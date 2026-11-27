@@ -71,8 +71,7 @@ fun BrowserScreen(
             },
             onBookmarkClick = handlers.actions.onBookmark,
         )
-        // Minimal selected-stream handoff into the PLAYER route (richer picker is
-        // queued post-MVP): plays the most recent detected stream with its headers.
+        // Show only links associated with the active tab's current page.
         handlers.detectedStreams.streams.takeIf { it.isNotEmpty() }?.let { items ->
             DetectedStreamBar(items = items, actions = handlers.detectedStreams)
         }
@@ -182,7 +181,12 @@ private fun DetectedStreamBar(
                 TextButton(onClick = { actions.onCopy(item) }) {
                     Text("نسخ الرابط")
                 }
-                TextButton(onClick = { saveTitle = android.net.Uri.parse(item.stream.url).host ?: item.stream.url; saveDialogOpen = true }) {
+                TextButton(
+                    onClick = {
+                        saveTitle = android.net.Uri.parse(item.stream.url).host ?: item.stream.url
+                        saveDialogOpen = true
+                    },
+                ) {
                     Text("حفظ في المكتبة")
                 }
             }
