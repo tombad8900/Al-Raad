@@ -12,6 +12,7 @@ import com.alraad.feature.browser.sniffer.StreamSniffer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -69,6 +70,45 @@ class StreamSnifferTest {
         val sniffer = StreamSniffer(noopLogger)
         assertNull(sniffer.onRequestObserved("https://example.com/page.html"))
         assertNull(sniffer.onRequestObserved("https://example.com/api", contentType = "application/json"))
+    }
+
+    @Test
+    fun `diagnostics omit stream URLs and credential header values`() {
+        val logged = mutableListOf<Map<String, String>>()
+        val logger =
+            object : DiagnosticsLogger {
+                override fun log(
+                    category: DiagCategory,
+                    level: DiagLevel,
+                    message: String,
+                    details: Map<String, String>,
+                ) {
+                    logged += details
+                }
+
+                override fun observeLogs(): Flow<List<com.alraad.core.common.contracts.DiagEntry>> = flowOf(emptyList())
+                override suspend fun exportAsText(): String = ""
+                override suspend fun clear() = Unit
+            }
+        val sniffer = StreamSniffer(logger)
+
+        sniffer.onRequestObserved(
+            "https://cdn.example/movie.m3u8?token=private-token",
+            mapOf("Cookie" to "session=private-cookie", "Authorization" to "Bearer private-auth"),
+        )
+        sniffer.onDrmLicenseObserved(
+            "https://license.example/widevine?token=private-license",
+            mapOf("Authorization" to "Bearer private-license-auth"),
+        )
+
+        val diagnosticText = logged.toString()
+        assertTrue(diagnosticText.contains("cdn.example"))
+        assertTrue(diagnosticText.contains("license.example"))
+        assertTrue(diagnosticText.contains("Cookie"))
+        assertFalse(diagnosticText.contains("private-token"))
+        assertFalse(diagnosticText.contains("private-cookie"))
+        assertFalse(diagnosticText.contains("private-auth"))
+        assertFalse(diagnosticText.contains("private-license"))
     }
 
     @Test fun `delimiter-containing header values do not collide in dedup key`() {
