@@ -1,8 +1,6 @@
 package com.alraad.feature.browser.ui
 
-import android.webkit.WebView
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -14,22 +12,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.viewinterop.AndroidView
 import com.alraad.core.adblocker.impl.WebViewIntegrationHelper
 import com.alraad.core.common.contracts.AppSettings
 import com.alraad.core.common.contracts.DiagnosticsLogger
-import com.alraad.core.common.contracts.StreamSource
 import com.alraad.feature.browser.sniffer.StreamSniffer
 import com.alraad.feature.browser.tabs.TabManager
-import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
-import com.alraad.feature.browser.web.SafeWebViewConfig
 
-/**
- * Browser shell: RTL AddressBar on top of a hardened WebView. Navigation from the
- * address bar updates the active tab in TabManager; the WebView loads the active
- * tab's URL. Ad blocking and sniffing come from WebViewIntegrationHelper.
- */
 @Composable
 fun BrowserScreen(
     tabManager: TabManager,
@@ -45,7 +33,13 @@ fun BrowserScreen(
     var isLoading by remember { mutableStateOf(false) }
     val backgroundColor = MaterialTheme.colorScheme.background
 
-    // Open the homepage tab on first launch so the WebView is never left blank.
+    val pageTabAssociator = remember { PageTabAssociator() }
+    val liveTabIds = tabState.tabs.map { it.id }.toSet()
+
+    LaunchedEffect(liveTabIds) {
+        pageTabAssociator.retainTabs(liveTabIds)
+    }
+
     LaunchedEffect(Unit) {
         if (tabState.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
     }
@@ -60,59 +54,45 @@ fun BrowserScreen(
             },
             onBookmarkClick = handlers.actions.onBookmark,
         )
-        // Minimal selected-stream handoff into the PLAYER route (richer picker is
-        // queued post-MVP): plays the most recent detected stream with its headers.
-        handlers.detectedStreams.streams.firstOrNull()?.let { stream ->
-            DetectedStreamBar(stream = stream, streams = handlers.detectedStreams)
+        handlers.detectedStreams.streams.lastOrNull()?.let { item ->
+            DetectedStreamBar(item = item, streams = handlers.detectedStreams)
         }
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                WebView(context).apply {
-                    // Match the app background so an empty WebView is never a white screen.
-                    setBackgroundColor(backgroundColor.toArgb())
-                    SafeWebViewConfig.apply(this, settings)
-                    webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
-                    webViewClient =
-                        webViewIntegration.webViewClient(
-                            onPageFinished = { webView ->
-                                isLoading = false
-                                webView.url?.let { loaded -> handlers.actions.onPageVisited(loaded, webView.title ?: "") }
-                            },
-                            onRequestObserved = { url, headers, pageUrl ->
-                                sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl)
-                            },
-                        )
-                }
-            },
-            update = { webView ->
-                activeTab?.url?.takeIf { it.isNotBlank() && it != webView.url }?.let {
-                    isLoading = true
-                    webView.loadUrl(it)
-                }
-            },
+        BrowserWebView(
+            activeTab = activeTab,
+            environment =
+                BrowserWebViewEnvironment(
+                    tabManager = tabManager,
+                    webViewIntegration = webViewIntegration,
+                    diagnosticsLogger = diagnosticsLogger,
+                    sniffer = sniffer,
+                    settings = settings,
+                ),
+            backgroundColor = backgroundColor,
+            handlers = handlers,
+            pageTabAssociator = pageTabAssociator,
+            onLoadingChange = { isLoading = it },
         )
     }
 }
 
-/** Stream bar: play / copy / save actions for the most recently detected stream. */
+/** Stream bar: play / copy / save for the most recently detected stream (picker UI lands in the follow-up PR). */
 @Composable
 private fun DetectedStreamBar(
-    stream: com.alraad.core.common.contracts.StreamUrl,
+    item: DetectedStreamItem,
     streams: DetectedStreamsUi,
 ) {
-    val host = android.net.Uri.parse(stream.url).host ?: stream.url
-    Row(
+    val host = android.net.Uri.parse(item.stream.url).host ?: item.stream.url
+    androidx.compose.foundation.layout.Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
     ) {
-        androidx.compose.material3.TextButton(onClick = { streams.onPlay(stream) }) {
+        androidx.compose.material3.TextButton(onClick = { streams.onPlay(item) }) {
             androidx.compose.material3.Text(text = "▶ $host")
         }
-        androidx.compose.material3.TextButton(onClick = { streams.onCopy(stream) }) {
+        androidx.compose.material3.TextButton(onClick = { streams.onCopy(item) }) {
             androidx.compose.material3.Text(text = "نسخ")
         }
-        androidx.compose.material3.TextButton(onClick = { streams.onSave(stream) }) {
+        androidx.compose.material3.TextButton(onClick = { streams.onSave(item, host) }) {
             androidx.compose.material3.Text(text = "حفظ")
         }
     }
