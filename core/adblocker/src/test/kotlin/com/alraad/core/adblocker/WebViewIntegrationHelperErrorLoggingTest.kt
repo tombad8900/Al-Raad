@@ -90,6 +90,7 @@ class WebViewIntegrationHelperErrorLoggingTest {
         assertEquals(DiagLevel.ERROR, entry.level)
         assertEquals("true", entry.details["mainFrame"])
     }
+
     @Test
     fun `webViewClient reports main frame start for tab correlation`() {
         val helper = WebViewIntegrationHelper(allowAll, logger, CoroutineScope(Dispatchers.Main))
@@ -101,5 +102,3 @@ class WebViewIntegrationHelperErrorLoggingTest {
 
         assertEquals("https://page.example/watch", startedUrl)
     }
-
-}
