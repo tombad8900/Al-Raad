@@ -17,11 +17,6 @@ import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.feature.browser.sniffer.StreamSniffer
 import com.alraad.feature.browser.tabs.TabManager
 
-/**
- * Browser shell: the WebView's page-start/page-finish callbacks are associated with
- * the tab that initiated each navigation, not whichever tab happens to be active
- * when the asynchronous finish callback arrives.
- */
 @Composable
 fun BrowserScreen(
     tabManager: TabManager,
@@ -37,9 +32,6 @@ fun BrowserScreen(
     var isLoading by remember { mutableStateOf(false) }
     val backgroundColor = MaterialTheme.colorScheme.background
 
-    // Load requests are recorded before loadUrl; onPageStarted binds the actual URL
-    // (including redirects) to the originating tab, so finish callbacks landing
-    // after a tab switch still update the right tab.
     val pageTabAssociator = remember { PageTabAssociator() }
 
     LaunchedEffect(Unit) {
