@@ -14,6 +14,9 @@ data class StreamUrl(
     val source: StreamSource,
     val headers: Map<String, String> = emptyMap(),
     val size: Long? = null,
+    // Detected standard EME/Widevine license request for this stream, when observed.
+    val drmLicenseUrl: String? = null,
+    val drmLicenseRequestHeaders: Map<String, String> = emptyMap(),
 )
 
 data class SavedStream(
@@ -27,6 +30,9 @@ data class SavedStream(
 
 interface StreamListener {
     fun onStreamDetected(stream: StreamUrl)
+
+    fun onStreamUpdated(stream: StreamUrl) {
+    }
 }
 
 interface AdBlocker {
