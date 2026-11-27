@@ -53,6 +53,7 @@ class WebViewIntegrationHelper
         fun webViewClient(
             onPageFinished: (WebView) -> Unit = {},
             onRequestObserved: (url: String, headers: Map<String, String>, pageUrl: String?) -> Unit = { _, _, _ -> },
+            onPageStarted: (WebView, String) -> Unit = { _, _ -> },
         ): WebViewClient =
             object : WebViewClient() {
                 // Cached from UI-thread navigation callbacks: shouldInterceptRequest runs
@@ -66,6 +67,7 @@ class WebViewIntegrationHelper
                     favicon: android.graphics.Bitmap?,
                 ) {
                     currentPageUrl = url
+                    onPageStarted(view, url)
                     super.onPageStarted(view, url, favicon)
                 }
 
