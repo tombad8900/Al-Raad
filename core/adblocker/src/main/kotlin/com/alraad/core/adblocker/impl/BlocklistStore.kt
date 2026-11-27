@@ -19,13 +19,17 @@ class BlocklistStore
     constructor(
         @ApplicationContext context: Context,
     ) {
-        /** Raised only by tests; a download below this many domains never promotes. */
-        internal var minDomains = 100
+        /** Test hook: overrides the catalog's per-source promote floor. */
+        internal var minDomains: Int? = null
 
         private val dir = File(context.filesDir, "blocklists")
         private val prefs = context.getSharedPreferences("adblock_lists", Context.MODE_PRIVATE)
 
-        private fun effectiveMin(id: String): Int = BlocklistCatalog.byId(id)?.minDomains ?: minDomains
+        private fun effectiveMin(id: String): Int = minDomains ?: BlocklistCatalog.byId(id)?.minDomains ?: DEFAULT_MIN_DOMAINS
+
+        private companion object {
+            const val DEFAULT_MIN_DOMAINS = 100
+        }
 
         fun isEnabled(id: String): Boolean = prefs.getBoolean("enabled_$id", BlocklistCatalog.byId(id)?.enabledByDefault ?: true)
 
