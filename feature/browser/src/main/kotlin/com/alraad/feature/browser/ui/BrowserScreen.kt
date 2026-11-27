@@ -55,8 +55,8 @@ fun BrowserScreen(
     // A load request is queued before loadUrl; onPageStarted binds its actual URL
     // (including redirects) to the originating tab. Finished callbacks then use
     // that immutable association even after the user switches tabs.
-    val pendingNavigationTabs = remember { mutableStateOf(mutableListOf<Pair<String, String>>()) }.value
-    val pageTabIds = remember { mutableStateOf(mutableMapOf<String, String>()) }.value
+    val pendingNavigationTabs = remember { mutableListOf<Pair<String, String>>() }
+    val pageTabIds = remember { mutableMapOf<String, String>() }
     var lastRequestedNavigation by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     LaunchedEffect(Unit) {
@@ -108,10 +108,10 @@ fun BrowserScreen(
                                 }
                             },
                             onPageFinishedWithUrl = { webView, loadedUrl ->
-                                val ownerTabId = pageTabIds.remove(loadedUrl) ?: tabManager.state.value.activeTabId
+                                val ownerTabId = pageTabIds.remove(loadedUrl)
                                 if (ownerTabId == tabManager.state.value.activeTabId) isLoading = false
-                                if (ownerTabId != null) {
-                                    handlers.actions.onPageFinished(ownerTabId, loadedUrl, webView.title ?: "")
+                                ownerTabId?.let {
+                                    handlers.actions.onPageFinished(it, loadedUrl, webView.title ?: "")
                                 }
                             },
                             onRequestObserved = { url, headers, pageUrl ->
