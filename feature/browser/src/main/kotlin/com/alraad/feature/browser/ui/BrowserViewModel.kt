@@ -145,13 +145,24 @@ class BrowserViewModel
 
         /** Starts playback of a selected stream with its captured request headers. */
         fun playStream(item: DetectedStreamItem) {
+            val pageSources =
+                streamsByTab.value[item.sourceTabId].orEmpty()
+                    .filter {
+                        it.sourceTabId == item.sourceTabId && it.sourcePageUrl == item.sourcePageUrl
+                    }
+                    .map { it.stream }
+                    .distinctBy { it.url }
+                    .toMutableList()
+            if (pageSources.none { it.url == item.stream.url }) pageSources += item.stream
+            val selectedIndex = pageSources.indexOfFirst { it.url == item.stream.url }.coerceAtLeast(0)
             val pageSubtitles =
                 subtitlesByTab.value[item.sourceTabId].orEmpty().filter {
                     it.sourceTabId == item.sourceTabId && it.sourcePageUrl == item.sourcePageUrl
                 }
             streamActions.play(
                 PlaybackRequest(
-                    sources = listOf(item.stream),
+                    sources = pageSources,
+                    selectedSourceIndex = selectedIndex,
                     subtitles = pageSubtitles,
                     sourcePageUrl = item.sourcePageUrl,
                     sourceTabId = item.sourceTabId,
