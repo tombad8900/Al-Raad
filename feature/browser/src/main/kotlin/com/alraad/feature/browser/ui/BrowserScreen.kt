@@ -148,7 +148,15 @@ private fun DetectedStreamBar(
     actions: DetectedStreamsUi,
 ) {
     val sortedItems = remember(items) { sortDetectedStreamItems(items) }
-    var selectedUrl by remember(sortedItems) { mutableStateOf(sortedItems.firstOrNull()?.stream?.url) }
+    var selectedUrl by remember(
+        sortedItems.firstOrNull()?.sourceTabId,
+        sortedItems.firstOrNull()?.sourcePageUrl,
+    ) { mutableStateOf<String?>(null) }
+    LaunchedEffect(sortedItems, selectedUrl) {
+        if (sortedItems.none { it.stream.url == selectedUrl }) {
+            selectedUrl = sortedItems.firstOrNull()?.stream?.url
+        }
+    }
     val selected = sortedItems.firstOrNull { it.stream.url == selectedUrl } ?: sortedItems.firstOrNull()
     var selectorExpanded by remember { mutableStateOf(false) }
     var saveDialogOpen by remember { mutableStateOf(false) }
