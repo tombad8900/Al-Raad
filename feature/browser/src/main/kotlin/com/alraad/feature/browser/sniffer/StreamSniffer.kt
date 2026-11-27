@@ -24,13 +24,14 @@ class StreamSniffer
         private val logger: DiagnosticsLogger,
     ) {
         private val listeners = java.util.concurrent.CopyOnWriteArrayList<StreamListener>()
+        private val observationListeners = java.util.concurrent.CopyOnWriteArrayList<StreamObservationListener>()
 
         @Volatile
         private var lastDetected: StreamUrl? = null
 
-        // Most recent detected stream per page URL, so a license request attaches to
-        // the stream of the document that issued it, not a stream from another tab/page.
-        private val lastDetectedByPage =
+        // Most recent detected stream per page+tab identity, so identical page URLs
+        // opened in different tabs cannot exchange DRM license metadata.
+        private val lastDetectedByPageAndTab =
             java.util.Collections.synchronizedMap(
                 object : LinkedHashMap<String, StreamUrl>(16, 0.75f, true) {
                     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, StreamUrl>?): Boolean = size > MAX_SEEN_KEYS
@@ -70,18 +71,16 @@ class StreamSniffer
             // unattached rather than landing on another page's stream.
             val target =
                 if (pageUrl != null) {
-                    lastDetectedByPage[pageUrl]
+                    lastDetectedByPageAndTab[pageKey(pageUrl, tabId)]
                 } else {
                     lastDetected
                 }
             target?.let { found ->
                 val updated = found.copy(drmLicenseUrl = url, drmLicenseRequestHeaders = headers)
                 if (lastDetected?.url == found.url) lastDetected = updated
-                pageUrl?.let { lastDetectedByPage[it] = updated }
-                listeners.forEach {
-                    it.onStreamUpdated(updated)
-                    it.onStreamObserved(updated, pageUrl, tabId)
-                }
+                pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = updated }
+                listeners.forEach { it.onStreamUpdated(updated) }
+                observationListeners.forEach { it.onStreamObserved(updated, pageUrl, tabId) }
             }
         }
 
@@ -107,12 +106,29 @@ class StreamSniffer
                 }
             }
 
+        private fun pageKey(
+            pageUrl: String,
+            tabId: String?,
+        ): String =
+            buildString {
+                append(tabId?.length ?: -1).append(':').append(tabId.orEmpty())
+                append(pageUrl)
+            }
+
         fun registerListener(listener: StreamListener) {
             listeners += listener
         }
 
         fun unregisterListener(listener: StreamListener) {
             listeners -= listener
+        }
+
+        fun registerObservationListener(listener: StreamObservationListener) {
+            observationListeners += listener
+        }
+
+        fun unregisterObservationListener(listener: StreamObservationListener) {
+            observationListeners -= listener
         }
 
         fun onRequestObserved(
@@ -153,7 +169,7 @@ class StreamSniffer
             )
             val isDuplicate = seen.put(dedupKey(url, headers), System.currentTimeMillis()) != null
             lastDetected = detected
-            pageUrl?.let { lastDetectedByPage[it] = detected }
+            pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = detected }
             if (!isDuplicate) {
                 logger.log(
                     DiagCategory.SNIFFER,
@@ -168,7 +184,17 @@ class StreamSniffer
                 )
                 listeners.forEach { it.onStreamDetected(detected) }
             }
-            listeners.forEach { it.onStreamObserved(detected, pageUrl, tabId) }
+            observationListeners.forEach { it.onStreamObserved(detected, pageUrl, tabId) }
             return if (isDuplicate) null else detected
         }
     }
+
+
+/** Browser-module extension for page/tab correlation; frozen common contracts stay unchanged. */
+fun interface StreamObservationListener {
+    fun onStreamObserved(
+        stream: StreamUrl,
+        pageUrl: String?,
+        tabId: String?,
+    )
+}
