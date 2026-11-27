@@ -114,8 +114,8 @@ private fun NavGraphBuilder.browserDestination(navController: NavHostController)
                     detectedStreams =
                         com.alraad.feature.browser.ui.DetectedStreamsUi(
                             streams = detectedStreams,
-                            onPlay = { stream ->
-                                viewModel.playStream(stream)
+                            onPlay = { item ->
+                                viewModel.playStream(item)
                                 navController.navigate(Routes.PLAYER)
                             },
                             onCopy = viewModel::copyStream,
@@ -123,7 +123,8 @@ private fun NavGraphBuilder.browserDestination(navController: NavHostController)
                         ),
                     actions =
                         com.alraad.feature.browser.ui.BrowserActions(
-                            onPageVisited = viewModel::recordVisit,
+                            onPageStarted = viewModel::recordPageStarted,
+                            onPageFinished = viewModel::recordPageFinished,
                             onBookmark = viewModel::bookmarkLastVisited,
                         ),
                 ),
@@ -241,12 +242,6 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
                         context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("diagnostics log", text))
                 }
-            },
-            onCopy = { text ->
-                val clipboard =
-                    context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as
-                        android.content.ClipboardManager
-                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("diagnostics log", text))
             },
         )
     }
