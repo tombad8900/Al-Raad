@@ -18,7 +18,7 @@ class PageTabAssociatorTest {
         val redirect = associator.onPageStartedWithContext("https://cdn.a.example/", "tabB")
         assertEquals("tabA", redirect.tabId)
         assertFalse(redirect.startsNewNavigation)
-        assertEquals("tabA", associator.onPageStarted("https://b.example/", "tabB"))
+        assertEquals("tabB", associator.onPageStarted("https://b.example/", "tabB"))
         assertEquals("tabA", associator.onPageFinished("https://cdn.a.example/"))
         assertEquals("tabB", associator.onPageFinished("https://b.example/"))
         assertEquals("tabA", associator.tabIdForPage("https://cdn.a.example/"))
