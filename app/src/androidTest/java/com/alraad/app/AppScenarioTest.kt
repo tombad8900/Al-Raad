@@ -36,10 +36,14 @@ class AppScenarioTest {
         composeRule.waitForIdle()
         waitForNode(hasSetTextAction(), 20_000)
 
-        // 1. Browse: type an address and submit via IME Go.
+        // 1. Browse: type an address and submit via IME Go. Deterministic sync at
+        // the real boundary: the load must FINISH (progress indicator shown, then
+        // gone) before leaving the tab, because leaving disposes the WebView and
+        // would abandon an in-flight load, so no visit could ever be recorded.
         composeRule.onNode(hasSetTextAction()).performTextInput("example.com")
         composeRule.onNode(hasSetTextAction()).performImeAction()
-        Thread.sleep(5_000)
+        runCatching { waitForNode(onNodeWithTagMatcher(), 10_000) } // best-effort: catch load start
+        waitForNodeGone(onNodeWithTagMatcher(), 60_000) // then require load finished
         capture("scenario-02-browsing.png")
 
         // 2. History: the finished load must appear as an entry (proves recording).
@@ -80,7 +84,7 @@ class AppScenarioTest {
         composeRule.onNode(hasSetTextAction())
             .performTextInput("https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4")
         composeRule.onNode(hasSetTextAction()).performImeAction()
-        waitForNode(hasText("\u25b6", substring = true), 30_000)
+        waitForNode(hasText("\u25b6", substring = true), 45_000)
         capture("scenario-06-stream-bar.png")
 
         composeRule.onNodeWithText("\u25b6", substring = true).performClick()
@@ -100,6 +104,19 @@ class AppScenarioTest {
             runCatching {
                 composeRule.onNode(matcher).assertIsDisplayed()
             }.isSuccess
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun onNodeWithTagMatcher(): SemanticsMatcher =
+        SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.TestTag, "page_loading")
+
+    private fun waitForNodeGone(
+        matcher: SemanticsMatcher,
+        timeoutMillis: Long,
+    ) {
+        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
+            runCatching { composeRule.onNode(matcher).assertIsDisplayed() }.isSuccess.not()
         }
         composeRule.waitForIdle()
     }
