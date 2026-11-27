@@ -7,17 +7,24 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
+import com.alraad.feature.browser.tabs.TabManagerTestEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import java.io.File
 import java.io.FileOutputStream
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -31,19 +38,36 @@ import org.junit.Test
 class AppScenarioTest {
     @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
 
+    /** TabManager is a process-wide @Singleton: clear tabs leaked by earlier tests. */
+    @Before
+    fun resetTabManager() {
+        EntryPointAccessors.fromApplication(
+            InstrumentationRegistry.getInstrumentation().targetContext.applicationContext,
+            TabManagerTestEntryPoint::class.java,
+        ).tabManager().reset()
+    }
+
     @Test fun browseThenHistoryBookmarkAndReopen() {
         composeRule.waitForIdle()
         waitForNode(hasSetTextAction(), 20_000)
 
-        // 1. Browse: type an address and submit via IME Go.
-        composeRule.onNode(hasSetTextAction()).performTextInput("example.com")
+        // 1. Browse: type a RUN-UNIQUE address and submit via IME Go. The unique
+        // query makes every later row assertion prove a FRESH visit - a stale row
+        // persisted from an earlier run can never mask a missing record. Sync at
+        // the real boundary: the load must demonstrably START (progress indicator
+        // shown; isLoading is set before loadUrl, so it renders at least one frame)
+        // and then FINISH (indicator gone) before leaving the tab, because leaving
+        // disposes the WebView and would abandon an in-flight load.
+        val uniqueUrl = "https://example.com/?t=" + System.currentTimeMillis()
+        composeRule.onNode(hasSetTextAction()).performTextInput(uniqueUrl)
         composeRule.onNode(hasSetTextAction()).performImeAction()
-        Thread.sleep(5_000)
+        waitForNode(onNodeWithTagMatcher(), 15_000) // required: load started
+        waitForNodeGone(onNodeWithTagMatcher(), 60_000) // required: load finished
         capture("scenario-02-browsing.png")
 
         // 2. History: the finished load must appear as an entry (proves recording).
         composeRule.onNodeWithText("السجل").performClick()
-        waitForNode(hasText("example.com", substring = true), 30_000)
+        waitForNode(rowInList("history_list"), 30_000)
         capture("scenario-03-history.png")
 
         // 3. Bookmark the loaded page from the browser, then verify it in Bookmarks.
@@ -51,26 +75,109 @@ class AppScenarioTest {
         waitForNode(hasSetTextAction(), 10_000)
         composeRule.onNodeWithTag("bookmark_action").performClick()
         composeRule.onNodeWithText("الإشارات").performClick()
-        waitForNode(hasText("example.com", substring = true), 15_000)
+        waitForNode(rowInList("bookmarks_list"), 15_000)
         capture("scenario-04-bookmarks.png")
 
         // 4. Reopen: recreate the activity and confirm history persists.
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        waitForNode(hasSetTextAction(), 20_000)
         composeRule.onNodeWithText("السجل").performClick()
-        waitForNode(hasText("example.com", substring = true), 15_000)
+        waitForNode(rowInList("history_list"), 15_000)
         capture("scenario-05-reopen-history.png")
     }
+
+    /**
+     * Route regression (owner real-device finding): tapping the detected-stream bar
+     * must reach the real PLAYER route, never the no-stream placeholder, and one tap
+     * must start playback once (the controller's single-start guard covers the double
+     * call from selection + PlayerScreen). Uses ExoPlayer's own public test media as
+     * controlled authorized content; needs emulator network, and fails honestly if
+     * the media cannot be fetched.
+     */
+    @Test fun detectedStreamTapReachesPlayerRoute() {
+        composeRule.waitForIdle()
+        waitForNode(hasSetTextAction(), 20_000)
+
+        // Load a CONTROLLED local wrapper page (test-only MockWebServer fixture,
+        // no production scheme handling broadened) whose script issues the media
+        // request as a subresource fetch: direct navigation to a media file is
+        // handed to the downloader and never reaches the sniffer, while ANY page
+        // subresource request for the .mp4 URL is observed through the WebView
+        // client and classified by URL extension, exactly like a <video> tag's
+        // own request. A fetch is used instead of an autoplaying <video> because
+        // software-rendered emulator WebViews crash their renderer decoding real
+        // media (run 46035966507 logcat: aw_browser_terminator); the bar asserts
+        // DETECTION + routing, which the request alone exercises. Media URL is
+        // ExoPlayer's own public test asset (authorized).
+        val server = okhttp3.mockwebserver.MockWebServer()
+        server.start()
+        server.enqueue(
+            okhttp3.mockwebserver.MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "text/html")
+                .setBody(
+                    "<html><body><script>" +
+                        "fetch('https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4'," +
+                        " {mode: 'no-cors'}).catch(function(){});" +
+                        "</script></body></html>",
+                ),
+        )
+        try {
+            composeRule.onNode(hasSetTextAction()).performTextInput(server.url("/wrapper.html").toString())
+            composeRule.onNode(hasSetTextAction()).performImeAction()
+            waitForNode(hasText("\u25b6", substring = true), 45_000)
+            capture("scenario-06-stream-bar.png")
+
+            composeRule.onNodeWithText("\u25b6", substring = true).performClick()
+            // The player route shows its controls; the no-stream placeholder must be absent.
+            waitForNode(hasContentDescription("Fullscreen"), 15_000)
+            composeRule
+                .onNodeWithText(
+                    "\u0644\u0645 \u064a\u062a\u0645 \u0627\u062e\u062a\u064a\u0627\u0631 \u0628\u062b \u0628\u0639\u062f",
+                ).assertDoesNotExist()
+            capture("scenario-07-player-route.png")
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    private fun rowInList(listTag: String): SemanticsMatcher = hasText("?t=", substring = true) and hasAnyAncestor(hasTestTag(listTag))
 
     private fun waitForNode(
         matcher: SemanticsMatcher,
         timeoutMillis: Long,
     ) {
-        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
-            runCatching {
-                composeRule.onNode(matcher).assertIsDisplayed()
-            }.isSuccess
+        runCatching {
+            // onAllNodes+onFirst tolerates duplicate matching rows (e.g. a reload
+            // recording the same visit twice), where onNode would fail on the
+            // multiple matches instead of checking the first.
+            composeRule.waitUntil(timeoutMillis = timeoutMillis) {
+                runCatching {
+                    composeRule.onAllNodes(matcher).onFirst().assertIsDisplayed()
+                }.isSuccess
+            }
+        }.onFailure {
+            // A red run must still show what the screen actually looked like.
+            capture("scenario-timeout-" + System.currentTimeMillis() + ".png")
+            throw it
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun onNodeWithTagMatcher(): SemanticsMatcher =
+        SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.TestTag, "page_loading")
+
+    private fun waitForNodeGone(
+        matcher: SemanticsMatcher,
+        timeoutMillis: Long,
+    ) {
+        runCatching {
+            composeRule.waitUntil(timeoutMillis = timeoutMillis) {
+                runCatching { composeRule.onAllNodes(matcher).onFirst().assertIsDisplayed() }.isSuccess.not()
+            }
+        }.onFailure {
+            capture("scenario-timeout-" + System.currentTimeMillis() + ".png")
+            throw it
         }
         composeRule.waitForIdle()
     }

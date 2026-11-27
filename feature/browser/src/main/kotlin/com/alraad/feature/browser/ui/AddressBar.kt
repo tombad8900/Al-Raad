@@ -76,7 +76,10 @@ fun AddressBar(
             },
             trailingIcon = {
                 if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.padding(4.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(
+                        modifier = Modifier.padding(4.dp).testTag("page_loading"),
+                        strokeWidth = 2.dp,
+                    )
                 }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),

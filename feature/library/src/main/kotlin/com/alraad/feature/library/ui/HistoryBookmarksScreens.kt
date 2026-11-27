@@ -20,6 +20,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.text.SimpleDateFormat
@@ -47,6 +48,7 @@ fun HistoryScreen(
             emptyLabel = "لا يوجد سجل بعد / No history yet",
             onOpen = onOpen,
             onDelete = viewModel::deleteHistory,
+            listTag = "history_list",
         )
     }
 }
@@ -63,6 +65,7 @@ fun BookmarksScreen(
         emptyLabel = "لا توجد إشارات مرجعية بعد / No bookmarks yet",
         onOpen = onOpen,
         onDelete = viewModel::deleteBookmark,
+        listTag = "bookmarks_list",
         modifier = modifier,
     )
 }
@@ -77,6 +80,7 @@ private fun EntryList(
     emptyLabel: String,
     onOpen: (String) -> Unit,
     onDelete: (Long) -> Unit,
+    listTag: String,
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) {
@@ -85,7 +89,7 @@ private fun EntryList(
         }
         return
     }
-    LazyColumn(modifier = modifier.fillMaxSize()) {
+    LazyColumn(modifier = modifier.fillMaxSize().testTag(listTag)) {
         items(items, key = { it.first }) { (id, data) ->
             val (title, url, timestamp) = data
             Row(

@@ -30,9 +30,13 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     viewModel: SettingsDiagnosticsViewModel,
     modifier: Modifier = Modifier,
+    onOpenDiagnostics: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsState()
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
+        TextButton(onClick = onOpenDiagnostics, modifier = Modifier.fillMaxWidth()) {
+            Text("سجل التشخيص / Diagnostics log")
+        }
         SettingToggle("حظر الإعلانات / Ad blocking", settings.adBlockEnabled) { on ->
             viewModel.update { it.copy(adBlockEnabled = on) }
         }

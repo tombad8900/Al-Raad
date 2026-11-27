@@ -65,6 +65,9 @@ class FakeSavedStreamsRepository : SavedStreamsRepository {
 
     override fun observeStreams(): Flow<List<SavedStream>> = items
 
+    /** Snapshot for assertions in tests. */
+    fun currentList(): List<SavedStream> = items.value
+
     override suspend fun getById(id: Long): SavedStream? = items.value.firstOrNull { it.id == id }
 
     override suspend fun save(stream: SavedStream): Long {

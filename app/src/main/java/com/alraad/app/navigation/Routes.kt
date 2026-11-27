@@ -8,4 +8,5 @@ object Routes {
     const val SETTINGS = "settings"
     const val HISTORY = "history"
     const val BOOKMARKS = "bookmarks"
+    const val DIAGNOSTICS = "diagnostics"
 }

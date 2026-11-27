@@ -1,5 +1,6 @@
 package com.alraad.feature.browser.tabs
 
+import androidx.annotation.VisibleForTesting
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,6 +26,12 @@ class TabManager
     constructor() {
         private val _state = MutableStateFlow(TabState())
         val state: StateFlow<TabState> = _state.asStateFlow()
+
+        /** androidTest isolation: clears all tabs between instrumented tests. */
+        @VisibleForTesting
+        fun reset() {
+            _state.value = TabState()
+        }
 
         fun openTab(url: String = "about:blank"): BrowserTab {
             val tab = BrowserTab(id = UUID.randomUUID().toString(), url = url)
