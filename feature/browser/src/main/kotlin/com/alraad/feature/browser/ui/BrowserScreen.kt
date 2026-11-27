@@ -107,7 +107,8 @@ fun BrowserScreen(
                                         ?: tabManager.state.value.activeTabId
                                 sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl, tabId)
                             },
-                            onPageStarted = { _, startedUrl ->
+                            onPageStart = { _, startedUrl ->
+                                if (pageTabIds.size > 100) pageTabIds.clear()
                                 tabManager.state.value.activeTabId?.let { pageTabIds[startedUrl] = it }
                             },
                         )
