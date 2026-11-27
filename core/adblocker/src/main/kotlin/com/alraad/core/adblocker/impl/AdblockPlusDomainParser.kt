@@ -26,6 +26,5 @@ object AdblockPlusDomainParser {
         return null
     }
 
-    private fun isPlainHostsLine(line: String): Boolean =
-        !line.startsWith("|") && !line.contains("*")
+    private fun isPlainHostsLine(line: String): Boolean = !line.startsWith("|") && !line.contains("*")
 }
