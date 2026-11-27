@@ -196,6 +196,41 @@ class Media3PlayerControllerTest {
         assertEquals("ar", configurations?.single()?.language)
     }
 
+    @Test
+    fun `source selection updates stream and retains only its page tab subtitles`() {
+        val first = StreamUrl("https://cdn.example/a.m3u8", StreamFormat.HLS, StreamSource.NETWORK)
+        val second = StreamUrl("https://cdn.example/b.mp4", StreamFormat.MP4, StreamSource.NETWORK)
+        val matching =
+            SubtitleTrack(
+                id = "same",
+                url = "https://sub.example/ar.vtt",
+                mimeType = "text/vtt",
+                language = "ar",
+                label = "Arabic",
+                sourcePageUrl = "https://page.example/watch",
+                sourceTabId = "tab-a",
+            )
+        val foreign =
+            matching.copy(
+                id = "foreign",
+                url = "https://sub.example/en.vtt",
+                sourcePageUrl = "https://other.example/watch",
+                sourceTabId = "tab-b",
+            )
+        val request =
+            PlaybackRequest(
+                sources = listOf(first, second),
+                subtitles = listOf(matching, foreign),
+                sourcePageUrl = "https://page.example/watch",
+                sourceTabId = "tab-a",
+            )
+
+        val selected = request.selectSource(1)
+
+        assertEquals(second, selected.selectedStream)
+        assertEquals(listOf(matching), selected.subtitles)
+    }
+
     @Test fun `switching streams replaces the player so UI state rebinding sees the new instance`() {
         val first =
             StreamUrl(url = "https://cdn.example.com/a.mp4", format = StreamFormat.MP4, source = StreamSource.NETWORK)
