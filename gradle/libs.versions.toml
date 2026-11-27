@@ -69,7 +69,6 @@ mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", versio
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 robolectric-android-all = { group = "org.robolectric", name = "android-all-instrumented", version.ref = "robolectric-android-all" }
 mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockito" }
-
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
