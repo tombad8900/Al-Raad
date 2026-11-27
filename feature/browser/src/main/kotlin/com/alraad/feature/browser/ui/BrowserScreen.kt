@@ -22,7 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -54,13 +54,15 @@ fun BrowserScreen(
 ) {
     val tabState by tabManager.state.collectAsState()
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
-    var isLoading by remember { mutableStateOf(false) }
+    val loadingByTab = remember { mutableStateMapOf<String, Boolean>() }
+    val isLoading = loadingByTab[activeTab?.id] ?: false
     val backgroundColor = MaterialTheme.colorScheme.background
     val webViews = remember { mutableMapOf<String, WebView>() }
 
     LaunchedEffect(tabState.tabs.map { it.id }) {
         val liveTabIds = tabState.tabs.mapTo(mutableSetOf()) { it.id }
         webViews.keys.filterNot { it in liveTabIds }.forEach { id ->
+            loadingByTab.remove(id)
             webViews.remove(id)?.apply {
                 stopLoading()
                 destroy()
@@ -109,7 +111,7 @@ fun BrowserScreen(
                                 webViewClient =
                                     webViewIntegration.webViewClient(
                                         onPageFinished = { webView ->
-                                            isLoading = false
+                                            loadingByTab[tab.id] = false
                                             webView.url?.let { loaded ->
                                                 handlers.actions.onPageVisited(loaded, webView.title ?: "", tab.id)
                                             }
@@ -124,14 +126,14 @@ fun BrowserScreen(
                                                 tab.id,
                                             )
                                         },
-                                        onPageStart = { _, _ -> isLoading = true },
+                                        onPageStart = { _, _ -> loadingByTab[tab.id] = true },
                                     )
                             }
                         }
                     },
                     update = { webView ->
                         tab.url.takeIf { it.isNotBlank() && it != webView.url }?.let {
-                            isLoading = true
+                            loadingByTab[tab.id] = true
                             webView.loadUrl(it)
                         }
                     },
