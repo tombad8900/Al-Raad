@@ -64,7 +64,11 @@ class SettingsDiagnosticsViewModelTest {
                 category = DiagCategory.SNIFFER,
                 level = DiagLevel.ERROR,
                 message = "failed https://cdn.example/a.m3u8?token=display-secret",
-                details = mapOf("Authorization" to "Bearer header-secret", "url" to "https://cdn.example/a.m3u8?session_id=url-secret"),
+                details =
+                    mapOf(
+                        "Authorization" to "Bearer header-secret",
+                        "url" to "https://cdn.example/a.m3u8?session_id=url-secret",
+                    ),
             )
         val rawLogger =
             object : DiagnosticsLogger {
