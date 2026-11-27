@@ -36,19 +36,23 @@ class AppScenarioTest {
         composeRule.waitForIdle()
         waitForNode(hasSetTextAction(), 20_000)
 
-        // 1. Browse: type an address and submit via IME Go. Deterministic sync at
-        // the real boundary: the load must FINISH (progress indicator shown, then
-        // gone) before leaving the tab, because leaving disposes the WebView and
-        // would abandon an in-flight load, so no visit could ever be recorded.
-        composeRule.onNode(hasSetTextAction()).performTextInput("example.com")
+        // 1. Browse: type a RUN-UNIQUE address and submit via IME Go. The unique
+        // query makes every later row assertion prove a FRESH visit - a stale row
+        // persisted from an earlier run can never mask a missing record. Sync at
+        // the real boundary: the load must demonstrably START (progress indicator
+        // shown; isLoading is set before loadUrl, so it renders at least one frame)
+        // and then FINISH (indicator gone) before leaving the tab, because leaving
+        // disposes the WebView and would abandon an in-flight load.
+        val uniqueUrl = "https://example.com/?t=" + System.currentTimeMillis()
+        composeRule.onNode(hasSetTextAction()).performTextInput(uniqueUrl)
         composeRule.onNode(hasSetTextAction()).performImeAction()
-        runCatching { waitForNode(onNodeWithTagMatcher(), 10_000) } // best-effort: catch load start
-        waitForNodeGone(onNodeWithTagMatcher(), 60_000) // then require load finished
+        waitForNode(onNodeWithTagMatcher(), 15_000) // required: load started
+        waitForNodeGone(onNodeWithTagMatcher(), 60_000) // required: load finished
         capture("scenario-02-browsing.png")
 
         // 2. History: the finished load must appear as an entry (proves recording).
         composeRule.onNodeWithText("السجل").performClick()
-        waitForNode(hasText("example.com", substring = true), 30_000)
+        waitForNode(hasText("?t=", substring = true), 30_000)
         capture("scenario-03-history.png")
 
         // 3. Bookmark the loaded page from the browser, then verify it in Bookmarks.
@@ -56,7 +60,7 @@ class AppScenarioTest {
         waitForNode(hasSetTextAction(), 10_000)
         composeRule.onNodeWithTag("bookmark_action").performClick()
         composeRule.onNodeWithText("الإشارات").performClick()
-        waitForNode(hasText("example.com", substring = true), 15_000)
+        waitForNode(hasText("?t=", substring = true), 15_000)
         capture("scenario-04-bookmarks.png")
 
         // 4. Reopen: recreate the activity and confirm history persists.
@@ -64,7 +68,7 @@ class AppScenarioTest {
         composeRule.waitForIdle()
         waitForNode(hasSetTextAction(), 20_000)
         composeRule.onNodeWithText("السجل").performClick()
-        waitForNode(hasText("example.com", substring = true), 15_000)
+        waitForNode(hasText("?t=", substring = true), 15_000)
         capture("scenario-05-reopen-history.png")
     }
 
@@ -80,9 +84,20 @@ class AppScenarioTest {
         composeRule.waitForIdle()
         waitForNode(hasSetTextAction(), 20_000)
 
-        // Load a direct media URL so the sniffer detects it from the real request.
-        composeRule.onNode(hasSetTextAction())
-            .performTextInput("https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4")
+        // Load a controlled wrapper page embedding the media as a <video>: direct
+        // navigation to a media file is handed to the downloader and never reaches
+        // the sniffer, while a page's subresource request is observed through the
+        // WebView client. Media is ExoPlayer's own public test asset (authorized).
+        // mediaPlaybackRequiresUserGesture=false in SafeWebViewConfig allows muted autoplay.
+        val wrapperPage =
+            "data:text/html," +
+                android.net.Uri.encode(
+                    "<html><body>" +
+                        "<video muted autoplay playsinline preload=\"auto\" " +
+                        "src=\"https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4\">" +
+                        "</video></body></html>",
+                )
+        composeRule.onNode(hasSetTextAction()).performTextInput(wrapperPage)
         composeRule.onNode(hasSetTextAction()).performImeAction()
         waitForNode(hasText("\u25b6", substring = true), 45_000)
         capture("scenario-06-stream-bar.png")
