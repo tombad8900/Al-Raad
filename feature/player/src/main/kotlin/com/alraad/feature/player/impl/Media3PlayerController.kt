@@ -3,6 +3,7 @@ package com.alraad.feature.player.impl
 import android.content.Context
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -79,6 +80,22 @@ class Media3PlayerController
             release()
             player =
                 ExoPlayer.Builder(context).build().apply {
+                    addListener(
+                        object : Player.Listener {
+                            override fun onPlayerError(error: PlaybackException) {
+                                logger.log(
+                                    DiagCategory.PLAYER,
+                                    DiagLevel.ERROR,
+                                    "Playback error",
+                                    mapOf(
+                                        "url" to stream.url,
+                                        "code" to error.errorCodeName,
+                                        "message" to (error.message ?: ""),
+                                    ),
+                                )
+                            }
+                        },
+                    )
                     if (quality != null) {
                         trackSelectionParameters =
                             TrackSelectionParameters.Builder(context)
