@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.alraad.core.common.contracts.DiagCategory
+import com.alraad.feature.library.ui.formatTimestamp
 import kotlinx.coroutines.launch
 
 /** Settings toggles (Issue #9, part C): ad blocking, JavaScript, mixed content. */
@@ -94,6 +95,10 @@ fun DiagnosticsScreen(
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             items(logs, key = { it.id }) { entry ->
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                    Text(
+                        formatTimestamp(entry.timestamp),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                     Text(
                         "${entry.level} [${entry.category}] ${entry.message}",
                         style = MaterialTheme.typography.bodyMedium,
