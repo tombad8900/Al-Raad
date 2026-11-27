@@ -46,11 +46,13 @@ fun BrowserWebView(
                                 if (ownerTabId == tabManager.state.value.activeTabId) onLoadingChange(true)
                             }
                         },
-                        onPageFinishedWithUrl = { webView, loadedUrl ->
-                            val ownerTabId = pageTabAssociator.onPageFinished(loadedUrl)
-                            if (ownerTabId == tabManager.state.value.activeTabId) onLoadingChange(false)
-                            ownerTabId?.let {
-                                handlers.actions.onPageFinished(it, loadedUrl, webView.title ?: "")
+                        onPageFinished = { webView ->
+                            webView.url?.let { loadedUrl ->
+                                val ownerTabId = pageTabAssociator.onPageFinished(loadedUrl)
+                                if (ownerTabId == tabManager.state.value.activeTabId) onLoadingChange(false)
+                                ownerTabId?.let {
+                                    handlers.actions.onPageFinished(it, loadedUrl, webView.title ?: "")
+                                }
                             }
                         },
                         onRequestObserved = { url, headers, pageUrl ->
