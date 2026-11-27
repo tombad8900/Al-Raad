@@ -93,8 +93,12 @@ fun DiagnosticsScreen(
             }
         }
         Row(modifier = Modifier.padding(horizontal = 8.dp)) {
-            TextButton(onClick = { scope.launch { onCopy(viewModel.exportLogs()) } }) { Text("نسخ / Copy") }
-            TextButton(onClick = { scope.launch { onExport(viewModel.exportLogs()) } }) { Text("تصدير ملف / Export") }
+            TextButton(
+                onClick = { scope.launch { onCopy(viewModel.exportLogs()) } },
+            ) { Text("نسخ / Copy") }
+            TextButton(
+                onClick = { scope.launch { onExport(viewModel.exportLogs()) } },
+            ) { Text("تصدير ملف / Export") }
             TextButton(onClick = { viewModel.clearLogs() }) { Text("مسح / Clear") }
         }
         HorizontalDivider()
