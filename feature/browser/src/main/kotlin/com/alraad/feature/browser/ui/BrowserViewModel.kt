@@ -70,6 +70,7 @@ class BrowserViewModel
                         tabId ?: tabState.tabs.firstOrNull { it.url == sourcePage }?.id
                             ?: tabState.activeTabId
                             ?: return
+                    if (tabState.tabs.none { it.id == resolvedTabId }) return
                     val item = DetectedStreamItem(stream, sourcePage, resolvedTabId)
                     streamsByTab.update { current ->
                         val liveTabIds = tabState.tabs.mapTo(mutableSetOf()) { it.id }
