@@ -108,6 +108,7 @@ private fun NavGraphBuilder.browserDestination(navController: NavHostController)
             webViewIntegration = viewModel.webViewIntegration,
             diagnosticsLogger = viewModel.diagnosticsLogger,
             sniffer = viewModel.sniffer,
+            subtitleSniffer = viewModel.subtitleSniffer,
             settings = settings,
             handlers =
                 com.alraad.feature.browser.ui.BrowserHandlers(
