@@ -2,6 +2,7 @@ package com.alraad.feature.player.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -10,9 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -51,7 +56,9 @@ fun PlayerScreen(
     modifier: Modifier = Modifier,
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val gestures = rememberPlayerGestureController()
     var speed by remember { mutableFloatStateOf(1.0f) }
+    var fullscreen by remember { mutableStateOf(false) }
 
     DisposableEffect(stream) {
         controller.play(stream)
@@ -59,40 +66,20 @@ fun PlayerScreen(
     }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
-        AndroidView(
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .pointerInput(isRtl) {
-                        detectTapGestures(
-                            onDoubleTap = { offset ->
-                                val forward = if (isRtl) offset.x < size.width / 2f else offset.x >= size.width / 2f
-                                val current = controller.currentPlayer() ?: return@detectTapGestures
-                                val delta = if (forward) SEEK_STEP_MS else -SEEK_STEP_MS
-                                val target = (current.currentPosition + delta).coerceIn(0L, current.duration.coerceAtLeast(0L))
-                                current.seekTo(target)
-                            },
-                        )
-                    },
-            factory = { context ->
-                PlayerView(context).apply {
-                    useController = true
-                    controller.currentPlayer()?.let { player = it }
-                }
-            },
-            update = { view ->
-                val current = controller.currentPlayer()
-                if (view.player !== current) view.player = current
-                current?.setPlaybackSpeed(speed)
-            },
-        )
+        PlayerSurface(controller = controller, gestures = gestures, isRtl = isRtl, speed = speed)
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp).align(Alignment.TopEnd),
             horizontalArrangement = Arrangement.End,
         ) {
-            SpeedMenu(
+            PlayerControlsRow(
+                fullscreen = fullscreen,
+                onToggleFullscreen = {
+                    fullscreen = !fullscreen
+                    gestures.setFullscreen(fullscreen)
+                },
+                onEnterPip = { gestures.enterPictureInPicture() },
                 speed = speed,
-                onSelect = { option ->
+                onSelectSpeed = { option ->
                     speed = option
                     controller.currentPlayer()?.setPlaybackSpeed(option)
                 },
@@ -126,4 +113,69 @@ private fun SpeedMenu(
             }
         }
     }
+}
+
+@Composable
+private fun PlayerControlsRow(
+    fullscreen: Boolean,
+    onToggleFullscreen: () -> Unit,
+    onEnterPip: () -> Unit,
+    speed: Float,
+    onSelectSpeed: (Float) -> Unit,
+) {
+    IconButton(onClick = onToggleFullscreen) {
+        Icon(
+            if (fullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+            contentDescription = if (fullscreen) "Exit fullscreen" else "Fullscreen",
+            tint = Color.White,
+        )
+    }
+    IconButton(onClick = onEnterPip) {
+        Icon(Icons.Default.PictureInPictureAlt, contentDescription = "Picture in picture", tint = Color.White)
+    }
+    SpeedMenu(speed = speed, onSelect = onSelectSpeed)
+}
+
+@Composable
+private fun PlayerSurface(
+    controller: Media3PlayerController,
+    gestures: PlayerGestureController,
+    isRtl: Boolean,
+    speed: Float,
+) {
+    AndroidView(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .pointerInput(isRtl) {
+                    detectVerticalDragGestures { change, dragAmount ->
+                        change.consume()
+                        val up = -dragAmount / size.height.toFloat()
+                        val volumeSide = if (isRtl) change.position.x < size.width / 2f else change.position.x >= size.width / 2f
+                        if (volumeSide) gestures.adjustVolume(up) else gestures.adjustBrightness(up)
+                    }
+                }
+                .pointerInput(isRtl) {
+                    detectTapGestures(
+                        onDoubleTap = { offset ->
+                            val forward = if (isRtl) offset.x < size.width / 2f else offset.x >= size.width / 2f
+                            val current = controller.currentPlayer() ?: return@detectTapGestures
+                            val delta = if (forward) SEEK_STEP_MS else -SEEK_STEP_MS
+                            val target = (current.currentPosition + delta).coerceIn(0L, current.duration.coerceAtLeast(0L))
+                            current.seekTo(target)
+                        },
+                    )
+                },
+        factory = { context ->
+            PlayerView(context).apply {
+                useController = true
+                controller.currentPlayer()?.let { player = it }
+            }
+        },
+        update = { view ->
+            val current = controller.currentPlayer()
+            if (view.player !== current) view.player = current
+            current?.setPlaybackSpeed(speed)
+        },
+    )
 }
