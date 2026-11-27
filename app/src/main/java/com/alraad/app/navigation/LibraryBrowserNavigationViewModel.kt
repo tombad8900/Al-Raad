@@ -16,7 +16,6 @@ class LibraryBrowserNavigationViewModel
     constructor(
         private val tabManager: TabManager,
     ) : ViewModel() {
-
         /**
          * Opens a valid web source in a fresh browser tab, then requests navigation
          * to the in-app browser. Returns false without side effects for missing or
@@ -26,15 +25,17 @@ class LibraryBrowserNavigationViewModel
             sourcePageUrl: String?,
             onNavigateToBrowser: () -> Unit,
         ): Boolean {
-            val url = sourcePageUrl?.trim()?.takeIf { it.isNotEmpty() } ?: return false
-            val uri = runCatching { URI(url) }.getOrNull() ?: return false
-            val scheme = uri.scheme?.lowercase()
-            if ((scheme != "http" && scheme != "https") || uri.host.isNullOrBlank()) {
-                return false
+            val url = sourcePageUrl?.trim().orEmpty()
+            val uri = runCatching { URI(url) }.getOrNull()
+            val scheme = uri?.scheme?.lowercase()
+            val valid =
+                url.isNotEmpty() &&
+                    (scheme == "http" || scheme == "https") &&
+                    !uri.host.isNullOrBlank()
+            if (valid) {
+                tabManager.openTab(url)
+                onNavigateToBrowser()
             }
-
-            tabManager.openTab(url)
-            onNavigateToBrowser()
-            return true
+            return valid
         }
     }
