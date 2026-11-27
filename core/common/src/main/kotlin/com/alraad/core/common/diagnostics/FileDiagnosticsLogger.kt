@@ -120,13 +120,15 @@ class FileDiagnosticsLogger(
                     val v = it.substringAfter('=')
                     if (isV2) dec(k) to dec(v) else k to v
                 }
-        return DiagEntry(
-            id = nextId++,
-            timestamp = parts[offset].toLongOrNull() ?: 0L,
-            category = runCatching { DiagCategory.valueOf(parts[offset + 1]) }.getOrDefault(DiagCategory.APP),
-            level = runCatching { DiagLevel.valueOf(parts[offset + 2]) }.getOrDefault(DiagLevel.INFO),
-            message = if (isV2) dec(parts[offset + 3]) else parts[offset + 3],
-            details = details,
+        return DiagnosticsRedactor.redact(
+            DiagEntry(
+                id = nextId++,
+                timestamp = parts[offset].toLongOrNull() ?: 0L,
+                category = runCatching { DiagCategory.valueOf(parts[offset + 1]) }.getOrDefault(DiagCategory.APP),
+                level = runCatching { DiagLevel.valueOf(parts[offset + 2]) }.getOrDefault(DiagLevel.INFO),
+                message = if (isV2) dec(parts[offset + 3]) else parts[offset + 3],
+                details = details,
+            ),
         )
     }
 
