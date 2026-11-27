@@ -43,6 +43,19 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
+      - name: Prefetch Robolectric android-all artifacts
+        run: |
+          set -e
+          dir="$HOME/.m2/repository/org/robolectric/android-all-instrumented/15-robolectric-12650502-i7"
+          base="https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/15-robolectric-12650502-i7"
+          mkdir -p "$dir"
+          for f in pom jar; do
+            name="android-all-instrumented-15-robolectric-12650502-i7.$f"
+            if [ ! -s "$dir/$name" ]; then
+              curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 -o "$dir/$name" "$base/$name"
+            fi
+          done
+
       - name: Run quality gates and build debug APK
         run: ./gradlew --no-daemon ktlintCheck detekt test assembleDebug
 
