@@ -112,7 +112,9 @@ class SubtitleSniffer @Inject constructor() {
     private fun originOnly(value: String): String? {
         val uri = parseUri(value) ?: return null
         if (!isHttpUrl(value)) return null
-        return "${uri.scheme}://${uri.rawAuthority}"
+        val host = uri.host ?: return null
+        val port = if (uri.port >= 0) ":${uri.port}" else ""
+        return "${uri.scheme}://${host}${port}"
     }
 
     private fun canonicalHeaderName(lowercaseName: String): String =
