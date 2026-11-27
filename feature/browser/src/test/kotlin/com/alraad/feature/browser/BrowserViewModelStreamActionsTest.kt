@@ -11,6 +11,7 @@ import com.alraad.core.common.fakes.FakeHistoryRepository
 import com.alraad.core.common.fakes.FakePlayerController
 import com.alraad.core.common.fakes.FakeSavedStreamsRepository
 import com.alraad.core.common.fakes.FakeSettingsRepository
+import com.alraad.feature.browser.sniffer.SubtitleSniffer
 import com.alraad.feature.browser.actions.StreamActions
 import com.alraad.feature.browser.sniffer.StreamSniffer
 import com.alraad.feature.browser.tabs.TabManager
@@ -37,6 +38,8 @@ class BrowserViewModelStreamActionsTest {
     private lateinit var tabManager: TabManager
     private lateinit var viewModel: BrowserViewModel
     private lateinit var sniffer: StreamSniffer
+    private lateinit var subtitleSniffer: SubtitleSniffer
+    private lateinit var playerController: FakePlayerController
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Before
@@ -45,10 +48,12 @@ class BrowserViewModelStreamActionsTest {
         val logger = FakeDiagnosticsLogger()
         savedStreams = FakeSavedStreamsRepository()
         tabManager = TabManager()
+        playerController = FakePlayerController()
+        subtitleSniffer = SubtitleSniffer()
         val streamActions =
             StreamActions(
                 org.robolectric.RuntimeEnvironment.getApplication(),
-                FakePlayerController(),
+                playerController,
                 savedStreams,
                 logger,
             )
@@ -64,6 +69,7 @@ class BrowserViewModelStreamActionsTest {
                     ),
                 diagnosticsLogger = logger,
                 sniffer = sniffer,
+                subtitleSniffer = subtitleSniffer,
                 streamActions = streamActions,
                 settingsRepository = FakeSettingsRepository(),
                 historyRepository = FakeHistoryRepository(),
@@ -122,6 +128,33 @@ class BrowserViewModelStreamActionsTest {
         tabManager.switchTo(tabA.id)
         assertEquals(listOf("https://cdn.example/a.m3u8"), viewModel.detectedStreams.value.map { it.stream.url })
         assertEquals(pageA, viewModel.detectedStreams.value.single().sourcePageUrl)
+    }
+
+    @Test
+    fun `play request contains only subtitles from the same page and tab with safe headers`() {
+        val page = "https://page.example/watch"
+        val tab = tabManager.openTab(page)
+        viewModel.recordVisit(page, "Page", tab.id)
+        subtitleSniffer.onRequestObserved(
+            "https://sub.example/captions.ar.vtt",
+            mapOf("Cookie" to "secret", "Authorization" to "Bearer secret", "Accept-Language" to "ar"),
+            page,
+            tab.id,
+        )
+        sniffer.onRequestObserved(
+            "https://cdn.example/movie.m3u8",
+            pageUrl = page,
+            tabId = tab.id,
+        )
+
+        viewModel.playStream(viewModel.detectedStreams.value.single())
+
+        val request = playerController.playedRequests.single()
+        assertEquals(1, request.subtitles.size)
+        assertEquals(page, request.subtitles.single().sourcePageUrl)
+        assertEquals(tab.id, request.subtitles.single().sourceTabId)
+        assertEquals("ar", request.subtitles.single().language)
+        assertEquals(mapOf("Accept-Language" to "ar"), request.subtitles.single().requestHeaders)
     }
 
 }
