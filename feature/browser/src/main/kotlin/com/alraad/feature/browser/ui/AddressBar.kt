@@ -32,7 +32,7 @@ import androidx.compose.ui.unit.dp
 /** Routes a search query (no TLD dot, or contains spaces) to the search engine. */
 private fun searchUrl(query: String): String = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query.trim(), "UTF-8")
 
-private val SCHEME_PREFIX = Regex("^([a-zA-Z][a-zA-Z0-9+.-]*://|data:)")
+private val SCHEME_PREFIX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
 
 private val DOMAIN_LIKE = Regex("^[^\\s]+\\.[^\\s]+$")
 
