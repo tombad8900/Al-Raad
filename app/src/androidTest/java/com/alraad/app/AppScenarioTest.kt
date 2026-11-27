@@ -19,11 +19,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
-import com.alraad.feature.browser.tabs.TabManager
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
+import com.alraad.feature.browser.tabs.TabManagerTestEntryPoint
 import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 import java.io.File
 import java.io.FileOutputStream
 import org.junit.Before
@@ -40,18 +37,12 @@ import org.junit.Test
 class AppScenarioTest {
     @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
 
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface TabManagerResetEntryPoint {
-        fun tabManager(): TabManager
-    }
-
     /** TabManager is a process-wide @Singleton: clear tabs leaked by earlier tests. */
     @Before
     fun resetTabManager() {
         EntryPointAccessors.fromApplication(
             InstrumentationRegistry.getInstrumentation().targetContext.applicationContext,
-            TabManagerResetEntryPoint::class.java,
+            TabManagerTestEntryPoint::class.java,
         ).tabManager().reset()
     }
 
