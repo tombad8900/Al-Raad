@@ -13,7 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import com.alraad.core.adblocker.impl.WebViewIntegrationHelper
 import com.alraad.core.common.contracts.AppSettings
+import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.feature.browser.tabs.TabManager
+import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
 import com.alraad.feature.browser.web.SafeWebViewConfig
 
 /**
@@ -25,6 +27,7 @@ import com.alraad.feature.browser.web.SafeWebViewConfig
 fun BrowserScreen(
     tabManager: TabManager,
     webViewIntegration: WebViewIntegrationHelper,
+    diagnosticsLogger: DiagnosticsLogger,
     settings: AppSettings,
     modifier: Modifier = Modifier,
 ) {
@@ -46,6 +49,7 @@ fun BrowserScreen(
             factory = { context ->
                 WebView(context).apply {
                     SafeWebViewConfig.apply(this, settings)
+                    webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
                     webViewClient =
                         webViewIntegration.webViewClient(
                             onPageFinished = { isLoading = false },
