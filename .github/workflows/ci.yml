@@ -120,6 +120,7 @@ jobs:
           # handling (set +e / code=$?) cannot work, so the test run and the evidence
           # pulls are wrapped in ONE bash -c line: a failing scenario still uploads.
           script: |
+            adb shell settings put global cached_apps_freezer disabled || true
             adb shell rm -f /sdcard/Download/app-launch.png /sdcard/Download/diagnostics-export.txt /sdcard/Download/scenario-*.png || true
             mkdir -p scenario-captures
             bash -c './gradlew --no-daemon :app:connectedDebugAndroidTest; code=$?; adb pull /sdcard/Download/app-launch.png app-launch.png || true; adb pull /sdcard/Download/diagnostics-export.txt diagnostics-export.txt || true; for f in $(adb shell ls /sdcard/Download/scenario-*.png 2>/dev/null | tr -d "\r"); do adb pull "$f" scenario-captures/ || true; done; adb logcat -d -t 2000 > scenario-captures/logcat-tail.txt || true; if [ "$code" -eq 0 ]; then test -s app-launch.png; test -s diagnostics-export.txt; [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d " \n")" = "89504e470d0a1a0a" ]; fi; exit $code' 

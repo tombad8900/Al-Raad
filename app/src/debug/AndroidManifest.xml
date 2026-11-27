@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Debug-only manifest overlay, merged into the APP apk for debug builds
+      (including connectedDebugAndroidTest). The scenario test serves a local
+      MockWebServer wrapper page over http://127.0.0.1, which the WebView
+      otherwise refuses (ERR_CLEARTEXT_NOT_PERMITTED). The androidTest manifest
+      cannot do this: it merges into the test apk, not the app under test.
+      Release builds keep cleartext disabled.
+    -->
+    <application android:usesCleartextTraffic="true" />
+
+</manifest>

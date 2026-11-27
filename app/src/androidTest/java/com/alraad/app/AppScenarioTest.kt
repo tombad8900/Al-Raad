@@ -7,8 +7,10 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -17,8 +19,14 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
 import androidx.test.platform.app.InstrumentationRegistry
+import com.alraad.feature.browser.tabs.TabManager
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import java.io.File
 import java.io.FileOutputStream
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
@@ -31,6 +39,21 @@ import org.junit.Test
  */
 class AppScenarioTest {
     @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
+
+    @EntryPoint
+    @InstallIn(SingletonComponent::class)
+    interface TabManagerResetEntryPoint {
+        fun tabManager(): TabManager
+    }
+
+    /** TabManager is a process-wide @Singleton: clear tabs leaked by earlier tests. */
+    @Before
+    fun resetTabManager() {
+        EntryPointAccessors.fromApplication(
+            InstrumentationRegistry.getInstrumentation().targetContext.applicationContext,
+            TabManagerResetEntryPoint::class.java,
+        ).tabManager().reset()
+    }
 
     @Test fun browseThenHistoryBookmarkAndReopen() {
         composeRule.waitForIdle()
@@ -52,7 +75,7 @@ class AppScenarioTest {
 
         // 2. History: the finished load must appear as an entry (proves recording).
         composeRule.onNodeWithText("السجل").performClick()
-        waitForNode(hasText("?t=", substring = true), 30_000)
+        waitForNode(rowInList("history_list"), 30_000)
         capture("scenario-03-history.png")
 
         // 3. Bookmark the loaded page from the browser, then verify it in Bookmarks.
@@ -60,15 +83,14 @@ class AppScenarioTest {
         waitForNode(hasSetTextAction(), 10_000)
         composeRule.onNodeWithTag("bookmark_action").performClick()
         composeRule.onNodeWithText("الإشارات").performClick()
-        waitForNode(hasText("?t=", substring = true), 15_000)
+        waitForNode(rowInList("bookmarks_list"), 15_000)
         capture("scenario-04-bookmarks.png")
 
         // 4. Reopen: recreate the activity and confirm history persists.
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
-        waitForNode(hasSetTextAction(), 20_000)
         composeRule.onNodeWithText("السجل").performClick()
-        waitForNode(hasText("?t=", substring = true), 15_000)
+        waitForNode(rowInList("history_list"), 15_000)
         capture("scenario-05-reopen-history.png")
     }
 
@@ -126,6 +148,8 @@ class AppScenarioTest {
             server.shutdown()
         }
     }
+
+    private fun rowInList(listTag: String): SemanticsMatcher = hasText("?t=", substring = true) and hasAnyAncestor(hasTestTag(listTag))
 
     private fun waitForNode(
         matcher: SemanticsMatcher,
