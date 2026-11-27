@@ -220,18 +220,28 @@ class AppScenarioTest {
                 "Media3 did not report a rendered video frame within 90 seconds",
                 firstFrameRendered.await(90, TimeUnit.SECONDS),
             )
+            // The short fixture clip can END before assertions run on a slow emulator;
+            // READY or ENDED both prove the render pipeline delivered the first frame.
+            // Poll briefly: a loaded emulator can transiently re-enter BUFFERING right
+            // after the first frame, and the state name/error is recorded on failure.
             var playbackState = Player.STATE_IDLE
             var videoWidth = 0
             var videoHeight = 0
-            instrumentation.runOnMainSync {
-                playbackState = player.playbackState
-                videoWidth = player.videoSize.width
-                videoHeight = player.videoSize.height
-            }
-            // The short fixture clip can END before assertions run on a slow emulator;
-            // READY or ENDED both prove the render pipeline delivered the first frame.
+            var playbackError: String? = null
+            val stateDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+            do {
+                instrumentation.runOnMainSync {
+                    playbackState = player.playbackState
+                    videoWidth = player.videoSize.width
+                    videoHeight = player.videoSize.height
+                    playbackError = player.playerError?.errorCodeName
+                }
+                if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) break
+                Thread.sleep(250)
+            } while (System.nanoTime() < stateDeadline)
             assertTrue(
-                "Player left the render pipeline before the frame assertion",
+                "Player left the render pipeline before the frame assertion " +
+                    "(state=" + playbackState + ", error=" + playbackError + ")",
                 playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED,
             )
             assertTrue("Decoded video width is missing", videoWidth > 0)
