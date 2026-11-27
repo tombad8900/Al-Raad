@@ -1,5 +1,6 @@
 package com.alraad.core.common.fakes
 
+import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.core.common.contracts.PlayerController
 import com.alraad.core.common.contracts.StreamUrl
 
@@ -9,6 +10,7 @@ import com.alraad.core.common.contracts.StreamUrl
  */
 class FakePlayerController : PlayerController {
     val playedStreams = mutableListOf<StreamUrl>()
+    val playedRequests = mutableListOf<PlaybackRequest>()
     val seekPositionsMs = mutableListOf<Long>()
     var pauseCount = 0
         private set
@@ -16,7 +18,14 @@ class FakePlayerController : PlayerController {
         private set
 
     override fun play(stream: StreamUrl) {
+        val request = PlaybackRequest.single(stream)
         playedStreams += stream
+        playedRequests += request
+    }
+
+    override fun play(request: PlaybackRequest) {
+        playedStreams += request.selectedStream
+        playedRequests += request
     }
 
     override fun pause() {
