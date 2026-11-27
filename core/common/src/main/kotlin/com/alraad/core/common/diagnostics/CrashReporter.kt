@@ -5,9 +5,9 @@ import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
 
 /**
- * UncaughtExceptionHandler that records the full raw stack trace to
- * [DiagnosticsLogger], then delegates to the previously installed handler
- * so normal crash behaviour is preserved.
+ * UncaughtExceptionHandler that records the stack trace through the
+ * credential-redacting [DiagnosticsLogger], then delegates to the previously
+ * installed handler so normal crash behaviour is preserved.
  */
 class CrashReporter(
     private val logger: DiagnosticsLogger,
