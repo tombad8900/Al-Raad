@@ -20,6 +20,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
@@ -219,15 +220,20 @@ class AppScenarioTest {
                 "Media3 did not report a rendered video frame within 90 seconds",
                 firstFrameRendered.await(90, TimeUnit.SECONDS),
             )
-            var playing = false
+            var playbackState = Player.STATE_IDLE
             var videoWidth = 0
             var videoHeight = 0
             instrumentation.runOnMainSync {
-                playing = player.isPlaying
+                playbackState = player.playbackState
                 videoWidth = player.videoSize.width
                 videoHeight = player.videoSize.height
             }
-            assertTrue("Player stopped before the frame assertion", playing)
+            // The short fixture clip can END before assertions run on a slow emulator;
+            // READY or ENDED both prove the render pipeline delivered the first frame.
+            assertTrue(
+                "Player left the render pipeline before the frame assertion",
+                playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED,
+            )
             assertTrue("Decoded video width is missing", videoWidth > 0)
             assertTrue("Decoded video height is missing", videoHeight > 0)
         } finally {
