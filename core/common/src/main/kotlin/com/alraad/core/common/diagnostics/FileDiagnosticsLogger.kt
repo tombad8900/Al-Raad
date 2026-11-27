@@ -21,8 +21,10 @@ import kotlinx.coroutines.launch
  * in-memory flow for the Diagnostics screen, so the record always survives
  * process death and export/clear are race-free. Nothing is redacted by design.
  *
- * Line format: `timestamp<TAB>CATEGORY<TAB>LEVEL<TAB>message<TAB>key=value;...`
- * Tabs/newlines inside values are flattened to spaces so one entry is one line.
+ * Line format v2: `V2<TAB>timestamp<TAB>CATEGORY<TAB>LEVEL<TAB>enc(message)<TAB>enc(key)=enc(value);...`
+ * where enc() is UTF-8 percent-encoding, so details containing ';', '=', tabs or
+ * newlines round-trip losslessly. Legacy v1 lines (no V2 marker, raw values) stay
+ * readable. Export decodes entries so exported text preserves the original payload.
  */
 class FileDiagnosticsLogger(
     private val logFile: File,
@@ -70,7 +72,13 @@ class FileDiagnosticsLogger(
 
     override suspend fun exportAsText(): String =
         synchronized(fileLock) {
-            if (logFile.exists()) logFile.readText() else ""
+            if (!logFile.exists()) return ""
+            // Decoded rendering: the original payload survives, including newlines.
+            logFile.readLines().mapNotNull { parseLine(it) }
+                .joinToString("\n") { entry ->
+                    val details = entry.details.entries.joinToString(";") { (k, v) -> "$k=$v" }
+                    "${entry.timestamp}\t${entry.category}\t${entry.level}\t${entry.message}\t$details"
+                }
         }
 
     override suspend fun clear() {
@@ -81,27 +89,72 @@ class FileDiagnosticsLogger(
     }
 
     private fun formatLine(entry: DiagEntry): String {
-        val details = entry.details.entries.joinToString(";") { (k, v) -> "${k.clean()}=${v.clean()}" }
-        return "${entry.timestamp}\t${entry.category}\t${entry.level}\t${entry.message.clean()}\t$details"
+        val details = entry.details.entries.joinToString(";") { (k, v) -> "${enc(k)}=${enc(v)}" }
+        return "V2\t${entry.timestamp}\t${entry.category}\t${entry.level}\t${enc(entry.message)}\t$details"
     }
 
     private fun parseLine(line: String): DiagEntry? {
         val parts = line.split('\t')
-        if (parts.size < 4) return null
+        val isV2 = parts.firstOrNull() == "V2"
+        val offset = if (isV2) 1 else 0
+        if (parts.size < offset + 4) return null
+        // Legacy v1 lines (no marker) carry raw, lossy values; V2 values are
+        // percent-encoded and decode losslessly.
+        val detailsRaw = parts.getOrNull(offset + 4).orEmpty()
         val details =
-            parts.getOrNull(4).orEmpty()
+            detailsRaw
                 .split(';')
                 .filter { it.contains('=') }
-                .associate { it.substringBefore('=') to it.substringAfter('=') }
+                .associate {
+                    val k = it.substringBefore('=')
+                    val v = it.substringAfter('=')
+                    if (isV2) dec(k) to dec(v) else k to v
+                }
         return DiagEntry(
             id = nextId++,
-            timestamp = parts[0].toLongOrNull() ?: 0L,
-            category = runCatching { DiagCategory.valueOf(parts[1]) }.getOrDefault(DiagCategory.APP),
-            level = runCatching { DiagLevel.valueOf(parts[2]) }.getOrDefault(DiagLevel.INFO),
-            message = parts[3],
+            timestamp = parts[offset].toLongOrNull() ?: 0L,
+            category = runCatching { DiagCategory.valueOf(parts[offset + 1]) }.getOrDefault(DiagCategory.APP),
+            level = runCatching { DiagLevel.valueOf(parts[offset + 2]) }.getOrDefault(DiagLevel.INFO),
+            message = if (isV2) dec(parts[offset + 3]) else parts[offset + 3],
             details = details,
         )
     }
 
-    private fun String.clean(): String = replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+    /**
+     * Strict percent codec: every byte outside [A-Za-z0-9._~-] becomes %XX (UTF-8),
+     * so ';', '=', tabs, newlines and non-ASCII survive losslessly. Unlike
+     * URLEncoder, '+' and space are distinct.
+     */
+    private fun enc(value: String): String {
+        val out = StringBuilder()
+        for (b in value.toByteArray(Charsets.UTF_8)) {
+            val c = b.toInt() and 0xFF
+            val ch = c.toChar()
+            if (ch.isLetterOrDigit() && c < 128 || ch in "._~-") {
+                out.append(ch)
+            } else {
+                out.append('%').append("%02X".format(c))
+            }
+        }
+        return out.toString()
+    }
+
+    private fun dec(value: String): String {
+        val bytes = java.io.ByteArrayOutputStream()
+        var i = 0
+        while (i < value.length) {
+            if (value[i] == '%' && i + 2 < value.length + 1 && i + 2 <= value.length - 1 + 1) {
+                val hex = value.substring(i + 1, minOf(i + 3, value.length))
+                val parsed = hex.toIntOrNull(16)
+                if (parsed != null && hex.length == 2) {
+                    bytes.write(parsed)
+                    i += 3
+                    continue
+                }
+            }
+            bytes.write(value[i].code)
+            i++
+        }
+        return bytes.toString(Charsets.UTF_8)
+    }
 }

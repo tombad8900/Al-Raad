@@ -71,4 +71,45 @@ class FileDiagnosticsLoggerTest {
             assertTrue(entries[0].details["stacktrace"]!!.contains("IllegalStateException"))
             assertEquals(boom, delegated)
         }
+
+    @Test
+    fun `details with separators and newlines round-trip losslessly across instances`() =
+        runTest {
+            val file = tmp.newFile("diag-v2.log")
+            val nasty =
+                mapOf(
+                    "Cookie" to "session=abc; x=y",
+                    "multiline" to "line1\nline2\r\nline3\ttab",
+                    "semicolon;key" to "v;v",
+                    "plus" to "a+b c",
+                )
+            logger(file).log(DiagCategory.WEBVIEW, DiagLevel.INFO, "raw=message; with; semis", nasty)
+
+            val reloaded = logger(file)
+            val entries = reloaded.observeLogs().first { it.isNotEmpty() }
+            val entry = entries.single { it.category == DiagCategory.WEBVIEW }
+            assertEquals(nasty, entry.details)
+            assertEquals("raw=message; with; semis", entry.message)
+        }
+
+    @Test
+    fun `export preserves the original payload`() =
+        runTest {
+            val file = tmp.newFile("diag-export.log")
+            val logger = logger(file)
+            logger.log(DiagCategory.SNIFFER, DiagLevel.WARN, "m", mapOf("Cookie" to "a=1; b=2", "body" to "x\ny"))
+            val exported = logger.exportAsText()
+            assertTrue(exported.contains("Cookie=a=1; b=2"))
+            assertTrue(exported.contains("x\ny"))
+        }
+
+    @Test
+    fun `legacy v1 lines remain readable`() =
+        runTest {
+            val file = tmp.newFile("diag-legacy.log")
+            file.writeText("1700000000000\tWEBVIEW\tERROR\told message\turl=https://a.example\n")
+            val entries = logger(file).observeLogs().first { it.isNotEmpty() }
+            assertEquals("old message", entries.single().message)
+            assertEquals("https://a.example", entries.single().details["url"])
+        }
 }
