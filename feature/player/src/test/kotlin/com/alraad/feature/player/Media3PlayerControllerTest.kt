@@ -11,6 +11,7 @@ import com.alraad.feature.player.impl.Media3PlayerController
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -53,6 +54,23 @@ class Media3PlayerControllerTest {
         controller.seekTo(1000)
         controller.release()
         assertNull(controller.currentPlayer())
+    }
+
+    @Test fun `play propagates stream drm license url and license request headers to the media item`() {
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example.com/v.mpd",
+                format = StreamFormat.DASH,
+                source = StreamSource.NETWORK,
+                headers = mapOf("Referer" to "https://page.example.com"),
+                drmLicenseUrl = "https://lic.example/widevine",
+                drmLicenseRequestHeaders = mapOf("Authorization" to "Bearer t"),
+            )
+        controller.play(stream)
+        val drm = controller.currentPlayer()?.currentMediaItem?.localConfiguration?.drmConfiguration
+        assertNotNull(drm)
+        assertEquals("https://lic.example/widevine", drm?.licenseUri?.toString())
+        assertEquals(mapOf("Authorization" to "Bearer t"), drm?.licenseRequestHeaders)
     }
 
     @Test fun `switching streams replaces the player so UI state rebinding sees the new instance`() {

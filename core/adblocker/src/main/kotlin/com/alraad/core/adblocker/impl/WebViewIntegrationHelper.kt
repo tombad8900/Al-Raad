@@ -50,13 +50,17 @@ class WebViewIntegrationHelper
             )
         }
 
-        fun webViewClient(onPageFinished: (WebView) -> Unit = {}): WebViewClient =
+        fun webViewClient(
+            onPageFinished: (WebView) -> Unit = {},
+            onRequestObserved: (url: String, headers: Map<String, String>, pageUrl: String?) -> Unit = { _, _, _ -> },
+        ): WebViewClient =
             object : WebViewClient() {
                 override fun shouldInterceptRequest(
                     view: WebView,
                     request: android.webkit.WebResourceRequest,
                 ): WebResourceResponse? {
                     val url = request.url.toString()
+                    onRequestObserved(url, request.requestHeaders ?: emptyMap(), view.url)
                     val blocked = runBlocking(Dispatchers.IO) { adBlocker.shouldBlock(url) }
                     if (blocked) {
                         logger.log(DiagCategory.ADBLOCK, DiagLevel.DEBUG, "Intercepted", mapOf("url" to url))

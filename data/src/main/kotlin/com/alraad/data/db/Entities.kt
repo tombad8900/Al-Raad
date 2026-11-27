@@ -32,6 +32,8 @@ data class SavedStreamEntity(
     val source: String,
     val sizeBytes: Long?,
     val headersJson: String,
+    val drmLicenseUrl: String? = null,
+    val drmHeadersJson: String = "",
     val thumbnailUrl: String?,
     val sourcePageUrl: String?,
     val createdAt: Long,

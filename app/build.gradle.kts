@@ -53,6 +53,8 @@ dependencies {
     implementation(projects.core.adblocker)
     implementation(projects.data)
     implementation(projects.feature.browser)
+    implementation(projects.feature.library)
+    implementation(projects.feature.player)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)

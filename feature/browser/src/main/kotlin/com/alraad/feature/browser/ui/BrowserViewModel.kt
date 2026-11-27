@@ -20,6 +20,7 @@ class BrowserViewModel
         val tabManager: TabManager,
         val webViewIntegration: WebViewIntegrationHelper,
         val diagnosticsLogger: DiagnosticsLogger,
+        val sniffer: com.alraad.feature.browser.sniffer.StreamSniffer,
         settingsRepository: SettingsRepository,
     ) : ViewModel() {
         val settings: StateFlow<AppSettings> =

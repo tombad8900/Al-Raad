@@ -10,6 +10,7 @@ import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagEntry
 import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
+import com.alraad.feature.browser.sniffer.StreamSniffer
 import com.alraad.feature.browser.tabs.TabManager
 import com.alraad.feature.browser.ui.BrowserScreen
 import kotlinx.coroutines.CoroutineScope
@@ -58,7 +59,7 @@ class BrowserScreenLaunchTest {
         val tabManager = TabManager()
         val helper = WebViewIntegrationHelper(fakeAdBlocker, fakeLogger, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
         val settings = AppSettings(homepageUrl = "https://home.example")
-        composeRule.setContent { BrowserScreen(tabManager, helper, fakeLogger, settings) }
+        composeRule.setContent { BrowserScreen(tabManager, helper, fakeLogger, StreamSniffer(fakeLogger), settings) }
         composeRule.waitForIdle()
         assertTrue(tabManager.state.value.tabs.any { it.url == "https://home.example" })
         composeRule.onNodeWithText("https://home.example").assertIsDisplayed()

@@ -35,13 +35,17 @@ class Media3PlayerController
     ) : PlayerController {
         private var player: ExoPlayer? = null
 
+        // Last stream handed to play(), so the PLAYER nav route can render it.
+        private val _currentStream = kotlinx.coroutines.flow.MutableStateFlow<StreamUrl?>(null)
+        val currentStream: kotlinx.coroutines.flow.StateFlow<StreamUrl?> = _currentStream
+
         /** Exposed for PlayerScreen rendering. */
         fun currentPlayer(): Player? = player
 
         /** Requested quality ceiling; null means adaptive/auto. */
         data class QualityLimit(val maxHeight: Int)
 
-        override fun play(stream: StreamUrl) = play(stream, drmLicenseUrl = null, quality = null)
+        override fun play(stream: StreamUrl) = play(stream, drmLicenseUrl = stream.drmLicenseUrl, quality = null)
 
         /**
          * Issue #8 part D: standard DRM playback (Widevine when drmLicenseUrl is
@@ -63,10 +67,14 @@ class Media3PlayerController
                     .setDefaultRequestProperties(stream.headers)
             val mediaItem =
                 MediaItem.Builder().setUri(stream.url).apply {
-                    if (drmLicenseUrl != null) {
+                    val effectiveLicenseUrl = drmLicenseUrl ?: stream.drmLicenseUrl
+                    if (effectiveLicenseUrl != null) {
+                        // License-request headers stay on the DRM config, distinct from the
+                        // stream headers applied to the media data source above.
                         setDrmConfiguration(
                             MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
-                                .setLicenseUri(drmLicenseUrl)
+                                .setLicenseUri(effectiveLicenseUrl)
+                                .setLicenseRequestHeaders(stream.drmLicenseRequestHeaders)
                                 .build(),
                         )
                     }
@@ -78,6 +86,7 @@ class Media3PlayerController
                     else -> ProgressiveMediaSource.Factory(dataSourceFactory)
                 }.createMediaSource(mediaItem)
             release()
+            _currentStream.value = stream
             player =
                 ExoPlayer.Builder(context).build().apply {
                     addListener(
@@ -132,5 +141,6 @@ class Media3PlayerController
         override fun release() {
             player?.release()
             player = null
+            _currentStream.value = null
         }
     }

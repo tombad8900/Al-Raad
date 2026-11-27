@@ -28,6 +28,15 @@ class StreamSniffer
         @Volatile
         private var lastDetected: StreamUrl? = null
 
+        // Most recent detected stream per page URL, so a license request attaches to
+        // the stream of the document that issued it, not a stream from another tab/page.
+        private val lastDetectedByPage =
+            java.util.Collections.synchronizedMap(
+                object : LinkedHashMap<String, StreamUrl>(16, 0.75f, true) {
+                    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, StreamUrl>?): Boolean = size > MAX_SEEN_KEYS
+                },
+            )
+
         // Detectable standard EME/Widevine license endpoint hints (case-insensitive).
         // Deliberately excludes a bare "drm" substring: media URLs like /drm/manifest.mpd
         // must classify as streams via StreamFormatDetector, never as license requests.
@@ -38,10 +47,15 @@ class StreamSniffer
             return licenseUrlHints.any { lower.contains(it) }
         }
 
-        /** Records a detected license request and attaches it to the most recent stream. */
+        /**
+         * Records a detected license request and attaches it to the stream detected on
+         * the same page when [pageUrl] is known, falling back to the most recent stream
+         * overall. License-request headers stay distinct from stream headers.
+         */
         fun onDrmLicenseObserved(
             url: String,
             headers: Map<String, String> = emptyMap(),
+            pageUrl: String? = null,
         ) {
             if (!isLicenseRequest(url)) return
             logger.log(
@@ -50,9 +64,21 @@ class StreamSniffer
                 "DRM license request detected",
                 mapOf("url" to url, "headers" to headers.toString()),
             )
-            val updated = lastDetected?.copy(drmLicenseUrl = url, drmLicenseRequestHeaders = headers) ?: return
-            lastDetected = updated
-            listeners.forEach { it.onStreamUpdated(updated) }
+            // Correlate strictly by page: when the page is known, only that page's stream
+            // may take the license; a license from a page with no detected stream stays
+            // unattached rather than landing on another page's stream.
+            val target =
+                if (pageUrl != null) {
+                    lastDetectedByPage[pageUrl]
+                } else {
+                    lastDetected
+                }
+            target?.let { found ->
+                val updated = found.copy(drmLicenseUrl = url, drmLicenseRequestHeaders = headers)
+                if (lastDetected?.url == found.url) lastDetected = updated
+                pageUrl?.let { lastDetectedByPage[it] = updated }
+                listeners.forEach { it.onStreamUpdated(updated) }
+            }
         }
 
         // Access-order LRU, bounded: long sessions evict the oldest unique keys.
@@ -90,10 +116,11 @@ class StreamSniffer
             headers: Map<String, String> = emptyMap(),
             contentType: String? = null,
             source: StreamSource = StreamSource.NETWORK,
+            pageUrl: String? = null,
         ): StreamUrl? {
-            if (StreamFormatDetector.isStream(url, contentType)) return detectStream(url, headers, contentType, source)
+            if (StreamFormatDetector.isStream(url, contentType)) return detectStream(url, headers, contentType, source, pageUrl)
             if (isLicenseRequest(url)) {
-                onDrmLicenseObserved(url, headers)
+                onDrmLicenseObserved(url, headers, pageUrl)
             }
             return null
         }
@@ -103,6 +130,7 @@ class StreamSniffer
             headers: Map<String, String>,
             contentType: String?,
             source: StreamSource,
+            pageUrl: String? = null,
         ): StreamUrl? {
             val isDuplicate = seen.put(dedupKey(url, headers), System.currentTimeMillis()) != null
             val stream =
@@ -123,6 +151,7 @@ class StreamSniffer
                 }
             stream?.let { detected ->
                 lastDetected = detected
+                pageUrl?.let { lastDetectedByPage[it] = detected }
                 logger.log(
                     DiagCategory.SNIFFER,
                     DiagLevel.INFO,
