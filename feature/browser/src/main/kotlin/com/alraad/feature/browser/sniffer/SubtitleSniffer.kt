@@ -2,13 +2,16 @@ package com.alraad.feature.browser.sniffer
 
 import com.alraad.core.common.contracts.SubtitleTrack
 import java.net.URI
+import javax.inject.Inject
+import javax.inject.Singleton
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 import java.util.LinkedHashMap
 import java.util.concurrent.CopyOnWriteArraySet
 
 /** Captures page/tab-scoped external subtitles without retaining credential headers. */
-class SubtitleSniffer {
+@Singleton
+class SubtitleSniffer @Inject constructor() {
     fun interface Listener {
         fun onSubtitleObserved(track: SubtitleTrack)
     }
