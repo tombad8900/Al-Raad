@@ -27,6 +27,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -40,6 +41,8 @@ class BrowserViewModelStreamActionsTest {
     private lateinit var tabManager: TabManager
     private lateinit var viewModel: BrowserViewModel
     private lateinit var sniffer: StreamSniffer
+    private lateinit var subtitleSniffer: SubtitleSniffer
+    private lateinit var playerController: FakePlayerController
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Before
@@ -49,10 +52,12 @@ class BrowserViewModelStreamActionsTest {
         savedStreams = FakeSavedStreamsRepository()
         tabManager = TabManager()
         sniffer = StreamSniffer(logger)
+        subtitleSniffer = SubtitleSniffer()
+        playerController = FakePlayerController()
         val streamActions =
             StreamActions(
                 org.robolectric.RuntimeEnvironment.getApplication(),
-                FakePlayerController(),
+                playerController,
                 savedStreams,
                 logger,
             )
@@ -67,7 +72,7 @@ class BrowserViewModelStreamActionsTest {
                     ),
                 diagnosticsLogger = logger,
                 sniffer = sniffer,
-                subtitleSniffer = SubtitleSniffer(),
+                subtitleSniffer = subtitleSniffer,
                 streamActions = streamActions,
                 settingsRepository = FakeSettingsRepository(),
                 historyRepository = FakeHistoryRepository(),
@@ -129,6 +134,45 @@ class BrowserViewModelStreamActionsTest {
         viewModel.recordPageStarted(tabA.id, "https://page-a.example/next", startsNewNavigation = true)
         sniffer.onRequestObserved("https://cdn.example/stale.m3u8", pageUrl = pageA, tabId = tabA.id)
         assertTrue(viewModel.detectedStreams.value.isEmpty())
+    }
+
+    @Test
+    fun `playback receives only subtitles from the selected page and tab`() {
+        val pageA = "https://page-a.example/watch"
+        val pageB = "https://page-b.example/watch"
+        val tabA = tabManager.openTab(pageA)
+        viewModel.recordPageStarted(tabA.id, pageA, startsNewNavigation = true)
+        val tabB = tabManager.openTab(pageB)
+        viewModel.recordPageStarted(tabB.id, pageB, startsNewNavigation = true)
+
+        subtitleSniffer.onRequestObserved(
+            "https://subtitles.example/a.ar.vtt",
+            mapOf("Cookie" to "video-session-secret", "Accept" to "text/vtt"),
+            pageA,
+            tabA.id,
+        )
+        subtitleSniffer.onRequestObserved(
+            "https://subtitles.example/b.en.srt",
+            mapOf("Authorization" to "Bearer secret"),
+            pageB,
+            tabB.id,
+        )
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example/a.m3u8",
+                format = StreamFormat.HLS,
+                source = StreamSource.NETWORK,
+                headers = mapOf("Cookie" to "video-session-secret"),
+            )
+
+        viewModel.playStream(DetectedStreamItem(stream, pageA, tabA.id))
+
+        val request = requireNotNull(playerController.lastPlaybackRequest)
+        assertEquals(listOf("https://subtitles.example/a.ar.vtt"), request.subtitles.map { it.url })
+        assertEquals(pageA, request.sourcePageUrl)
+        assertEquals(tabA.id, request.sourceTabId)
+        assertFalse(request.subtitles.single().requestHeaders.containsKey("Cookie"))
+        assertFalse(request.subtitles.single().requestHeaders.containsKey("Authorization"))
     }
 
     @Test
