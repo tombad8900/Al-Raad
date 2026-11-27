@@ -56,6 +56,7 @@ class StreamSniffer
             url: String,
             headers: Map<String, String> = emptyMap(),
             pageUrl: String? = null,
+            tabId: String? = null,
         ) {
             if (!isLicenseRequest(url)) return
             logger.log(
@@ -77,7 +78,10 @@ class StreamSniffer
                 val updated = found.copy(drmLicenseUrl = url, drmLicenseRequestHeaders = headers)
                 if (lastDetected?.url == found.url) lastDetected = updated
                 pageUrl?.let { lastDetectedByPage[it] = updated }
-                listeners.forEach { it.onStreamUpdated(updated) }
+                listeners.forEach {
+                    it.onStreamUpdated(updated)
+                    it.onStreamObserved(updated, pageUrl, tabId)
+                }
             }
         }
 
@@ -117,10 +121,13 @@ class StreamSniffer
             contentType: String? = null,
             source: StreamSource = StreamSource.NETWORK,
             pageUrl: String? = null,
+            tabId: String? = null,
         ): StreamUrl? {
-            if (StreamFormatDetector.isStream(url, contentType)) return detectStream(url, headers, contentType, source, pageUrl)
+            if (StreamFormatDetector.isStream(url, contentType)) {
+                return detectStream(url, headers, contentType, source, pageUrl, tabId)
+            }
             if (isLicenseRequest(url)) {
-                onDrmLicenseObserved(url, headers, pageUrl)
+                onDrmLicenseObserved(url, headers, pageUrl, tabId)
             }
             return null
         }
@@ -131,27 +138,23 @@ class StreamSniffer
             contentType: String?,
             source: StreamSource,
             pageUrl: String? = null,
+            tabId: String? = null,
         ): StreamUrl? {
+            val detected = StreamUrl(
+                url = url,
+                format = StreamFormatDetector.detect(url, contentType),
+                source = source,
+                headers = headers,
+                size =
+                    headers.entries
+                        .firstOrNull { it.key.equals("Content-Length", ignoreCase = true) }
+                        ?.value
+                        ?.toLongOrNull(),
+            )
             val isDuplicate = seen.put(dedupKey(url, headers), System.currentTimeMillis()) != null
-            val stream =
-                if (isDuplicate) {
-                    null
-                } else {
-                    StreamUrl(
-                        url = url,
-                        format = StreamFormatDetector.detect(url, contentType),
-                        source = source,
-                        headers = headers,
-                        size =
-                            headers.entries
-                                .firstOrNull { it.key.equals("Content-Length", ignoreCase = true) }
-                                ?.value
-                                ?.toLongOrNull(),
-                    )
-                }
-            stream?.let { detected ->
-                lastDetected = detected
-                pageUrl?.let { lastDetectedByPage[it] = detected }
+            lastDetected = detected
+            pageUrl?.let { lastDetectedByPage[it] = detected }
+            if (!isDuplicate) {
                 logger.log(
                     DiagCategory.SNIFFER,
                     DiagLevel.INFO,
@@ -165,6 +168,7 @@ class StreamSniffer
                 )
                 listeners.forEach { it.onStreamDetected(detected) }
             }
-            return stream
+            listeners.forEach { it.onStreamObserved(detected, pageUrl, tabId) }
+            return if (isDuplicate) null else detected
         }
     }
