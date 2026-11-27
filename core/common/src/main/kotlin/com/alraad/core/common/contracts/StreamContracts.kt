@@ -57,7 +57,13 @@ data class PlaybackRequest(
     val selectedStream: StreamUrl
         get() = sources[selectedSourceIndex]
 
-    fun selectSource(index: Int): PlaybackRequest = copy(selectedSourceIndex = index)
+    fun selectSource(index: Int): PlaybackRequest =
+        copy(
+            selectedSourceIndex = index,
+            subtitles = subtitles.filter {
+                it.sourcePageUrl == sourcePageUrl && it.sourceTabId == sourceTabId
+            },
+        )
 
     companion object {
         fun single(stream: StreamUrl): PlaybackRequest = PlaybackRequest(sources = listOf(stream))
