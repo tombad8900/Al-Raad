@@ -30,6 +30,7 @@ object DiagnosticsRedactor {
             "xapikey",
             "key",
             "clientsecret",
+            "privatekey",
             "secret",
             "password",
             "passwd",
@@ -95,6 +96,6 @@ object DiagnosticsRedactor {
             normalized.endsWith("password") ||
             normalized.endsWith("signature") ||
             normalized.endsWith("credential") ||
-            normalized.endsWith("apikey")
+            normalized.endsWith("apikey") || normalized.endsWith("privatekey")
     }
 }
