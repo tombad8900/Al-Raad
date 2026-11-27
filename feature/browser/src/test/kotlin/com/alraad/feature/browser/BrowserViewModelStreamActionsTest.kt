@@ -13,6 +13,7 @@ import com.alraad.core.common.fakes.FakeSavedStreamsRepository
 import com.alraad.core.common.fakes.FakeSettingsRepository
 import com.alraad.feature.browser.actions.StreamActions
 import com.alraad.feature.browser.sniffer.StreamSniffer
+import com.alraad.feature.browser.sniffer.SubtitleSniffer
 import com.alraad.feature.browser.tabs.TabManager
 import com.alraad.feature.browser.ui.BrowserViewModel
 import com.alraad.feature.browser.ui.DetectedStreamItem
@@ -66,6 +67,7 @@ class BrowserViewModelStreamActionsTest {
                     ),
                 diagnosticsLogger = logger,
                 sniffer = sniffer,
+                subtitleSniffer = SubtitleSniffer(),
                 streamActions = streamActions,
                 settingsRepository = FakeSettingsRepository(),
                 historyRepository = FakeHistoryRepository(),
