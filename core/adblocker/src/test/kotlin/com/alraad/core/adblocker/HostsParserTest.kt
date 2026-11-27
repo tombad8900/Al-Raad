@@ -32,4 +32,25 @@ class HostsParserTest {
         assertEquals(500, parsed.size)
         assertTrue("ad250.example.com" in parsed)
     }
+
+    @Test fun `ipv6 literals with hex letters are filtered, hostnames kept`() {
+        val parsed =
+            HostsParser.parse(
+                """
+                2001:db8::1 example.com
+                ::1 localhost
+                fe80::a1b2:c3d4
+                """.trimIndent(),
+            )
+        assertTrue("example.com" in parsed)
+        assertFalse("2001:db8::1" in parsed)
+        assertFalse(parsed.any { it.contains(":") })
+        assertFalse("::1" in parsed)
+        assertFalse("localhost" in parsed)
+    }
+
+    @Test fun `standalone ipv6 candidate is not returned as a domain`() {
+        val parsed = HostsParser.parse("2001:db8::dead:beef")
+        assertTrue(parsed.isEmpty())
+    }
 }
