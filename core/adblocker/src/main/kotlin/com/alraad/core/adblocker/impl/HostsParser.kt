@@ -19,5 +19,12 @@ object HostsParser {
         return hosts
     }
 
-    private fun isIp(value: String): Boolean = value.all { it.isDigit() || it == '.' || it == ':' } && value.any { it == '.' || it == ':' }
+    private val ipv4 = Regex("^[0-9.]+$")
+    private val ipv6 = Regex("^[0-9a-fA-F:]+$")
+
+    /** IPv4 literals (digits/dots) and IPv6 literals (hex digits/colons, incl. compressed ::). */
+    private fun isIp(value: String): Boolean {
+        if (value.any { it == ':' }) return ipv6.matches(value)
+        return value.any { it == '.' } && ipv4.matches(value)
+    }
 }
