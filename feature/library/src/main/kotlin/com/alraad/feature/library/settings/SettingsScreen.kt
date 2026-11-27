@@ -65,13 +65,14 @@ private fun SettingToggle(
 }
 
 /**
- * Diagnostics screen (part C): raw unredacted log list with category filter,
- * copy/export and clear. Entries intentionally show full URLs and headers.
+ * Diagnostics screen with category filtering, safe copy/export, and clear.
+ * Credential values are redacted by the logger and view-model boundaries.
  */
 @Composable
 fun DiagnosticsScreen(
     viewModel: SettingsDiagnosticsViewModel,
     onExport: (String) -> Unit,
+    onCopy: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val logs by viewModel.logs.collectAsState()
@@ -92,7 +93,8 @@ fun DiagnosticsScreen(
             }
         }
         Row(modifier = Modifier.padding(horizontal = 8.dp)) {
-            TextButton(onClick = { scope.launch { onExport(viewModel.exportLogs()) } }) { Text("نسخ / Export") }
+            TextButton(onClick = { scope.launch { onCopy(viewModel.exportLogs()) } }) { Text("نسخ / Copy") }
+            TextButton(onClick = { scope.launch { onExport(viewModel.exportLogs()) } }) { Text("تصدير ملف / Export") }
             TextButton(onClick = { viewModel.clearLogs() }) { Text("مسح / Clear") }
         }
         HorizontalDivider()
