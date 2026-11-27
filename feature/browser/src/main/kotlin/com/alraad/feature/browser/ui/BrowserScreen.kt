@@ -1,20 +1,34 @@
 package com.alraad.feature.browser.ui
 
 import android.webkit.WebView
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.alraad.core.adblocker.impl.WebViewIntegrationHelper
 import com.alraad.core.common.contracts.AppSettings
@@ -26,9 +40,8 @@ import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
 import com.alraad.feature.browser.web.SafeWebViewConfig
 
 /**
- * Browser shell: RTL AddressBar on top of a hardened WebView. Navigation from the
- * address bar updates the active tab in TabManager; the WebView loads the active
- * tab's URL. Ad blocking and sniffing come from WebViewIntegrationHelper.
+ * Browser shell: each tab owns a WebView so in-flight requests retain their true
+ * originating tab while the user switches between tabs.
  */
 @Composable
 fun BrowserScreen(
@@ -42,10 +55,30 @@ fun BrowserScreen(
 ) {
     val tabState by tabManager.state.collectAsState()
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
-    var isLoading by remember { mutableStateOf(false) }
-    val backgroundColor = MaterialTheme.colorScheme.background
+    val loadingByTab = remember { mutableStateMapOf<String, Boolean>() }
+    val webViews = remember { mutableMapOf<String, WebView>() }
+    val backgroundColor = MaterialTheme.colorScheme.background.toArgb()
 
-    // Open the homepage tab on first launch so the WebView is never left blank.
+    LaunchedEffect(tabState.tabs.map { it.id }) {
+        val liveIds = tabState.tabs.mapTo(mutableSetOf()) { it.id }
+        webViews.keys.filterNot { it in liveIds }.forEach { id ->
+            loadingByTab.remove(id)
+            webViews.remove(id)?.apply {
+                stopLoading()
+                destroy()
+            }
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            webViews.values.forEach { webView ->
+                webView.stopLoading()
+                webView.destroy()
+            }
+            webViews.clear()
+        }
+    }
+
     LaunchedEffect(Unit) {
         if (tabState.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
     }
@@ -53,67 +86,155 @@ fun BrowserScreen(
     Column(modifier = modifier.fillMaxSize()) {
         AddressBar(
             currentUrl = activeTab?.url ?: "",
-            isLoading = isLoading,
+            isLoading = activeTab?.let { loadingByTab[it.id] } ?: false,
             onNavigate = { url ->
                 val id = tabState.activeTabId ?: tabManager.openTab(url).id
                 tabManager.updateTab(id, url = url)
             },
             onBookmarkClick = handlers.actions.onBookmark,
         )
-        // Minimal selected-stream handoff into the PLAYER route (richer picker is
-        // queued post-MVP): plays the most recent detected stream with its headers.
-        handlers.detectedStreams.streams.firstOrNull()?.let { stream ->
-            DetectedStreamBar(stream = stream, streams = handlers.detectedStreams)
+        handlers.detectedStreams.streams.takeIf { it.isNotEmpty() }?.let { items ->
+            DetectedStreamBar(items = items, actions = handlers.detectedStreams)
         }
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                WebView(context).apply {
-                    // Match the app background so an empty WebView is never a white screen.
-                    setBackgroundColor(backgroundColor.toArgb())
-                    SafeWebViewConfig.apply(this, settings)
-                    webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
-                    webViewClient =
-                        webViewIntegration.webViewClient(
-                            onPageFinished = { webView ->
-                                isLoading = false
-                                webView.url?.let { loaded -> handlers.actions.onPageVisited(loaded, webView.title ?: "") }
-                            },
-                            onRequestObserved = { url, headers, pageUrl ->
-                                sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl)
-                            },
-                        )
-                }
-            },
-            update = { webView ->
-                activeTab?.url?.takeIf { it.isNotBlank() && it != webView.url }?.let {
-                    isLoading = true
-                    webView.loadUrl(it)
-                }
-            },
-        )
+        activeTab?.let { tab ->
+            key(tab.id) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { context ->
+                        webViews.getOrPut(tab.id) {
+                            WebView(context).apply {
+                                setBackgroundColor(backgroundColor)
+                                SafeWebViewConfig.apply(this, settings)
+                                webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
+                                webViewClient =
+                                    webViewIntegration.webViewClient(
+                                        onPageFinished = { webView ->
+                                            loadingByTab[tab.id] = false
+                                            webView.url?.let { loaded ->
+                                                handlers.actions.onPageVisited(loaded, webView.title ?: "", tab.id)
+                                            }
+                                        },
+                                        onRequestObserved = { url, headers, pageUrl ->
+                                            sniffer.onRequestObserved(
+                                                url,
+                                                headers,
+                                                null,
+                                                StreamSource.NETWORK,
+                                                pageUrl,
+                                                tab.id,
+                                            )
+                                        },
+                                        onPageStart = { _, _ -> loadingByTab[tab.id] = true },
+                                    )
+                            }
+                        }
+                    },
+                    update = { webView ->
+                        tab.url.takeIf { it.isNotBlank() && it != webView.url }?.let { url ->
+                            loadingByTab[tab.id] = true
+                            webView.loadUrl(url)
+                        }
+                    },
+                )
+            }
+        }
     }
 }
 
-/** Stream bar: play / copy / save actions for the most recently detected stream. */
+/** Current-page stream picker. A single result needs no selector. */
 @Composable
 private fun DetectedStreamBar(
-    stream: com.alraad.core.common.contracts.StreamUrl,
-    streams: DetectedStreamsUi,
+    items: List<DetectedStreamItem>,
+    actions: DetectedStreamsUi,
 ) {
-    val host = android.net.Uri.parse(stream.url).host ?: stream.url
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    val sortedItems = remember(items) { sortDetectedStreamItems(items) }
+    var selectedUrl by remember(sortedItems) { mutableStateOf(sortedItems.firstOrNull()?.stream?.url) }
+    val selected = sortedItems.firstOrNull { it.stream.url == selectedUrl } ?: sortedItems.firstOrNull()
+    var selectorExpanded by remember { mutableStateOf(false) }
+    var saveDialogOpen by remember { mutableStateOf(false) }
+    var saveTitle by remember(selected?.stream?.url) {
+        mutableStateOf(selected?.stream?.let { android.net.Uri.parse(it.url).host ?: it.url }.orEmpty())
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
-        androidx.compose.material3.TextButton(onClick = { streams.onPlay(stream) }) {
-            androidx.compose.material3.Text(text = "▶ $host")
+        Text("روابط البث المكتشفة: ${sortedItems.size}", style = MaterialTheme.typography.labelLarge)
+        if (sortedItems.size > 1) {
+            androidx.compose.foundation.layout.Box {
+                OutlinedButton(onClick = { selectorExpanded = true }) {
+                    Text("اختيار رابط البث")
+                }
+                DropdownMenu(expanded = selectorExpanded, onDismissRequest = { selectorExpanded = false }) {
+                    sortedItems.forEach { item ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(item.stream.format.name)
+                                    Text(item.stream.url, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                }
+                            },
+                            onClick = {
+                                selectedUrl = item.stream.url
+                                selectorExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
         }
-        androidx.compose.material3.TextButton(onClick = { streams.onCopy(stream) }) {
-            androidx.compose.material3.Text(text = "نسخ")
+        selected?.let { item ->
+            Text(item.stream.url, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(onClick = { actions.onPlay(item) }) {
+                    Text("تشغيل")
+                }
+                TextButton(onClick = { actions.onCopy(item) }) {
+                    Text("نسخ الرابط")
+                }
+                TextButton(
+                    onClick = {
+                        saveTitle = android.net.Uri.parse(item.stream.url).host ?: item.stream.url
+                        saveDialogOpen = true
+                    },
+                ) {
+                    Text("حفظ في المكتبة")
+                }
+            }
         }
-        androidx.compose.material3.TextButton(onClick = { streams.onSave(stream) }) {
-            androidx.compose.material3.Text(text = "حفظ")
-        }
+    }
+
+    if (saveDialogOpen && selected != null) {
+        AlertDialog(
+            onDismissRequest = { saveDialogOpen = false },
+            title = { Text("حفظ البث") },
+            text = {
+                OutlinedTextField(
+                    value = saveTitle,
+                    onValueChange = { saveTitle = it },
+                    label = { Text("اسم البث") },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = saveTitle.isNotBlank(),
+                    onClick = {
+                        actions.onSave(selected, saveTitle.trim())
+                        saveDialogOpen = false
+                    },
+                ) {
+                    Text("حفظ")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { saveDialogOpen = false }) {
+                    Text("إلغاء")
+                }
+            },
+        )
     }
 }
