@@ -8,7 +8,7 @@
 - **لاقط ذكي لروابط البث** (`m3u8`/`mpd`/`mp4`/`webm`/`mkv`) من أي صفحة مع التقاط كامل الـ `headers`.
 - **مكتبة البثوث المحفوظة (Saved Streams Library):** عند التقاط رابط بث يمكن للمستخدم **تشغيله** أو **نسخه** أو **حفظه في المكتبة**؛ عند الحفظ يظهر في تبويب المكتبة ككارت أنيق ببنر/صورة مصغرة وعنوان وصيغة البث، محفوظاً بكل الـ `headers` (`User-Agent`, `Referer`, `Cookie`, `Origin`...) ورابط الصفحة الأصلية (`sourcePageUrl`) لتشغيله مباشرةً لاحقاً أو تحديث الرابط عند انتهاء صلاحيته.
 - **مشغل Media3/ExoPlayer** بواجهة RTL جذابة (إيماءات، PiP، سرعة، جودة، تمرير `headers` فعلياً).
-- **سجل الفحص والتشخيص الكامل (Diagnostics & Crash Logger):** يسجّل كل الأحداث والأعطال خاماً **كاملة بدون إخفاء أي بيانات أو روابط أو headers** (لتسهيل الفحص الشخصي): أخطاء WebView وJS console وإصابات AdBlock، اكتشافات StreamSniffer، حالات وتوقفات Media3 وأخطاء 403/Codec، وأعطال التطبيق (`UncaughtExceptionHandler`). مع شاشة في الإعدادات لـ **العرض، الفلترة، النسخ، التصدير كملف (`.log`/`.txt`)، والحذف**.
+- **سجل الفحص والتشخيص الكامل (Diagnostics & Crash Logger):** يسجّل الأحداث والأعطال مع الاحتفاظ بالسياق التشخيصي غير الحساس، مع **حجب قيم بيانات الاعتماد والأسرار** من التخزين والعرض والنسخ والتصدير: أخطاء WebView وJS console وإصابات AdBlock، اكتشافات StreamSniffer، حالات وتوقفات Media3 وأخطاء 403/Codec، وأعطال التطبيق (`UncaughtExceptionHandler`). مع شاشة في الإعدادات لـ **العرض، الفلترة، النسخ، التصدير كملف (`.log`/`.txt`)، والحذف**.
 
 Stack: Kotlin 2.x, Compose, Material3 (RTL-first), Media3, Room, DataStore, Hilt, Coroutines/Flow, Gradle KTS + Version Catalog. `minSdk 24`, `compileSdk 35`, `JDK 17`.
 
@@ -47,7 +47,7 @@ Stack: Kotlin 2.x, Compose, Material3 (RTL-first), Media3, Room, DataStore, Hilt
 - **مراجعة `Pally` لكل PR تفحص:**
   1. هل التعديل مرتبط بتذكرة واحدة ومختبر فعلياً؟
   2. هل `stream.headers` محفوظة وممررة فعلياً إلى `Media3` و`SavedStream`؟
-  3. هل الأخطاء والأحداث مسجلة كاملةً بدون إخفاء في `DiagnosticsLogger`؟
+  3. هل الأحداث والأخطاء التشخيصية محفوظة مع حجب قيم بيانات الاعتماد في `DiagnosticsLogger`؟
   4. هل CI أخضر (`assembleDebug` + `ktlint` + `detekt` + `unit tests`)؟
 - عند الرفض: يضع `Pally` label `needs-fix` مع السبب الدقيق. عند الموافقة: `approve` + `ready-to-merge`، ويدمج `Instinct`.
 - بلّغا تحديثات الحالة في `#12` (`Status Board`).
@@ -62,5 +62,5 @@ Stack: Kotlin 2.x, Compose, Material3 (RTL-first), Media3, Room, DataStore, Hilt
 - Sniffer يلتقط `m3u8` بالـ `headers` مع أزرار (تشغيل / نسخ / حفظ في المكتبة).
 - المكتبة تعرض كروت وبنرات RTL وتشغّل البثوث المحفوظة بالـ `headers` مباشرةً.
 - المشغل يشغّل `m3u8` + `mp4` مع PiP والإيماءات.
-- سجل التشخيص يسجّل كل الأحداث والأعطال خاماً بدون إخفاء، ويدعم العرض والنسخ والتصدير كملف والحذف.
+- سجل التشخيص يحتفظ بالسياق غير الحساس ويحجب بيانات الاعتماد، ويدعم العرض والنسخ والتصدير كملف والحذف.
 - CI أخضر على `main`، و`androidTest` ناجحة على Emulator، و`assembleDebug` APK متاح كـ Artifact للتجربة على الهاتف.
