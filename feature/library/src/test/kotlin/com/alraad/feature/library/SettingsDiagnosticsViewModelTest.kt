@@ -26,7 +26,13 @@ import org.junit.Test
 class SettingsDiagnosticsViewModelTest {
     private val entries =
         DiagCategory.entries.mapIndexed { i, cat ->
-            DiagEntry(id = i.toLong() + 1, timestamp = 0L, category = cat, level = if (i % 2 == 0) DiagLevel.ERROR else DiagLevel.INFO, message = "event-$i ${cat.name}")
+            DiagEntry(
+                id = i.toLong() + 1,
+                timestamp = 0L,
+                category = cat,
+                level = if (i % 2 == 0) DiagLevel.ERROR else DiagLevel.INFO,
+                message = "event-$i ${cat.name}",
+            )
         }
     private val fakeLogger =
         object : DiagnosticsLogger {
