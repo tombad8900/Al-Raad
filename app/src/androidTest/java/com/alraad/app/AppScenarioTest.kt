@@ -13,6 +13,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -147,9 +148,12 @@ class AppScenarioTest {
         timeoutMillis: Long,
     ) {
         runCatching {
+            // onAllNodes+onFirst tolerates duplicate matching rows (e.g. a reload
+            // recording the same visit twice), where onNode would fail on the
+            // multiple matches instead of checking the first.
             composeRule.waitUntil(timeoutMillis = timeoutMillis) {
                 runCatching {
-                    composeRule.onNode(matcher).assertIsDisplayed()
+                    composeRule.onAllNodes(matcher).onFirst().assertIsDisplayed()
                 }.isSuccess
             }
         }.onFailure {
@@ -169,7 +173,7 @@ class AppScenarioTest {
     ) {
         runCatching {
             composeRule.waitUntil(timeoutMillis = timeoutMillis) {
-                runCatching { composeRule.onNode(matcher).assertIsDisplayed() }.isSuccess.not()
+                runCatching { composeRule.onAllNodes(matcher).onFirst().assertIsDisplayed() }.isSuccess.not()
             }
         }.onFailure {
             capture("scenario-timeout-" + System.currentTimeMillis() + ".png")
