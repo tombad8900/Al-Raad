@@ -212,17 +212,26 @@ class AppScenarioTest {
                     firstFrameRendered.countDown()
                 }
             }
-        player.addAnalyticsListener(listener)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { player.addAnalyticsListener(listener) }
         try {
             assertTrue(
                 "Media3 did not report a rendered video frame within 90 seconds",
                 firstFrameRendered.await(90, TimeUnit.SECONDS),
             )
-            assertTrue("Player stopped before the frame assertion", player.isPlaying)
-            assertTrue("Decoded video width is missing", player.videoSize.width > 0)
-            assertTrue("Decoded video height is missing", player.videoSize.height > 0)
+            var playing = false
+            var videoWidth = 0
+            var videoHeight = 0
+            instrumentation.runOnMainSync {
+                playing = player.isPlaying
+                videoWidth = player.videoSize.width
+                videoHeight = player.videoSize.height
+            }
+            assertTrue("Player stopped before the frame assertion", playing)
+            assertTrue("Decoded video width is missing", videoWidth > 0)
+            assertTrue("Decoded video height is missing", videoHeight > 0)
         } finally {
-            player.removeAnalyticsListener(listener)
+            instrumentation.runOnMainSync { player.removeAnalyticsListener(listener) }
         }
     }
 
