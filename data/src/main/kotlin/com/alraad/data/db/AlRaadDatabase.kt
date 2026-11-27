@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         SavedStreamEntity::class,
         DiagnosticsLogEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class AlRaadDatabase : RoomDatabase() {
@@ -24,5 +24,14 @@ abstract class AlRaadDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "alraad.db"
+
+        /** Adds DRM license capture columns to saved_streams. */
+        val MIGRATION_1_2 =
+            object : androidx.room.migration.Migration(1, 2) {
+                override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE saved_streams ADD COLUMN drmLicenseUrl TEXT")
+                    db.execSQL("ALTER TABLE saved_streams ADD COLUMN drmHeadersJson TEXT NOT NULL DEFAULT ''")
+                }
+            }
     }
 }

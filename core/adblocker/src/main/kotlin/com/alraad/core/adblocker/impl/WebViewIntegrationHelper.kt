@@ -50,13 +50,43 @@ class WebViewIntegrationHelper
             )
         }
 
-        fun webViewClient(onPageFinished: (WebView) -> Unit = {}): WebViewClient =
+        fun webViewClient(
+            onPageFinished: (WebView) -> Unit = {},
+            onRequestObserved: (url: String, headers: Map<String, String>, pageUrl: String?) -> Unit = { _, _, _ -> },
+        ): WebViewClient =
             object : WebViewClient() {
+                // Cached from UI-thread navigation callbacks: shouldInterceptRequest runs
+                // off the WebView UI thread, so reading view.url here would touch WebView
+                // state on the wrong thread.
+                @Volatile private var currentPageUrl: String? = null
+
+                override fun onPageStarted(
+                    view: WebView,
+                    url: String,
+                    favicon: android.graphics.Bitmap?,
+                ) {
+                    currentPageUrl = url
+                    super.onPageStarted(view, url, favicon)
+                }
+
+                override fun doUpdateVisitedHistory(
+                    view: WebView,
+                    url: String,
+                    isReload: Boolean,
+                ) {
+                    currentPageUrl = url
+                    super.doUpdateVisitedHistory(view, url, isReload)
+                }
+
                 override fun shouldInterceptRequest(
                     view: WebView,
                     request: android.webkit.WebResourceRequest,
                 ): WebResourceResponse? {
                     val url = request.url.toString()
+                    if (request.isForMainFrame) {
+                        currentPageUrl = url
+                    }
+                    onRequestObserved(url, request.requestHeaders ?: emptyMap(), currentPageUrl)
                     val blocked = runBlocking(Dispatchers.IO) { adBlocker.shouldBlock(url) }
                     if (blocked) {
                         logger.log(DiagCategory.ADBLOCK, DiagLevel.DEBUG, "Intercepted", mapOf("url" to url))

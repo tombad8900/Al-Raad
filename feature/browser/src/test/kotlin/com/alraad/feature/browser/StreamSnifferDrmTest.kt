@@ -62,6 +62,78 @@ class StreamSnifferDrmTest {
         assertTrue(logs.none { it.message == "DRM license request detected" })
     }
 
+    @Test fun `interleaved license requests attach to the stream of the page that issued them`() {
+        val sniffer = StreamSniffer(fakeLogger)
+        val updates = mutableListOf<StreamUrl>()
+        sniffer.registerListener(
+            object : StreamListener {
+                override fun onStreamDetected(stream: StreamUrl) = Unit
+
+                override fun onStreamUpdated(stream: StreamUrl) {
+                    updates += stream
+                }
+            },
+        )
+        sniffer.onRequestObserved(
+            "https://cdn-a.example/movie.m3u8",
+            emptyMap(),
+            "application/vnd.apple.mpegurl",
+            pageUrl = "https://page-a.example/watch",
+        )
+        sniffer.onRequestObserved(
+            "https://cdn-b.example/show.mpd",
+            emptyMap(),
+            "application/dash+xml",
+            pageUrl = "https://page-b.example/play",
+        )
+        // License XHR for page B's stream arrives while page A's stream is the most recent.
+        sniffer.onRequestObserved(
+            "https://lic-b.example/widevine",
+            mapOf("Authorization" to "Bearer b"),
+            pageUrl = "https://page-b.example/play",
+        )
+        sniffer.onRequestObserved(
+            "https://lic-a.example/widevine",
+            mapOf("Authorization" to "Bearer a"),
+            pageUrl = "https://page-a.example/watch",
+        )
+        assertEquals(2, updates.size)
+        assertEquals("https://cdn-b.example/show.mpd", updates[0].url)
+        assertEquals("https://lic-b.example/widevine", updates[0].drmLicenseUrl)
+        assertEquals(mapOf("Authorization" to "Bearer b"), updates[0].drmLicenseRequestHeaders)
+        assertEquals("https://cdn-a.example/movie.m3u8", updates[1].url)
+        assertEquals("https://lic-a.example/widevine", updates[1].drmLicenseUrl)
+        assertEquals(mapOf("Authorization" to "Bearer a"), updates[1].drmLicenseRequestHeaders)
+    }
+
+    @Test fun `license request on a page with no detected stream stays unattached`() {
+        val sniffer = StreamSniffer(fakeLogger)
+        val updates = mutableListOf<StreamUrl>()
+        sniffer.registerListener(
+            object : StreamListener {
+                override fun onStreamDetected(stream: StreamUrl) = Unit
+
+                override fun onStreamUpdated(stream: StreamUrl) {
+                    updates += stream
+                }
+            },
+        )
+        sniffer.onRequestObserved(
+            "https://cdn-a.example/movie.m3u8",
+            emptyMap(),
+            "application/vnd.apple.mpegurl",
+            pageUrl = "https://page-a.example/watch",
+        )
+        // License request arrives from a different page that has no detected stream.
+        sniffer.onRequestObserved(
+            "https://lic-b.example/widevine",
+            mapOf("Authorization" to "Bearer b"),
+            pageUrl = "https://page-b.example/play",
+        )
+        assertTrue(updates.isEmpty())
+        assertTrue(logs.any { it.message == "DRM license request detected" })
+    }
+
     @Test fun `license request without a prior stream only logs diagnostics`() {
         val sniffer = StreamSniffer(fakeLogger)
         val updates = mutableListOf<StreamUrl>()

@@ -26,7 +26,11 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(
         @ApplicationContext context: Context,
-    ): AlRaadDatabase = Room.databaseBuilder(context, AlRaadDatabase::class.java, "alraad.db").build()
+    ): AlRaadDatabase =
+        Room
+            .databaseBuilder(context, AlRaadDatabase::class.java, "alraad.db")
+            .addMigrations(AlRaadDatabase.MIGRATION_1_2)
+            .build()
 
     @Provides fun provideHistoryDao(db: AlRaadDatabase) = db.historyDao()
 
