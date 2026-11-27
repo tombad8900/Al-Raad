@@ -7,9 +7,11 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -39,6 +41,7 @@ fun AddressBar(
     isLoading: Boolean,
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onBookmarkClick: (() -> Unit)? = null,
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     var text by remember(currentUrl) { mutableStateOf(currentUrl) }
@@ -67,5 +70,13 @@ fun AddressBar(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
             keyboardActions = KeyboardActions(onGo = { onNavigate(normalizeAddress(text)) }),
         )
+        if (onBookmarkClick != null) {
+            IconButton(onClick = onBookmarkClick) {
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = if (isRtl) "إضافة إلى الإشارات" else "Bookmark this page",
+                )
+            }
+        }
     }
 }
