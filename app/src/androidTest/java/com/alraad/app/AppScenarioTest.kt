@@ -84,30 +84,42 @@ class AppScenarioTest {
         composeRule.waitForIdle()
         waitForNode(hasSetTextAction(), 20_000)
 
-        // Load a controlled wrapper page embedding the media as a <video>: direct
-        // navigation to a media file is handed to the downloader and never reaches
-        // the sniffer, while a page's subresource request is observed through the
-        // WebView client. Media is ExoPlayer's own public test asset (authorized).
+        // Load a CONTROLLED local wrapper page (test-only MockWebServer fixture,
+        // no production scheme handling broadened) embedding the media as a <video>:
+        // direct navigation to a media file is handed to the downloader and never
+        // reaches the sniffer, while a page's subresource request is observed through
+        // the WebView client. Media is ExoPlayer's own public test asset (authorized).
         // mediaPlaybackRequiresUserGesture=false in SafeWebViewConfig allows muted autoplay.
-        val wrapperPage =
-            "data:text/html," +
-                android.net.Uri.encode(
+        val server = okhttp3.mockwebserver.MockWebServer()
+        server.start()
+        server.enqueue(
+            okhttp3.mockwebserver.MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Type", "text/html")
+                .setBody(
                     "<html><body>" +
                         "<video muted autoplay playsinline preload=\"auto\" " +
                         "src=\"https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4\">" +
                         "</video></body></html>",
-                )
-        composeRule.onNode(hasSetTextAction()).performTextInput(wrapperPage)
-        composeRule.onNode(hasSetTextAction()).performImeAction()
-        waitForNode(hasText("\u25b6", substring = true), 45_000)
-        capture("scenario-06-stream-bar.png")
+                ),
+        )
+        try {
+            composeRule.onNode(hasSetTextAction()).performTextInput(server.url("/wrapper.html").toString())
+            composeRule.onNode(hasSetTextAction()).performImeAction()
+            waitForNode(hasText("\u25b6", substring = true), 45_000)
+            capture("scenario-06-stream-bar.png")
 
-        composeRule.onNodeWithText("\u25b6", substring = true).performClick()
-        // The player route shows its controls; the no-stream placeholder must be absent.
-        waitForNode(hasContentDescription("Fullscreen"), 15_000)
-        composeRule.onNodeWithText(
-            "\u0644\u0645 \u064a\u062a\u0645 \u0627\u062e\u062a\u064a\u0627\u0631 \u0628\u062b \u0628\u0639\u062f",
-        ).assertDoesNotExist()
+            composeRule.onNodeWithText("\u25b6", substring = true).performClick()
+            // The player route shows its controls; the no-stream placeholder must be absent.
+            waitForNode(hasContentDescription("Fullscreen"), 15_000)
+            composeRule
+                .onNodeWithText(
+                    "\u0644\u0645 \u064a\u062a\u0645 \u0627\u062e\u062a\u064a\u0627\u0631 \u0628\u062b \u0628\u0639\u062f",
+                ).assertDoesNotExist()
+            capture("scenario-07-player-route.png")
+        } finally {
+            server.shutdown()
+        }
         capture("scenario-07-player-route.png")
     }
 
