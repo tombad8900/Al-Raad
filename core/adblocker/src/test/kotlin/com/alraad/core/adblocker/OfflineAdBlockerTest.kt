@@ -4,10 +4,10 @@ import androidx.test.core.app.ApplicationProvider
 import com.alraad.core.adblocker.impl.BlocklistStore
 import com.alraad.core.adblocker.impl.OfflineAdBlocker
 import com.alraad.core.common.contracts.AppSettings
-import com.alraad.core.common.contracts.SettingsRepository
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
+import com.alraad.core.common.contracts.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking

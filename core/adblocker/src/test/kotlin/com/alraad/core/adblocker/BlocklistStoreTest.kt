@@ -21,8 +21,7 @@ class BlocklistStoreTest {
         store.minDomains = 3
     }
 
-    private fun goodList(prefix: String) =
-        (1..5).joinToString("\n") { "||$prefix$it.example.com^" }
+    private fun goodList(prefix: String) = (1..5).joinToString("\n") { "||$prefix$it.example.com^" }
 
     @Test fun `malformed download never promotes`() {
         assertFalse(store.promote("easylist", "garbage not a list"))

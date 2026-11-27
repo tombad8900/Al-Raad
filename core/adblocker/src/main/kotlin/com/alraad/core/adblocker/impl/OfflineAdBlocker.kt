@@ -6,12 +6,12 @@ import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.SettingsRepository
-import kotlinx.coroutines.flow.first
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.net.URI
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext

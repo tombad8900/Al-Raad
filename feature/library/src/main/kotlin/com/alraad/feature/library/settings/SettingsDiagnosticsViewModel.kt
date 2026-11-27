@@ -104,7 +104,10 @@ class SettingsDiagnosticsViewModel
                 BlocklistUi(it.id, it.name, blocklistStore.isEnabled(it.id), blocklistStore.lastUpdated(it.id))
             }
 
-        fun setListEnabled(id: String, enabled: Boolean) {
+        fun setListEnabled(
+            id: String,
+            enabled: Boolean,
+        ) {
             blocklistStore.setEnabled(id, enabled)
             offlineAdBlocker.reload()
             blocklists.value = currentBlocklists()
