@@ -27,7 +27,7 @@ class BlocklistUpdater
                     val ok = runCatching { download(source.url) }.getOrNull()?.let { store.promote(source.id, it) } ?: false
                     (if (ok) updated else kept) += source.id
                     if (!ok) {
-                        logger.log(DiagCategory.ADBLOCK, DiagLevel.WARNING, "List update kept last-known-good", mapOf("list" to source.id))
+                        logger.log(DiagCategory.ADBLOCK, DiagLevel.WARN, "List update kept last-known-good", mapOf("list" to source.id))
                     }
                 }
                 Result(updated, kept)
