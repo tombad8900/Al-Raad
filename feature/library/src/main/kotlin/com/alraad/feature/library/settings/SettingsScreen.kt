@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -72,9 +73,11 @@ fun DiagnosticsScreen(
     val filter by viewModel.categoryFilter.collectAsState()
     val scope = rememberCoroutineScope()
     Column(modifier = modifier.fillMaxSize()) {
-        Row(modifier = Modifier.padding(8.dp)) {
-            FilterChip(selected = filter == null, onClick = { viewModel.categoryFilter.value = null }, label = { Text("All") })
-            DiagCategory.entries.take(4).forEach { cat ->
+        LazyRow(modifier = Modifier.padding(8.dp)) {
+            item {
+                FilterChip(selected = filter == null, onClick = { viewModel.categoryFilter.value = null }, label = { Text("All") })
+            }
+            items(DiagCategory.entries.toList(), key = { it.name }) { cat ->
                 FilterChip(
                     selected = filter == cat,
                     onClick = { viewModel.categoryFilter.value = cat },
