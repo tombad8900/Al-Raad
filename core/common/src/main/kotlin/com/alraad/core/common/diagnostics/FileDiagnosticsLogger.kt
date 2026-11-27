@@ -45,7 +45,12 @@ class FileDiagnosticsLogger(
                     // Migrate valid legacy/raw entries in place so secrets are not left
                     // on disk after the new redaction policy is introduced.
                     if (loaded.size == rawLines.count { it.isNotBlank() }) {
-                        val safeContent = loaded.joinToString(separator = "\n", postfix = if (loaded.isEmpty()) "" else "\n", transform = ::formatLine)
+                        val safeContent =
+                            loaded.joinToString(
+                                separator = "\n",
+                                postfix = if (loaded.isEmpty()) "" else "\n",
+                                transform = ::formatLine,
+                            )
                         if (safeContent != logFile.readText()) logFile.writeText(safeContent)
                     }
                 }
