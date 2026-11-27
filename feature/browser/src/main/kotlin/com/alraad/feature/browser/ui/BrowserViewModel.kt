@@ -72,11 +72,13 @@ class BrowserViewModel
                             ?: return
                     val item = DetectedStreamItem(stream, sourcePage, resolvedTabId)
                     streamsByTab.update { current ->
-                        val existing = current[resolvedTabId].orEmpty()
+                        val liveTabIds = tabState.tabs.mapTo(mutableSetOf()) { it.id }
+                        val retained = current.filterKeys { it in liveTabIds }
+                        val existing = retained[resolvedTabId].orEmpty()
                         val index = existing.indexOfFirst { it.stream.url == stream.url }
                         val updated =
                             if (index >= 0) existing.toMutableList().apply { set(index, item) } else existing + item
-                        current + (resolvedTabId to updated.takeLast(MAX_STREAMS_PER_TAB))
+                        retained + (resolvedTabId to updated.takeLast(MAX_STREAMS_PER_TAB))
                     }
                 }
             }
