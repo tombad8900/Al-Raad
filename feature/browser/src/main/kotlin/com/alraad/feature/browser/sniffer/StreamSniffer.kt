@@ -6,6 +6,7 @@ import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.StreamListener
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.core.common.contracts.StreamUrl
+import java.net.URI
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,7 +53,7 @@ class StreamSniffer
                 DiagCategory.SNIFFER,
                 DiagLevel.INFO,
                 "DRM license request detected",
-                mapOf("url" to url, "headers" to headers.toString()),
+                mapOf("host" to safeHost(url), "headerNames" to headers.keys.joinToString(",")),
             )
             val target =
                 if (pageUrl != null) {
@@ -96,6 +97,9 @@ class StreamSniffer
                 append(tabId?.length ?: -1).append(':').append(tabId.orEmpty())
                 append(pageUrl)
             }
+
+        private fun safeHost(url: String): String =
+            runCatching { URI(url).host?.take(255) }.getOrNull() ?: "unknown"
 
         fun registerListener(listener: StreamListener) {
             listeners += listener
@@ -157,10 +161,10 @@ class StreamSniffer
                     DiagLevel.INFO,
                     "Stream detected",
                     mapOf(
-                        "url" to detected.url,
+                        "host" to safeHost(detected.url),
                         "format" to detected.format.name,
                         "source" to source.name,
-                        "headers" to headers.toString(),
+                        "headerNames" to headers.keys.joinToString(","),
                     ),
                 )
                 listeners.forEach { it.onStreamDetected(detected) }
