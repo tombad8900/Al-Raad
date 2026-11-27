@@ -16,6 +16,7 @@ import com.alraad.feature.browser.sniffer.StreamSniffer
 import com.alraad.feature.browser.tabs.TabManager
 import com.alraad.feature.browser.ui.BrowserViewModel
 import com.alraad.feature.browser.ui.DetectedStreamItem
+import com.alraad.feature.browser.ui.sortDetectedStreamItems
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -122,6 +123,27 @@ class BrowserViewModelStreamActionsTest {
         tabManager.switchTo(tabA.id)
         assertEquals(listOf("https://cdn.example/a.m3u8"), viewModel.detectedStreams.value.map { it.stream.url })
         assertEquals(pageA, viewModel.detectedStreams.value.single().sourcePageUrl)
+    }
+
+    @Test
+    fun `stream picker sorts formats and removes duplicate URLs`() {
+        val tab = tabManager.openTab("https://page.example/watch")
+        val dash = DetectedStreamItem(
+            StreamUrl("https://cdn.example/z.mpd", StreamFormat.DASH, StreamSource.NETWORK),
+            tab.url,
+            tab.id,
+        )
+        val hls = DetectedStreamItem(
+            StreamUrl("https://cdn.example/a.m3u8", StreamFormat.HLS, StreamSource.NETWORK),
+            tab.url,
+            tab.id,
+        )
+        val duplicate = hls.copy(stream = hls.stream.copy(headers = mapOf("Range" to "bytes=0-")))
+
+        val sorted = sortDetectedStreamItems(listOf(hls, dash, duplicate))
+
+        assertEquals(listOf(StreamFormat.DASH, StreamFormat.HLS), sorted.map { it.stream.format })
+        assertEquals(2, sorted.size)
     }
 
 }
