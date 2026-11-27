@@ -224,6 +224,12 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
                     clipboard.setPrimaryClip(android.content.ClipData.newPlainText("diagnostics log", text))
                 }
             },
+            onCopy = { text ->
+                val clipboard =
+                    context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as
+                        android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("diagnostics log", text))
+            },
         )
     }
 }
