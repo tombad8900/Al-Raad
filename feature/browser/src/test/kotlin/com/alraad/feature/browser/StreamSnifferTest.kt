@@ -8,6 +8,7 @@ import com.alraad.core.common.contracts.StreamListener
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.core.common.contracts.StreamUrl
 import com.alraad.feature.browser.sniffer.StreamSniffer
+import com.alraad.feature.browser.sniffer.StreamObservationListener
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
@@ -88,4 +89,37 @@ class StreamSnifferTest {
         assertNull(sniffer.onRequestObserved("https://cdn.example.com/recent.m3u8"))
         assertTrue(sniffer.onRequestObserved("https://cdn.example.com/oldest.m3u8") != null)
     }
-}
+
+    @Test
+    fun `reports duplicate observations with their originating page and tab`() {
+        val sniffer = StreamSniffer(noopLogger)
+        val observations = mutableListOf<Triple<String?, String?, String>>()
+        sniffer.registerObservationListener(
+            StreamObservationListener { stream, pageUrl, tabId ->
+                observations += Triple(pageUrl, tabId, stream.url)
+            },
+        )
+        val streamUrl = "https://cdn.example.com/shared.m3u8"
+        assertTrue(
+            sniffer.onRequestObserved(
+                streamUrl,
+                pageUrl = "https://page-a.example/watch",
+                tabId = "tab-a",
+            ) != null,
+        )
+        assertNull(
+            sniffer.onRequestObserved(
+                streamUrl,
+                pageUrl = "https://page-b.example/watch",
+                tabId = "tab-b",
+            ),
+        )
+
+        assertEquals(
+            listOf(
+                Triple("https://page-a.example/watch", "tab-a", streamUrl),
+                Triple("https://page-b.example/watch", "tab-b", streamUrl),
+            ),
+            observations,
+        )
+    }
