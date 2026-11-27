@@ -50,7 +50,7 @@ object DiagnosticsRedactor {
                 """(?i)(^|[\r\n{,;\s])(["']?[A-Za-z0-9_-]*(?:proxy-authorization|authorization|x-api-key|api-key|access-token|""",
                 """refresh-token|id-token|token|session(?:-id)?|jwt|client-secret|secret|password|passwd|""",
                 """signature|credential|private-key)["']?\s*[:=]\s*)""",
-                """(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^ \t,;]+|[^\s,;]+)""",
+                """(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^ \t\r\n,;]+|[^\s,;]+)""",
             ).joinToString(""),
         )
 
