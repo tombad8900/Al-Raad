@@ -18,11 +18,15 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @Suppress("LongParameterList") // Hilt-injected collaborators; grouping would obscure the graph
 @HiltViewModel
+private const val MAX_STREAMS_PER_TAB = 100
+
 class BrowserViewModel
     @Inject
     constructor(
@@ -39,18 +43,41 @@ class BrowserViewModel
             settingsRepository.observeSettings()
                 .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
 
-        /** Streams detected by the sniffer, newest first; updates replace by URL. */
-        private val streams = kotlinx.coroutines.flow.MutableStateFlow<List<StreamUrl>>(emptyList())
-        val detectedStreams: StateFlow<List<StreamUrl>> = streams
+        /** Streams are retained per tab and exposed only for that tab's current page. */
+        private val streamsByTab =
+            kotlinx.coroutines.flow.MutableStateFlow<Map<String, List<DetectedStreamItem>>>(emptyMap())
+        val detectedStreams: StateFlow<List<DetectedStreamItem>> =
+            combine(tabManager.state, streamsByTab) { tabState, byTab ->
+                val activeId = tabState.activeTabId
+                val activeUrl = tabState.tabs.firstOrNull { it.id == activeId }?.url
+                byTab[activeId].orEmpty().filter { activeUrl == null || it.sourcePageUrl == activeUrl }
+            }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         private val streamListener =
             object : StreamListener {
-                override fun onStreamDetected(stream: StreamUrl) {
-                    streams.value = listOf(stream) + streams.value
-                }
+                override fun onStreamDetected(stream: StreamUrl) = Unit
 
-                override fun onStreamUpdated(stream: StreamUrl) {
-                    streams.value = streams.value.map { if (it.url == stream.url) stream else it }
+                override fun onStreamUpdated(stream: StreamUrl) = Unit
+
+                override fun onStreamObserved(
+                    stream: StreamUrl,
+                    pageUrl: String?,
+                    tabId: String?,
+                ) {
+                    val tabState = tabManager.state.value
+                    val sourcePage = pageUrl ?: return
+                    val resolvedTabId =
+                        tabId ?: tabState.tabs.firstOrNull { it.url == sourcePage }?.id
+                            ?: tabState.activeTabId
+                            ?: return
+                    val item = DetectedStreamItem(stream, sourcePage, resolvedTabId)
+                    streamsByTab.update { current ->
+                        val existing = current[resolvedTabId].orEmpty()
+                        val index = existing.indexOfFirst { it.stream.url == stream.url }
+                        val updated =
+                            if (index >= 0) existing.toMutableList().apply { set(index, item) } else existing + item
+                        current + (resolvedTabId to updated.takeLast(MAX_STREAMS_PER_TAB))
+                    }
                 }
             }
 
@@ -65,7 +92,7 @@ class BrowserViewModel
         }
 
         /** Starts playback of a detected stream; the PLAYER route renders it via currentStream. */
-        fun playStream(stream: StreamUrl) = streamActions.play(stream)
+        fun playStream(item: DetectedStreamItem) = streamActions.play(item.stream)
 
         /** Last page reported by the WebView as finished loading; basis for bookmarking. */
         var lastVisited: Pair<String, String>? = null
@@ -75,8 +102,24 @@ class BrowserViewModel
         fun recordVisit(
             url: String,
             title: String,
+            tabId: String? = null,
         ) {
             if (url.isBlank() || url == "about:blank" || url.startsWith("data:")) return
+            val resolvedTabId = tabId ?: tabManager.state.value.activeTabId
+            if (resolvedTabId != null) {
+                val previousUrl = tabManager.state.value.tabs.firstOrNull { it.id == resolvedTabId }?.url
+                tabManager.updateTab(resolvedTabId, url = url, title = title)
+                if (previousUrl != null && previousUrl != url) {
+                    streamsByTab.update { current ->
+                        val existing = current[resolvedTabId].orEmpty()
+                        current + (
+                            resolvedTabId to existing.map {
+                                if (it.sourcePageUrl == previousUrl) it.copy(sourcePageUrl = url) else it
+                            }
+                        )
+                    }
+                }
+            }
             lastVisited = url to title
             viewModelScope.launch {
                 historyRepository.add(
@@ -104,14 +147,15 @@ class BrowserViewModel
         }
 
         /** Copies the detected stream URL to the clipboard. */
-        fun copyStream(stream: StreamUrl) = streamActions.copyUrl(stream)
+        fun copyStream(item: DetectedStreamItem) = streamActions.copyUrl(item.stream)
 
-        /** Saves the detected stream with its full headers and the active tab as source page. */
-        fun saveStream(stream: StreamUrl) {
-            val sourcePage = tabManager.state.value.tabs.firstOrNull { it.id == tabManager.state.value.activeTabId }?.url
-            val title = android.net.Uri.parse(stream.url).host ?: stream.url
+        /** Saves the selected link with its user-provided title and original page URL. */
+        fun saveStream(
+            item: DetectedStreamItem,
+            title: String,
+        ) {
             viewModelScope.launch {
-                streamActions.saveToLibrary(stream, title = title, sourcePageUrl = sourcePage)
+                streamActions.saveToLibrary(item.stream, title = title, sourcePageUrl = item.sourcePageUrl)
             }
         }
     }
