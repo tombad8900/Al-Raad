@@ -127,7 +127,13 @@ class AppScenarioTest {
             composeRule.onNode(hasSetTextAction()).performImeAction()
             // T2 picker UI (post #73): a detected stream shows the picker section with
             // a Play button instead of the old minimal bar.
-            waitForNode(hasText("\u0631\u0648\u0627\u0628\u0637 \u0627\u0644\u0628\u062b \u0627\u0644\u0645\u0643\u062a\u0634\u0641\u0629", substring = true), 45_000)
+            waitForNode(
+                hasText(
+                    "\u0631\u0648\u0627\u0628\u0637 \u0627\u0644\u0628\u062b \u0627\u0644\u0645\u0643\u062a\u0634\u0641\u0629",
+                    substring = true,
+                ),
+                45_000,
+            )
             capture("scenario-06-stream-picker.png")
 
             composeRule.onNodeWithText("\u062a\u0634\u063a\u064a\u0644").performClick()
