@@ -24,6 +24,7 @@ class StreamSniffer
         private val logger: DiagnosticsLogger,
     ) {
         private val listeners = java.util.concurrent.CopyOnWriteArrayList<StreamListener>()
+        private val observationListeners = java.util.concurrent.CopyOnWriteArrayList<StreamObservationListener>()
 
         @Volatile
         private var lastDetected: StreamUrl? = null
@@ -78,10 +79,8 @@ class StreamSniffer
                 val updated = found.copy(drmLicenseUrl = url, drmLicenseRequestHeaders = headers)
                 if (lastDetected?.url == found.url) lastDetected = updated
                 pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = updated }
-                listeners.forEach {
-                    it.onStreamUpdated(updated)
-                    it.onStreamObserved(updated, pageUrl, tabId)
-                }
+                listeners.forEach { it.onStreamUpdated(updated) }
+                observationListeners.forEach { it.onStreamObserved(updated, pageUrl, tabId) }
             }
         }
 
@@ -122,6 +121,14 @@ class StreamSniffer
 
         fun unregisterListener(listener: StreamListener) {
             listeners -= listener
+        }
+
+        fun registerObservationListener(listener: StreamObservationListener) {
+            observationListeners += listener
+        }
+
+        fun unregisterObservationListener(listener: StreamObservationListener) {
+            observationListeners -= listener
         }
 
         fun onRequestObserved(
@@ -177,7 +184,17 @@ class StreamSniffer
                 )
                 listeners.forEach { it.onStreamDetected(detected) }
             }
-            listeners.forEach { it.onStreamObserved(detected, pageUrl, tabId) }
+            observationListeners.forEach { it.onStreamObserved(detected, pageUrl, tabId) }
             return if (isDuplicate) null else detected
         }
     }
+
+
+/** Browser-module extension for page/tab correlation; frozen common contracts stay unchanged. */
+fun interface StreamObservationListener {
+    fun onStreamObserved(
+        stream: StreamUrl,
+        pageUrl: String?,
+        tabId: String?,
+    )
+}
