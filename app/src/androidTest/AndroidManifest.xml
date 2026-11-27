@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Test-only manifest, merged into the app under test for androidTest builds.
+      The production manifest deliberately does not allow cleartext; the scenario
+      test serves a local MockWebServer wrapper page over http://127.0.0.1, which
+      the WebView would otherwise refuse to load (ERR_CLEARTEXT_NOT_PERMITTED).
+    -->
+    <application android:usesCleartextTraffic="true" />
+
+</manifest>
