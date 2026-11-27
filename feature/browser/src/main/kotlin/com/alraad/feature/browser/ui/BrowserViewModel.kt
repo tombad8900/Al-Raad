@@ -32,22 +32,28 @@ class BrowserViewModel
                 .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
 
         /** Streams detected by the sniffer, newest first; updates replace by URL. */
-        val detectedStreams: StateFlow<List<StreamUrl>>
+        private val streams = kotlinx.coroutines.flow.MutableStateFlow<List<StreamUrl>>(emptyList())
+        val detectedStreams: StateFlow<List<StreamUrl>> = streams
+
+        private val streamListener =
+            object : StreamListener {
+                override fun onStreamDetected(stream: StreamUrl) {
+                    streams.value = listOf(stream) + streams.value
+                }
+
+                override fun onStreamUpdated(stream: StreamUrl) {
+                    streams.value = streams.value.map { if (it.url == stream.url) stream else it }
+                }
+            }
 
         init {
-            val streams = kotlinx.coroutines.flow.MutableStateFlow<List<StreamUrl>>(emptyList())
-            detectedStreams = streams
-            sniffer.registerListener(
-                object : StreamListener {
-                    override fun onStreamDetected(stream: StreamUrl) {
-                        streams.value = listOf(stream) + streams.value
-                    }
+            sniffer.registerListener(streamListener)
+        }
 
-                    override fun onStreamUpdated(stream: StreamUrl) {
-                        streams.value = streams.value.map { if (it.url == stream.url) stream else it }
-                    }
-                },
-            )
+        // public override so lifecycle coverage can invoke it directly from tests
+        public override fun onCleared() {
+            sniffer.unregisterListener(streamListener)
+            super.onCleared()
         }
 
         /** Starts playback of a detected stream; the PLAYER route renders it via currentStream. */
