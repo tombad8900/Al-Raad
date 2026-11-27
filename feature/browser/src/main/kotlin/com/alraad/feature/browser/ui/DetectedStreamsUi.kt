@@ -2,10 +2,20 @@ package com.alraad.feature.browser.ui
 
 import com.alraad.core.common.contracts.StreamUrl
 
-/** Detected-stream list plus the play action, kept as one param for detekt limits. */
-data class DetectedStreamsUi(
-    val streams: List<StreamUrl> = emptyList(),
-    val onPlay: (StreamUrl) -> Unit = {},
-    val onCopy: (StreamUrl) -> Unit = {},
-    val onSave: (StreamUrl) -> Unit = {},
+/** A detected media link tied to the page and browser tab that requested it. */
+data class DetectedStreamItem(
+    val stream: StreamUrl,
+    val sourcePageUrl: String,
+    val sourceTabId: String,
 )
+
+/** Detected-stream actions for the current page, kept as one parameter for detekt limits. */
+data class DetectedStreamsUi(
+    val streams: List<DetectedStreamItem> = emptyList(),
+    val onPlay: (DetectedStreamItem) -> Unit = {},
+    val onCopy: (DetectedStreamItem) -> Unit = {},
+    val onSave: (DetectedStreamItem, String) -> Unit = { _, _ -> },
+)
+
+
+internal fun shouldShowStreamSelector(streamCount: Int): Boolean = streamCount > 1
