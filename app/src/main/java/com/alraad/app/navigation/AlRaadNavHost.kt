@@ -26,6 +26,7 @@ fun AlRaadNavHost(navController: NavHostController) {
                 tabManager = viewModel.tabManager,
                 webViewIntegration = viewModel.webViewIntegration,
                 diagnosticsLogger = viewModel.diagnosticsLogger,
+                sniffer = viewModel.sniffer,
                 settings = settings,
             )
         }

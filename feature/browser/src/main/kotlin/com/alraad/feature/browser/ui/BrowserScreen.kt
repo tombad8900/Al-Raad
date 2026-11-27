@@ -14,6 +14,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.alraad.core.adblocker.impl.WebViewIntegrationHelper
 import com.alraad.core.common.contracts.AppSettings
 import com.alraad.core.common.contracts.DiagnosticsLogger
+import com.alraad.core.common.contracts.StreamSource
+import com.alraad.feature.browser.sniffer.StreamSniffer
 import com.alraad.feature.browser.tabs.TabManager
 import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
 import com.alraad.feature.browser.web.SafeWebViewConfig
@@ -28,6 +30,7 @@ fun BrowserScreen(
     tabManager: TabManager,
     webViewIntegration: WebViewIntegrationHelper,
     diagnosticsLogger: DiagnosticsLogger,
+    sniffer: StreamSniffer,
     settings: AppSettings,
     modifier: Modifier = Modifier,
 ) {
@@ -53,6 +56,9 @@ fun BrowserScreen(
                     webViewClient =
                         webViewIntegration.webViewClient(
                             onPageFinished = { isLoading = false },
+                            onRequestObserved = { url, headers ->
+                                sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK)
+                            },
                         )
                 }
             },
