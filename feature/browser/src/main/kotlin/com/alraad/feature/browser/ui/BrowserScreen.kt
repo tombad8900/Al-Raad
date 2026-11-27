@@ -71,4 +71,3 @@ fun BrowserScreen(
         )
     }
 }
-
