@@ -106,8 +106,8 @@ private fun NavGraphBuilder.browserDestination(navController: NavHostController)
                     detectedStreams =
                         com.alraad.feature.browser.ui.DetectedStreamsUi(
                             streams = detectedStreams,
-                            onPlay = { stream ->
-                                viewModel.playStream(stream)
+                            onPlay = { item ->
+                                viewModel.playStream(item)
                                 navController.navigate(Routes.PLAYER)
                             },
                             onCopy = viewModel::copyStream,
