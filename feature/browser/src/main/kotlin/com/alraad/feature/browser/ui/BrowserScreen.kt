@@ -1,11 +1,21 @@
 package com.alraad.feature.browser.ui
 
 import android.webkit.WebView
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -44,6 +54,7 @@ fun BrowserScreen(
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
     var isLoading by remember { mutableStateOf(false) }
     val backgroundColor = MaterialTheme.colorScheme.background
+    val pageTabIds = remember { java.util.concurrent.ConcurrentHashMap<String, String>() }
 
     // Open the homepage tab on first launch so the WebView is never left blank.
     LaunchedEffect(Unit) {
@@ -62,8 +73,8 @@ fun BrowserScreen(
         )
         // Minimal selected-stream handoff into the PLAYER route (richer picker is
         // queued post-MVP): plays the most recent detected stream with its headers.
-        handlers.detectedStreams.streams.firstOrNull()?.let { stream ->
-            DetectedStreamBar(stream = stream, streams = handlers.detectedStreams)
+        handlers.detectedStreams.streams.takeIf { it.isNotEmpty() }?.let { items ->
+            DetectedStreamBar(items = items, actions = handlers.detectedStreams)
         }
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -77,10 +88,28 @@ fun BrowserScreen(
                         webViewIntegration.webViewClient(
                             onPageFinished = { webView ->
                                 isLoading = false
-                                webView.url?.let { loaded -> handlers.actions.onPageVisited(loaded, webView.title ?: "") }
+                                webView.url?.let { loaded ->
+                                    val tabId =
+                                        pageTabIds[loaded]
+                                            ?: tabManager.state.value.tabs.firstOrNull { it.url == loaded }?.id
+                                            ?: tabManager.state.value.activeTabId
+                                    if (tabId != null) {
+                                        pageTabIds[loaded] = tabId
+                                        handlers.actions.onPageVisited(loaded, webView.title ?: "", tabId)
+                                    }
+                                }
                             },
                             onRequestObserved = { url, headers, pageUrl ->
-                                sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl)
+                                val tabId =
+                                    pageUrl?.let { pageTabIds[it] }
+                                        ?: pageUrl?.let { page ->
+                                            tabManager.state.value.tabs.firstOrNull { it.url == page }?.id
+                                        }
+                                        ?: tabManager.state.value.activeTabId
+                                sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl, tabId)
+                            },
+                            onPageStarted = { _, startedUrl ->
+                                tabManager.state.value.activeTabId?.let { pageTabIds[startedUrl] = it }
                             },
                         )
                 }
@@ -95,25 +124,98 @@ fun BrowserScreen(
     }
 }
 
-/** Stream bar: play / copy / save actions for the most recently detected stream. */
+/** Current-page stream picker with a direct path when only one URL was detected. */
 @Composable
 private fun DetectedStreamBar(
-    stream: com.alraad.core.common.contracts.StreamUrl,
-    streams: DetectedStreamsUi,
+    items: List<DetectedStreamItem>,
+    actions: DetectedStreamsUi,
 ) {
-    val host = android.net.Uri.parse(stream.url).host ?: stream.url
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    val sortedItems = remember(items) { sortDetectedStreamItems(items) }
+    var selectedUrl by remember(sortedItems) { mutableStateOf(sortedItems.firstOrNull()?.stream?.url) }
+    val selected = sortedItems.firstOrNull { it.stream.url == selectedUrl } ?: sortedItems.firstOrNull()
+    var selectorExpanded by remember { mutableStateOf(false) }
+    var saveDialogOpen by remember { mutableStateOf(false) }
+    var saveTitle by remember(selected?.stream?.url) {
+        mutableStateOf(selected?.stream?.let { android.net.Uri.parse(it.url).host ?: it.url }.orEmpty())
+    }
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
-        androidx.compose.material3.TextButton(onClick = { streams.onPlay(stream) }) {
-            androidx.compose.material3.Text(text = "▶ $host")
+        Text("روابط البث المكتشفة: ${sortedItems.size}", style = MaterialTheme.typography.labelLarge)
+        if (sortedItems.size > 1) {
+            androidx.compose.foundation.layout.Box {
+                OutlinedButton(onClick = { selectorExpanded = true }) {
+                    Text("اختيار رابط البث")
+                }
+                DropdownMenu(expanded = selectorExpanded, onDismissRequest = { selectorExpanded = false }) {
+                    sortedItems.forEach { item ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(item.stream.format.name)
+                                    Text(item.stream.url, style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                                }
+                            },
+                            onClick = {
+                                selectedUrl = item.stream.url
+                                selectorExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
         }
-        androidx.compose.material3.TextButton(onClick = { streams.onCopy(stream) }) {
-            androidx.compose.material3.Text(text = "نسخ")
-        }
-        androidx.compose.material3.TextButton(onClick = { streams.onSave(stream) }) {
-            androidx.compose.material3.Text(text = "حفظ")
+        selected?.let { item ->
+            Text(
+                item.stream.url,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(onClick = { actions.onPlay(item) }) {
+                    Text("تشغيل")
+                }
+                TextButton(onClick = { actions.onCopy(item) }) {
+                    Text("نسخ الرابط")
+                }
+                TextButton(onClick = { saveTitle = android.net.Uri.parse(item.stream.url).host ?: item.stream.url; saveDialogOpen = true }) {
+                    Text("حفظ في المكتبة")
+                }
+            }
         }
     }
+
+    if (saveDialogOpen && selected != null) {
+        AlertDialog(
+            onDismissRequest = { saveDialogOpen = false },
+            title = { Text("حفظ البث") },
+            text = {
+                OutlinedTextField(
+                    value = saveTitle,
+                    onValueChange = { saveTitle = it },
+                    label = { Text("اسم البث") },
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = saveTitle.isNotBlank(),
+                    onClick = {
+                        actions.onSave(selected, saveTitle.trim())
+                        saveDialogOpen = false
+                    },
+                ) { Text("حفظ") }
+            },
+            dismissButton = {
+                TextButton(onClick = { saveDialogOpen = false }) { Text("إلغاء") }
+            },
+        )
+    }
 }
+
+internal fun sortDetectedStreamItems(items: List<DetectedStreamItem>): List<DetectedStreamItem> =
+    items.distinctBy { it.stream.url }.sortedWith(compareBy({ it.stream.format.name }, { it.stream.url }))
