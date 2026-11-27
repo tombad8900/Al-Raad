@@ -28,9 +28,9 @@ class StreamSniffer
         @Volatile
         private var lastDetected: StreamUrl? = null
 
-        // Most recent detected stream per page URL, so a license request attaches to
-        // the stream of the document that issued it, not a stream from another tab/page.
-        private val lastDetectedByPage =
+        // Most recent detected stream per page+tab identity, so identical page URLs
+        // opened in different tabs cannot exchange DRM license metadata.
+        private val lastDetectedByPageAndTab =
             java.util.Collections.synchronizedMap(
                 object : LinkedHashMap<String, StreamUrl>(16, 0.75f, true) {
                     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, StreamUrl>?): Boolean = size > MAX_SEEN_KEYS
@@ -70,14 +70,14 @@ class StreamSniffer
             // unattached rather than landing on another page's stream.
             val target =
                 if (pageUrl != null) {
-                    lastDetectedByPage[pageUrl]
+                    lastDetectedByPageAndTab[pageKey(pageUrl, tabId)]
                 } else {
                     lastDetected
                 }
             target?.let { found ->
                 val updated = found.copy(drmLicenseUrl = url, drmLicenseRequestHeaders = headers)
                 if (lastDetected?.url == found.url) lastDetected = updated
-                pageUrl?.let { lastDetectedByPage[it] = updated }
+                pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = updated }
                 listeners.forEach {
                     it.onStreamUpdated(updated)
                     it.onStreamObserved(updated, pageUrl, tabId)
@@ -106,6 +106,11 @@ class StreamSniffer
                     append('=').append(entry.value.length).append(':').append(entry.value)
                 }
             }
+
+        private fun pageKey(
+            pageUrl: String,
+            tabId: String?,
+        ): String = "${tabId.orEmpty()}\u0000$pageUrl"
 
         fun registerListener(listener: StreamListener) {
             listeners += listener
@@ -153,7 +158,7 @@ class StreamSniffer
             )
             val isDuplicate = seen.put(dedupKey(url, headers), System.currentTimeMillis()) != null
             lastDetected = detected
-            pageUrl?.let { lastDetectedByPage[it] = detected }
+            pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = detected }
             if (!isDuplicate) {
                 logger.log(
                     DiagCategory.SNIFFER,
