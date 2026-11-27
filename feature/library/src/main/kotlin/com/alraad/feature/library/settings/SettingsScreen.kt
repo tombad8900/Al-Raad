@@ -210,9 +210,7 @@ private fun DiagnosticsLogList(
 }
 
 @Composable
-private fun DiagnosticsLogEntry(
-    entry: DiagEntry,
-) {
+private fun DiagnosticsLogEntry(entry: DiagEntry) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         Text(formatTimestamp(entry.timestamp), style = MaterialTheme.typography.labelSmall)
         Text(
