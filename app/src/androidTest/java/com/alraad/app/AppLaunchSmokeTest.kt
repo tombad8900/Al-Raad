@@ -5,9 +5,13 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
@@ -33,6 +37,45 @@ import org.junit.Test
 class AppLaunchSmokeTest {
     @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
 
+    @Test fun bottomNavigationReachesEverySection() {
+        composeRule.waitForIdle()
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            runCatching { assertAllSectionsDisplayed() }.isSuccess
+        }
+
+        composeRule.onNodeWithText("المكتبة").performClick()
+        waitForNode(
+            hasText("No saved streams yet", substring = true) or
+                hasText("مقاطع محفوظة", substring = true),
+        )
+
+        composeRule.onNodeWithText("السجل").performClick()
+        waitForNode(hasText("مسح السجل / Clear all", substring = true))
+
+        composeRule.onNodeWithText("الإشارات").performClick()
+        waitForNode(hasText("No bookmarks yet", substring = true))
+
+        composeRule.onNodeWithText("الإعدادات").performClick()
+        waitForNode(hasText("نسخ / Export", substring = true))
+
+        composeRule.onNodeWithText("المتصفح").performClick()
+        waitForNode(hasSetTextAction())
+    }
+
+    private fun assertAllSectionsDisplayed() {
+        listOf("المتصفح", "المكتبة", "السجل", "الإشارات", "الإعدادات").forEach { label ->
+            composeRule.onNodeWithText(label).assertIsDisplayed()
+        }
+    }
+
+    private fun waitForNode(matcher: SemanticsMatcher) {
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching {
+                composeRule.onNode(matcher).assertIsDisplayed()
+            }.isSuccess
+        }
+    }
+
     @Test fun appLaunchesAndRenders() {
         composeRule.waitForIdle()
         // Wait for real content, not just a composed root: the AddressBar text field
@@ -42,6 +85,12 @@ class AppLaunchSmokeTest {
             runCatching {
                 composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
             }.isSuccess
+        }
+        // The launch assertion is bound to the integrated shell, not just any
+        // editable field: all five bottom-navigation destinations must be visible,
+        // so this fails on the address-bar-only defect the owner reported.
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching { assertAllSectionsDisplayed() }.isSuccess
         }
         composeRule.waitForIdle()
 
