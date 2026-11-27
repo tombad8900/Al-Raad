@@ -32,6 +32,7 @@ import org.robolectric.RobolectricTestRunner
 class BrowserViewModelHistoryBookmarkTest {
     private lateinit var history: FakeHistoryRepository
     private lateinit var bookmarks: FakeBookmarksRepository
+    private lateinit var tabManager: TabManager
     private lateinit var viewModel: BrowserViewModel
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -41,9 +42,10 @@ class BrowserViewModelHistoryBookmarkTest {
         val logger = FakeDiagnosticsLogger()
         history = FakeHistoryRepository()
         bookmarks = FakeBookmarksRepository()
+        tabManager = TabManager()
         viewModel =
             BrowserViewModel(
-                tabManager = TabManager(),
+                tabManager = tabManager,
                 webViewIntegration =
                     WebViewIntegrationHelper(
                         FakeAdBlocker(),
@@ -68,6 +70,22 @@ class BrowserViewModelHistoryBookmarkTest {
     @OptIn(ExperimentalCoroutinesApi::class)
     @After
     fun tearDown() = Dispatchers.resetMain()
+
+    @Test
+    fun `page finish updates its original tab after switching to another tab`() {
+        val tabA = tabManager.openTab("https://a.example/old")
+        val tabB = tabManager.openTab("https://b.example/")
+        tabManager.switchTo(tabB.id)
+
+        viewModel.recordPageFinished(tabA.id, "https://a.example/new", "A finished")
+
+        val tabs = tabManager.state.value
+        assertEquals(tabB.id, tabs.activeTabId)
+        assertEquals("https://a.example/new", tabs.tabs.first { it.id == tabA.id }.url)
+        assertEquals("A finished", tabs.tabs.first { it.id == tabA.id }.title)
+        assertEquals("https://b.example/", tabs.tabs.first { it.id == tabB.id }.url)
+        assertEquals("", tabs.tabs.first { it.id == tabB.id }.title)
+    }
 
     @Test
     fun `finished page load is recorded in history`() {

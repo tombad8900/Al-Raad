@@ -83,11 +83,26 @@ class BrowserViewModelStreamActionsTest {
                 source = StreamSource.NETWORK,
                 headers = mapOf("Referer" to "https://page.example/"),
             )
-        viewModel.saveStream(stream)
+        viewModel.saveStream(stream, "My chosen title")
         val saved = savedStreams.currentList()
         assertEquals(1, saved.size)
         assertEquals(stream.headers, saved[0].stream.headers)
         assertEquals("https://page.example/watch", saved[0].sourcePageUrl)
-        assertEquals("cdn.example", saved[0].title)
+        assertEquals("My chosen title", saved[0].title)
+    }
+
+    @Test
+    fun `blank requested title falls back to stream host`() {
+        tabManager.openTab("https://page.example/watch")
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example/movie.m3u8",
+                format = StreamFormat.HLS,
+                source = StreamSource.NETWORK,
+            )
+
+        viewModel.saveStream(stream, "   ")
+
+        assertEquals("cdn.example", savedStreams.currentList().single().title)
     }
 }

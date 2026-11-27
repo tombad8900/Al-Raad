@@ -5,7 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -26,9 +31,9 @@ import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
 import com.alraad.feature.browser.web.SafeWebViewConfig
 
 /**
- * Browser shell: RTL AddressBar on top of a hardened WebView. Navigation from the
- * address bar updates the active tab in TabManager; the WebView loads the active
- * tab's URL. Ad blocking and sniffing come from WebViewIntegrationHelper.
+ * Browser shell: the WebView's page-start/page-finish callbacks are associated with
+ * the tab that initiated each navigation, not whichever tab happens to be active
+ * when the asynchronous finish callback arrives.
  */
 @Composable
 fun BrowserScreen(
@@ -43,9 +48,17 @@ fun BrowserScreen(
     val tabState by tabManager.state.collectAsState()
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
     var isLoading by remember { mutableStateOf(false) }
+    var saveDialogStream by remember { mutableStateOf<com.alraad.core.common.contracts.StreamUrl?>(null) }
+    var saveTitle by remember { mutableStateOf("") }
     val backgroundColor = MaterialTheme.colorScheme.background
 
-    // Open the homepage tab on first launch so the WebView is never left blank.
+    // A load request is queued before loadUrl; onPageStarted binds its actual URL
+    // (including redirects) to the originating tab. Finished callbacks then use
+    // that immutable association even after the user switches tabs.
+    val pendingNavigationTabs = remember { mutableStateOf(mutableListOf<Pair<String, String>>()) }.value
+    val pageTabIds = remember { mutableStateOf(mutableMapOf<String, String>()) }.value
+    var lastRequestedNavigation by remember { mutableStateOf<Pair<String, String>?>(null) }
+
     LaunchedEffect(Unit) {
         if (tabState.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
     }
@@ -60,24 +73,46 @@ fun BrowserScreen(
             },
             onBookmarkClick = handlers.actions.onBookmark,
         )
-        // Minimal selected-stream handoff into the PLAYER route (richer picker is
-        // queued post-MVP): plays the most recent detected stream with its headers.
         handlers.detectedStreams.streams.firstOrNull()?.let { stream ->
-            DetectedStreamBar(stream = stream, streams = handlers.detectedStreams)
+            DetectedStreamBar(
+                stream = stream,
+                streams = handlers.detectedStreams,
+                onSaveClick = {
+                    saveTitle = android.net.Uri.parse(stream.url).host ?: stream.url
+                    saveDialogStream = stream
+                },
+            )
         }
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
                 WebView(context).apply {
-                    // Match the app background so an empty WebView is never a white screen.
                     setBackgroundColor(backgroundColor.toArgb())
                     SafeWebViewConfig.apply(this, settings)
                     webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
                     webViewClient =
                         webViewIntegration.webViewClient(
-                            onPageFinished = { webView ->
-                                isLoading = false
-                                webView.url?.let { loaded -> handlers.actions.onPageVisited(loaded, webView.title ?: "") }
+                            onPageStarted = { _, url ->
+                                val matchIndex = pendingNavigationTabs.indexOfFirst { it.first == url }
+                                val ownerTabId =
+                                    if (matchIndex >= 0) {
+                                        pendingNavigationTabs.removeAt(matchIndex).second
+                                    } else if (pendingNavigationTabs.isNotEmpty()) {
+                                        pendingNavigationTabs.removeAt(0).second
+                                    } else {
+                                        tabManager.state.value.activeTabId
+                                    }
+                                if (ownerTabId != null) {
+                                    pageTabIds[url] = ownerTabId
+                                    if (ownerTabId == tabManager.state.value.activeTabId) isLoading = true
+                                }
+                            },
+                            onPageFinishedWithUrl = { webView, loadedUrl ->
+                                val ownerTabId = pageTabIds.remove(loadedUrl) ?: tabManager.state.value.activeTabId
+                                if (ownerTabId == tabManager.state.value.activeTabId) isLoading = false
+                                if (ownerTabId != null) {
+                                    handlers.actions.onPageFinished(ownerTabId, loadedUrl, webView.title ?: "")
+                                }
                             },
                             onRequestObserved = { url, headers, pageUrl ->
                                 sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl)
@@ -86,12 +121,46 @@ fun BrowserScreen(
                 }
             },
             update = { webView ->
-                activeTab?.url?.takeIf { it.isNotBlank() && it != webView.url }?.let {
-                    isLoading = true
-                    webView.loadUrl(it)
+                activeTab?.let { tab ->
+                    val request = tab.id to tab.url
+                    if (tab.url.isNotBlank() && tab.url != webView.url && request != lastRequestedNavigation) {
+                        lastRequestedNavigation = request
+                        pendingNavigationTabs.add(tab.url to tab.id)
+                        isLoading = true
+                        webView.loadUrl(tab.url)
+                    }
                 }
             },
         )
+        saveDialogStream?.let { stream ->
+            AlertDialog(
+                onDismissRequest = { saveDialogStream = null },
+                title = { Text("حفظ البث") },
+                text = {
+                    OutlinedTextField(
+                        value = saveTitle,
+                        onValueChange = { saveTitle = it },
+                        singleLine = true,
+                        label = { Text("اسم البث") },
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            handlers.detectedStreams.onSave(stream, saveTitle.trim())
+                            saveDialogStream = null
+                        },
+                    ) {
+                        Text("حفظ")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { saveDialogStream = null }) {
+                        Text("إلغاء")
+                    }
+                },
+            )
+        }
     }
 }
 
@@ -100,6 +169,7 @@ fun BrowserScreen(
 private fun DetectedStreamBar(
     stream: com.alraad.core.common.contracts.StreamUrl,
     streams: DetectedStreamsUi,
+    onSaveClick: () -> Unit,
 ) {
     val host = android.net.Uri.parse(stream.url).host ?: stream.url
     Row(
@@ -112,7 +182,7 @@ private fun DetectedStreamBar(
         androidx.compose.material3.TextButton(onClick = { streams.onCopy(stream) }) {
             androidx.compose.material3.Text(text = "نسخ")
         }
-        androidx.compose.material3.TextButton(onClick = { streams.onSave(stream) }) {
+        androidx.compose.material3.TextButton(onClick = onSaveClick) {
             androidx.compose.material3.Text(text = "حفظ")
         }
     }

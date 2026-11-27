@@ -71,6 +71,21 @@ class BrowserViewModel
         var lastVisited: Pair<String, String>? = null
             private set
 
+        /**
+         * Applies a completed WebView navigation to the tab that started it. The active
+         * tab may have changed while the asynchronous page-finished callback was pending.
+         */
+        fun recordPageFinished(
+            tabId: String,
+            url: String,
+            title: String,
+        ) {
+            if (tabManager.state.value.tabs.any { it.id == tabId }) {
+                tabManager.updateTab(tabId, url = url, title = title)
+            }
+            recordVisit(url, title)
+        }
+
         /** Records a finished page load into history. Skips empty and internal pages. */
         fun recordVisit(
             url: String,
@@ -107,9 +122,12 @@ class BrowserViewModel
         fun copyStream(stream: StreamUrl) = streamActions.copyUrl(stream)
 
         /** Saves the detected stream with its full headers and the active tab as source page. */
-        fun saveStream(stream: StreamUrl) {
+        fun saveStream(
+            stream: StreamUrl,
+            requestedTitle: String = "",
+        ) {
             val sourcePage = tabManager.state.value.tabs.firstOrNull { it.id == tabManager.state.value.activeTabId }?.url
-            val title = android.net.Uri.parse(stream.url).host ?: stream.url
+            val title = requestedTitle.trim().ifBlank { android.net.Uri.parse(stream.url).host ?: stream.url }
             viewModelScope.launch {
                 streamActions.saveToLibrary(stream, title = title, sourcePageUrl = sourcePage)
             }
