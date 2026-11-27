@@ -15,6 +15,8 @@ import com.alraad.feature.browser.actions.StreamActions
 import com.alraad.feature.browser.sniffer.StreamSniffer
 import com.alraad.feature.browser.tabs.TabManager
 import com.alraad.feature.browser.ui.BrowserViewModel
+import com.alraad.feature.browser.ui.DetectedStreamItem
+import com.alraad.feature.browser.ui.sortDetectedStreamItems
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,12 +31,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
-/** The stream bar's Save action must persist headers and the active tab as source page. */
+/** Stream actions preserve request headers, the chosen title, and the source page. */
 @RunWith(RobolectricTestRunner::class)
 class BrowserViewModelStreamActionsTest {
     private lateinit var savedStreams: FakeSavedStreamsRepository
     private lateinit var tabManager: TabManager
     private lateinit var viewModel: BrowserViewModel
+    private lateinit var sniffer: StreamSniffer
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Before
@@ -50,6 +53,7 @@ class BrowserViewModelStreamActionsTest {
                 savedStreams,
                 logger,
             )
+        sniffer = StreamSniffer(logger)
         viewModel =
             BrowserViewModel(
                 tabManager = tabManager,
@@ -60,7 +64,7 @@ class BrowserViewModelStreamActionsTest {
                         CoroutineScope(SupervisorJob() + Dispatchers.Unconfined),
                     ),
                 diagnosticsLogger = logger,
-                sniffer = StreamSniffer(logger),
+                sniffer = sniffer,
                 streamActions = streamActions,
                 settingsRepository = FakeSettingsRepository(),
                 historyRepository = FakeHistoryRepository(),
@@ -73,9 +77,10 @@ class BrowserViewModelStreamActionsTest {
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
-    fun `save persists headers and the active tab url as source page`() {
-        val tab = tabManager.openTab("https://page.example/watch")
-        tabManager.updateTab(tab.id, url = "https://page.example/watch")
+    fun `save preserves selected title headers and original source page`() {
+        val page = "https://page.example/watch"
+        val tab = tabManager.openTab(page)
+        viewModel.recordVisit(page, "Page A", tab.id)
         val stream =
             StreamUrl(
                 url = "https://cdn.example/movie.m3u8",
@@ -83,11 +88,62 @@ class BrowserViewModelStreamActionsTest {
                 source = StreamSource.NETWORK,
                 headers = mapOf("Referer" to "https://page.example/"),
             )
-        viewModel.saveStream(stream)
-        val saved = savedStreams.currentList()
-        assertEquals(1, saved.size)
-        assertEquals(stream.headers, saved[0].stream.headers)
-        assertEquals("https://page.example/watch", saved[0].sourcePageUrl)
-        assertEquals("cdn.example", saved[0].title)
+        sniffer.onRequestObserved(stream.url, stream.headers, pageUrl = page, tabId = tab.id)
+        viewModel.saveStream(viewModel.detectedStreams.value.single(), "My saved stream")
+
+        val saved = savedStreams.currentList().single()
+        assertEquals(stream.headers, saved.stream.headers)
+        assertEquals(page, saved.sourcePageUrl)
+        assertEquals("My saved stream", saved.title)
+    }
+
+    @Test
+    fun `detected links remain isolated to the originating tab and page`() {
+        val pageA = "https://page-a.example/watch"
+        val pageB = "https://page-b.example/watch"
+        val tabA = tabManager.openTab(pageA)
+        viewModel.recordVisit(pageA, "Page A", tabA.id)
+        val tabB = tabManager.openTab(pageB)
+        viewModel.recordVisit(pageB, "Page B", tabB.id)
+
+        sniffer.onRequestObserved(
+            "https://cdn.example/a.m3u8",
+            pageUrl = pageA,
+            tabId = tabA.id,
+        )
+        assertEquals(emptyList<DetectedStreamItem>(), viewModel.detectedStreams.value)
+
+        sniffer.onRequestObserved(
+            "https://cdn.example/b.m3u8",
+            pageUrl = pageB,
+            tabId = tabB.id,
+        )
+        assertEquals(listOf("https://cdn.example/b.m3u8"), viewModel.detectedStreams.value.map { it.stream.url })
+
+        tabManager.switchTo(tabA.id)
+        assertEquals(listOf("https://cdn.example/a.m3u8"), viewModel.detectedStreams.value.map { it.stream.url })
+        assertEquals(pageA, viewModel.detectedStreams.value.single().sourcePageUrl)
+    }
+
+    @Test
+    fun `stream picker sorts formats and removes duplicate URLs`() {
+        val tab = tabManager.openTab("https://page.example/watch")
+        val page = tab.url
+        val dash = DetectedStreamItem(
+            StreamUrl("https://cdn.example/z.mpd", StreamFormat.DASH, StreamSource.NETWORK),
+            page,
+            tab.id,
+        )
+        val hls = DetectedStreamItem(
+            StreamUrl("https://cdn.example/a.m3u8", StreamFormat.HLS, StreamSource.NETWORK),
+            page,
+            tab.id,
+        )
+        val duplicate = hls.copy(stream = hls.stream.copy(headers = mapOf("Range" to "bytes=0-")))
+
+        val sorted = sortDetectedStreamItems(listOf(hls, dash, duplicate))
+
+        assertEquals(listOf(StreamFormat.DASH, StreamFormat.HLS), sorted.map { it.stream.format })
+        assertEquals(2, sorted.size)
     }
 }
