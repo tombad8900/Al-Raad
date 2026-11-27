@@ -57,7 +57,7 @@ jobs:
           done
 
       - name: Run quality gates and build debug APK
-        run: ./gradlew --no-daemon ktlintCheck detekt test assembleDebug
+        run: ./gradlew --no-daemon ktlintCheck detekt test assembleDebug assembleDebugAndroidTest
 
       - name: Upload Wave 3 debug APK artifact
         if: (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') || github.event_name == 'workflow_dispatch'
