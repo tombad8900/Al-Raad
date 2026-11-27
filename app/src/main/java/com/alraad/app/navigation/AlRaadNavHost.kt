@@ -127,6 +127,7 @@ private fun NavGraphBuilder.libraryDestination(navController: NavHostController)
     composable(Routes.LIBRARY) {
         val libraryViewModel: LibraryViewModel = hiltViewModel()
         val playerViewModel: PlayerViewModel = hiltViewModel()
+        val browserNavigationViewModel: LibraryBrowserNavigationViewModel = hiltViewModel()
         val context = LocalContext.current
         LibraryScreen(
             viewModel = libraryViewModel,
@@ -140,10 +141,10 @@ private fun NavGraphBuilder.libraryDestination(navController: NavHostController)
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("stream url", saved.stream.url))
             },
             onOpenSource = { saved ->
-                saved.sourcePageUrl?.let { page ->
-                    context.startActivity(
-                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(page)),
-                    )
+                browserNavigationViewModel.openSourcePage(saved.sourcePageUrl) {
+                    navController.navigate(Routes.BROWSER) {
+                        launchSingleTop = true
+                    }
                 }
             },
         )
