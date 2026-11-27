@@ -43,8 +43,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
-import com.alraad.core.common.contracts.StreamUrl
+import androidx.media3.ui.TrackSelectionDialogBuilder
+import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.feature.player.impl.Media3PlayerController
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
@@ -72,9 +74,8 @@ internal fun seekTarget(
 @Composable
 fun PlayerScreen(
     controller: Media3PlayerController,
-    stream: StreamUrl,
+    playbackRequest: PlaybackRequest,
     modifier: Modifier = Modifier,
-    drmLicenseUrl: String? = null,
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val gestures = rememberPlayerGestureController()
@@ -102,8 +103,8 @@ fun PlayerScreen(
         }
     }
 
-    DisposableEffect(stream) {
-        controller.play(stream, drmLicenseUrl = drmLicenseUrl)
+    DisposableEffect(playbackRequest) {
+        controller.play(playbackRequest)
         player = controller.currentPlayer()
         onDispose {
             // release() frees resources but preserves the selection, so a recreate
@@ -132,6 +133,14 @@ fun PlayerScreen(
                 onSelectSpeed = { option ->
                     speed = option
                     player?.setPlaybackSpeed(option)
+                },
+                player = player,
+                onSelectSubtitles = {
+                    player?.let {
+                        TrackSelectionDialogBuilder(activity ?: LocalContext.current, "الترجمة", it, C.TRACK_TYPE_TEXT)
+                            .build()
+                            .show()
+                    }
                 },
             )
         }
@@ -194,6 +203,8 @@ private fun PlayerControlsRow(
     onEnterPip: () -> Unit,
     speed: Float,
     onSelectSpeed: (Float) -> Unit,
+    player: Player?,
+    onSelectSubtitles: () -> Unit,
 ) {
     var qualityMenuOpen by remember { mutableStateOf(false) }
     IconButton(onClick = onToggleFullscreen) {
@@ -205,6 +216,9 @@ private fun PlayerControlsRow(
     }
     IconButton(onClick = onEnterPip) {
         Icon(Icons.Default.PictureInPictureAlt, contentDescription = "Picture in picture", tint = Color.White)
+    }
+    TextButton(onClick = onSelectSubtitles, enabled = player != null) {
+        Text("الترجمة", color = Color.White, style = MaterialTheme.typography.labelLarge)
     }
     Box {
         TextButton(onClick = { qualityMenuOpen = true }) {
