@@ -52,5 +52,6 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)
     testImplementation(libs.robolectric)
+    testImplementation(libs.robolectric.android.all)
     testImplementation(libs.androidx.test.core)
 }

@@ -22,6 +22,8 @@ espresso = "3.6.1"
 turbine = "1.2.0"
 mockwebserver = "4.12.0"
 robolectric = "4.14.1"
+robolectric-android-all = "15-robolectric-12650502-i7"
+mockito = "5.14.2"
 ktlintPlugin = "12.1.2"
 detekt = "1.23.7"
 
@@ -65,6 +67,8 @@ androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "mockwebserver" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+robolectric-android-all = { group = "org.robolectric", name = "android-all-instrumented", version.ref = "robolectric-android-all" }
+mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockito" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
