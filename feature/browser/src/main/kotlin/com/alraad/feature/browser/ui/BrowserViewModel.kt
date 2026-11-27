@@ -61,10 +61,12 @@ class BrowserViewModel
                     pageUrl: String?,
                     tabId: String?,
                 ) {
-                    val sourcePage = pageUrl ?: return
-                    val sourceTabId = tabId ?: return
-                    if (tabManager.state.value.tabs.none { it.id == sourceTabId }) return
-                    if (sourcePage !in currentPageUrlsByTab.value[sourceTabId].orEmpty()) return
+                    if (pageUrl == null || tabId == null) return
+                    val sourcePage = pageUrl
+                    val sourceTabId = tabId
+                    val knownTab = tabManager.state.value.tabs.any { it.id == sourceTabId }
+                    val onCurrentPage = sourcePage in currentPageUrlsByTab.value[sourceTabId].orEmpty()
+                    if (!knownTab || !onCurrentPage) return
                     val item = DetectedStreamItem(stream, sourcePage, sourceTabId)
                     streamsByTab.update { current ->
                         val existing = current[sourceTabId].orEmpty()
