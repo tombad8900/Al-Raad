@@ -6,8 +6,8 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onRoot
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
@@ -35,7 +35,15 @@ class AppLaunchSmokeTest {
 
     @Test fun appLaunchesAndRenders() {
         composeRule.waitForIdle()
-        composeRule.onRoot(useUnmergedTree = true).assertIsDisplayed()
+        // Wait for real content, not just a composed root: the AddressBar text field
+        // must be displayed with the loaded URL before we capture, so the artifact can
+        // only exist when the launch UI actually renders.
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            runCatching {
+                composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+            }.isSuccess
+        }
+        composeRule.waitForIdle()
 
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
