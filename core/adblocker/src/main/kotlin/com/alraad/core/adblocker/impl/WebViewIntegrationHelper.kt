@@ -85,7 +85,8 @@ class WebViewIntegrationHelper
                     view: WebView,
                     request: android.webkit.WebResourceRequest,
                 ): Boolean {
-                    if (request.isForMainFrame && request.url.scheme in setOf("http", "https")) {
+                    val scheme = request.url.scheme
+                    if (request.isForMainFrame && !request.isRedirect && (scheme == "http" || scheme == "https")) {
                         onNavigationRequested(view, request.url.toString())
                     }
                     return false
