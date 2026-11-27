@@ -137,6 +137,40 @@ class BrowserViewModelStreamActionsTest {
     }
 
     @Test
+    fun `player request includes all and only sources from selected page and tab`() {
+        val pageA = "https://page-a.example/watch"
+        val pageB = "https://page-b.example/watch"
+        val tabA = tabManager.openTab(pageA)
+        viewModel.recordPageStarted(tabA.id, pageA, startsNewNavigation = true)
+        val tabB = tabManager.openTab(pageB)
+        viewModel.recordPageStarted(tabB.id, pageB, startsNewNavigation = true)
+        val firstHeaders = mapOf("Referer" to pageA, "Cookie" to "first=secret")
+        val secondHeaders = mapOf("Referer" to pageA, "Authorization" to "Bearer second")
+        val first =
+            StreamUrl("https://cdn-a.example/one.m3u8", StreamFormat.HLS, StreamSource.NETWORK, firstHeaders)
+        val second =
+            StreamUrl("https://cdn-b.example/two.mp4", StreamFormat.MP4, StreamSource.NETWORK, secondHeaders)
+
+        sniffer.onRequestObserved(first.url, first.headers, pageUrl = pageA, tabId = tabA.id)
+        sniffer.onRequestObserved(second.url, second.headers, pageUrl = pageA, tabId = tabA.id)
+        sniffer.onRequestObserved(
+            "https://cdn-other.example/other.mpd",
+            pageUrl = pageB,
+            tabId = tabB.id,
+        )
+
+        viewModel.playStream(DetectedStreamItem(second, pageA, tabA.id))
+
+        val request = requireNotNull(playerController.lastPlaybackRequest)
+        assertEquals(listOf(first.url, second.url), request.sources.map { it.url })
+        assertEquals(1, request.selectedSourceIndex)
+        assertEquals(firstHeaders, request.sources[0].headers)
+        assertEquals(secondHeaders, request.selectedStream.headers)
+        assertEquals(pageA, request.sourcePageUrl)
+        assertEquals(tabA.id, request.sourceTabId)
+    }
+
+    @Test
     fun `playback receives only subtitles from the selected page and tab`() {
         val pageA = "https://page-a.example/watch"
         val pageB = "https://page-b.example/watch"
