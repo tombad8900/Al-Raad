@@ -17,6 +17,8 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -51,6 +53,52 @@ class SettingsDiagnosticsViewModelTest {
     @Before fun setMain() = Dispatchers.setMain(UnconfinedTestDispatcher())
 
     @After fun resetMain() = Dispatchers.resetMain()
+
+    @Test
+    fun `legacy raw logger entries and export are sanitized by the view model`() {
+        val rawEntry =
+            DiagEntry(
+                id = 90L,
+                timestamp = 1L,
+                category = DiagCategory.SNIFFER,
+                level = DiagLevel.ERROR,
+                message = "failed https://cdn.example/a.m3u8?token=display-secret",
+                details =
+                    mapOf(
+                        "Authorization" to "Bearer header-secret",
+                        "url" to "https://cdn.example/a.m3u8?session_id=url-secret",
+                    ),
+            )
+        val rawLogger =
+            object : DiagnosticsLogger {
+                override fun log(
+                    category: DiagCategory,
+                    level: DiagLevel,
+                    message: String,
+                    details: Map<String, String>,
+                ) = Unit
+
+                override fun observeLogs(): Flow<List<DiagEntry>> = flowOf(listOf(rawEntry))
+
+                override suspend fun exportAsText(): String =
+                    "Authorization=Bearer export-secret\\nurl=https://cdn.example/a.m3u8?access_token=export-token"
+
+                override suspend fun clear() = Unit
+            }
+        val vm = SettingsDiagnosticsViewModel(fakeSettings, rawLogger)
+        val rendered = vm.logs.value.single().let { it.message + it.details.toString() }
+
+        listOf("display-secret", "header-secret", "url-secret").forEach {
+            assertFalse(rendered.contains(it))
+        }
+        assertTrue(rendered.contains("[REDACTED]"))
+        kotlinx.coroutines.runBlocking {
+            val exported = vm.exportLogs()
+            assertFalse(exported.contains("export-secret"))
+            assertFalse(exported.contains("export-token"))
+            assertTrue(exported.contains("[REDACTED]"))
+        }
+    }
 
     @Test fun `every DiagCategory is filterable and narrows the log list`() {
         val vm = SettingsDiagnosticsViewModel(fakeSettings, fakeLogger)

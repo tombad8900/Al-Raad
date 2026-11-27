@@ -14,17 +14,16 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Persistent [DiagnosticsLogger]: raw, unredacted, file-backed.
+ * Persistent [DiagnosticsLogger]: file-backed with credentials redacted before
+ * persistence and again when legacy entries are loaded for display or export.
  *
- * Entries are appended verbatim (full URLs, headers, stack traces) to [logFile]
- * synchronously (single-line appends, sub-millisecond) and mirrored to an
- * in-memory flow for the Diagnostics screen, so the record always survives
- * process death and export/clear are race-free. Nothing is redacted by design.
+ * Safe URL context, non-sensitive headers, and stack traces remain available.
+ * The same sanitized entries feed the in-memory flow and text export.
  *
  * Line format v2: `V2<TAB>timestamp<TAB>CATEGORY<TAB>LEVEL<TAB>enc(message)<TAB>enc(key)=enc(value);...`
  * where enc() is UTF-8 percent-encoding, so details containing ';', '=', tabs or
  * newlines round-trip losslessly. Legacy v1 lines (no V2 marker, raw values) stay
- * readable. Export decodes entries so exported text preserves the original payload.
+ * readable. Export decodes entries while preserving only sanitized diagnostic content.
  */
 class FileDiagnosticsLogger(
     private val logFile: File,
@@ -40,7 +39,20 @@ class FileDiagnosticsLogger(
         scope.launch(ioDispatcher) {
             synchronized(fileLock) {
                 if (logFile.exists()) {
-                    entries.value = logFile.readLines().mapNotNull { parseLine(it) }.takeLast(maxInMemory)
+                    val rawLines = logFile.readLines()
+                    val loaded = rawLines.mapNotNull { parseLine(it) }
+                    entries.value = loaded.takeLast(maxInMemory)
+                    // Migrate valid legacy/raw entries in place so secrets are not left
+                    // on disk after the new redaction policy is introduced.
+                    if (loaded.size == rawLines.count { it.isNotBlank() }) {
+                        val safeContent =
+                            loaded.joinToString(
+                                separator = "\n",
+                                postfix = if (loaded.isEmpty()) "" else "\n",
+                                transform = ::formatLine,
+                            )
+                        if (safeContent != logFile.readText()) logFile.writeText(safeContent)
+                    }
                 }
             }
         }
@@ -53,13 +65,15 @@ class FileDiagnosticsLogger(
         details: Map<String, String>,
     ) {
         val entry =
-            DiagEntry(
-                id = nextId++,
-                timestamp = System.currentTimeMillis(),
-                category = category,
-                level = level,
-                message = message,
-                details = details,
+            DiagnosticsRedactor.redact(
+                DiagEntry(
+                    id = nextId++,
+                    timestamp = System.currentTimeMillis(),
+                    category = category,
+                    level = level,
+                    message = message,
+                    details = details,
+                ),
             )
         entries.update { (it + entry).takeLast(maxInMemory) }
         synchronized(fileLock) {
@@ -73,10 +87,10 @@ class FileDiagnosticsLogger(
     override suspend fun exportAsText(): String =
         synchronized(fileLock) {
             if (!logFile.exists()) return ""
-            // Decoded rendering: the original payload survives, including newlines.
+            // Decoded rendering retains safe diagnostics and excludes credential values.
             logFile.readLines().mapNotNull { parseLine(it) }
                 .joinToString("\n") { entry ->
-                    val details = entry.details.entries.joinToString(";") { (k, v) -> "$k=$v" }
+                    val details = entry.details.entries.joinToString("\n") { (k, v) -> "$k=$v" }
                     "${entry.timestamp}\t${entry.category}\t${entry.level}\t${entry.message}\t$details"
                 }
         }
@@ -110,13 +124,15 @@ class FileDiagnosticsLogger(
                     val v = it.substringAfter('=')
                     if (isV2) dec(k) to dec(v) else k to v
                 }
-        return DiagEntry(
-            id = nextId++,
-            timestamp = parts[offset].toLongOrNull() ?: 0L,
-            category = runCatching { DiagCategory.valueOf(parts[offset + 1]) }.getOrDefault(DiagCategory.APP),
-            level = runCatching { DiagLevel.valueOf(parts[offset + 2]) }.getOrDefault(DiagLevel.INFO),
-            message = if (isV2) dec(parts[offset + 3]) else parts[offset + 3],
-            details = details,
+        return DiagnosticsRedactor.redact(
+            DiagEntry(
+                id = nextId++,
+                timestamp = parts[offset].toLongOrNull() ?: 0L,
+                category = runCatching { DiagCategory.valueOf(parts[offset + 1]) }.getOrDefault(DiagCategory.APP),
+                level = runCatching { DiagLevel.valueOf(parts[offset + 2]) }.getOrDefault(DiagLevel.INFO),
+                message = if (isV2) dec(parts[offset + 3]) else parts[offset + 3],
+                details = details,
+            ),
         )
     }
 
