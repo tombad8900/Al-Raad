@@ -10,9 +10,11 @@ class PageTabAssociator {
     private var lastRequestedNavigation: Pair<String, String>? = null
     private var lastBoundTabId: String? = null
 
+    @Synchronized
     fun shouldLoad(tabId: String, tabUrl: String, webViewUrl: String?): Boolean =
         tabUrl.isNotBlank() && tabUrl != webViewUrl && (tabId to tabUrl) != lastRequestedNavigation
 
+    @Synchronized
     fun recordRequest(tabId: String, tabUrl: String) {
         lastRequestedNavigation = tabId to tabUrl
         pageTabIds.entries.removeAll { it.value == tabId }
@@ -20,6 +22,7 @@ class PageTabAssociator {
         if (pendingNavigationTabs.size > MAX_PENDING_NAVIGATIONS) pendingNavigationTabs.removeAt(0)
     }
 
+    @Synchronized
     fun onPageStartedWithContext(url: String, activeTabId: String?): PageStartAssociation {
         val matchIndex = pendingNavigationTabs.indexOfFirst { it.first == url }
         val displacedRedirect = matchIndex < 0 && pendingNavigationTabs.isNotEmpty()
@@ -39,8 +42,10 @@ class PageTabAssociator {
         return PageStartAssociation(ownerTabId, startsNewNavigation)
     }
 
+    @Synchronized
     fun onPageFinished(url: String): String? = pageTabIds[url]
 
+    @Synchronized
     fun tabIdForPage(url: String?): String? = url?.let { pageTabIds[it] }
 
     private companion object {
