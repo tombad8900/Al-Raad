@@ -137,7 +137,8 @@ fun BrowserScreen(
                     },
                 )
             }
-        }    }
+        }
+    }
 }
 
 /** Current-page stream picker with a direct path when only one URL was detected. */
