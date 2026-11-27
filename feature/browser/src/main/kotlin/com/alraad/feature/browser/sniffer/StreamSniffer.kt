@@ -49,8 +49,8 @@ class StreamSniffer
 
         /**
          * Records a detected license request and attaches it to the stream detected on
-         * the same page when [pageUrl] is known, falling back to the most recent stream
-         * overall. License-request headers stay distinct from stream headers.
+         * the same page when [pageUrl] is known. A known page with no detected stream
+         * stays unassociated; license headers remain distinct from stream headers.
          */
         fun onDrmLicenseObserved(
             url: String,
