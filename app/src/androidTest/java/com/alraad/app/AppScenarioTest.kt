@@ -171,7 +171,7 @@ class AppScenarioTest {
             capture("scenario-player-fit-frames.png")
 
             // Fit is the initial mode. Switch to Fill and capture the rendered result.
-            composeRule.onNodeWithContentDescription("Fill screen").performClick()
+            composeRule.onNode(hasContentDescription("Fill screen")).performClick()
             waitForNode(hasContentDescription("Fit video inside screen"), 10_000)
             composeRule.waitForIdle()
             Thread.sleep(500)
