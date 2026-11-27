@@ -22,6 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * History and Bookmarks lists (Issue #9, part B). Both are RTL-friendly simple
@@ -64,6 +67,10 @@ fun BookmarksScreen(
     )
 }
 
+/** Row timestamp, e.g. 2026-11-27 09:41. Internal for test coverage. */
+internal fun formatTimestamp(epochMillis: Long): String =
+    SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(epochMillis))
+
 @Composable
 private fun EntryList(
     items: List<Pair<Long, Triple<String, String, Long>>>,
@@ -80,7 +87,7 @@ private fun EntryList(
     }
     LazyColumn(modifier = modifier.fillMaxSize()) {
         items(items, key = { it.first }) { (id, data) ->
-            val (title, url, _) = data
+            val (title, url, timestamp) = data
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -94,6 +101,10 @@ private fun EntryList(
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        formatTimestamp(timestamp),
+                        style = MaterialTheme.typography.labelSmall,
                     )
                 }
                 IconButton(onClick = { onDelete(id) }) { Icon(Icons.Default.Delete, contentDescription = "Delete") }
