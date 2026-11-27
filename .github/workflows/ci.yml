@@ -88,9 +88,16 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          # The screenshot lands in the app's private external files dir, which the
-          # shell user cannot stat on API 30+ (scoped storage), so read it via run-as.
-          script: ./gradlew --no-daemon :app:connectedDebugAndroidTest && adb shell run-as com.alraad.browser cat /sdcard/Android/data/com.alraad.browser/files/app-launch.png > app-launch.png
+          # The test writes the screenshot to the public Downloads collection via
+          # MediaStore (survives scoped storage and post-test package removal; run
+          # 45987678975 showed the package lookup failing at pull time). Clear any
+          # stale file first, then require a non-empty PNG from this run.
+          script: |
+            adb shell rm -f /sdcard/Download/app-launch.png || true
+            ./gradlew --no-daemon :app:connectedDebugAndroidTest
+            adb pull /sdcard/Download/app-launch.png app-launch.png
+            test -s app-launch.png
+            head -c 8 app-launch.png | grep -q $'\x89PNG\x0d\x0a\x1a\x0a'
 
       - name: Upload app-launch screenshot
         uses: actions/upload-artifact@v7
