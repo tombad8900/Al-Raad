@@ -82,9 +82,19 @@ class OfflineAdBlockerConcurrencyTest {
                         override suspend fun clear() = Unit
                     },
                 )
+            val failures = java.util.concurrent.ConcurrentLinkedQueue<Throwable>()
+
+            fun worker(body: () -> Unit): Thread =
+                Thread {
+                    try {
+                        body()
+                    } catch (t: Throwable) {
+                        failures += t
+                    }
+                }
             val writers =
                 (1..4).map { w ->
-                    Thread {
+                    worker {
                         repeat(500) {
                             blocker.addToWhitelist("host$it-w$w.example.com")
                             blocker.removeFromWhitelist("host$it-w$w.example.com")
@@ -93,7 +103,7 @@ class OfflineAdBlockerConcurrencyTest {
                 }
             val readers =
                 (1..4).map {
-                    Thread {
+                    worker {
                         runBlocking {
                             repeat(500) { blocker.shouldBlock("https://host$it-w1.example.com/x") }
                         }
@@ -101,6 +111,7 @@ class OfflineAdBlockerConcurrencyTest {
                 }
             (writers + readers).forEach { it.start() }
             (writers + readers).forEach { it.join(30_000) }
-            assertTrue((writers + readers).none { it.isAlive })
+            assertTrue("workers still alive", (writers + readers).none { it.isAlive })
+            assertTrue("worker failures: $failures", failures.isEmpty())
         }
 }
