@@ -15,6 +15,8 @@ import com.alraad.core.common.contracts.StreamListener
 import com.alraad.core.common.contracts.StreamUrl
 import com.alraad.core.common.contracts.SubtitleTrack
 import com.alraad.feature.browser.actions.StreamActions
+import com.alraad.feature.browser.sniffer.StreamSniffer
+import com.alraad.feature.browser.sniffer.SubtitleSniffer
 import com.alraad.feature.browser.tabs.TabManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
