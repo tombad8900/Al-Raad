@@ -63,21 +63,7 @@ fun BrowserScreen(
         // Minimal selected-stream handoff into the PLAYER route (richer picker is
         // queued post-MVP): plays the most recent detected stream with its headers.
         handlers.detectedStreams.streams.firstOrNull()?.let { stream ->
-            val host = android.net.Uri.parse(stream.url).host ?: stream.url
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-            ) {
-                androidx.compose.material3.TextButton(onClick = { handlers.detectedStreams.onPlay(stream) }) {
-                    androidx.compose.material3.Text(text = "▶ $host")
-                }
-                androidx.compose.material3.TextButton(onClick = { handlers.detectedStreams.onCopy(stream) }) {
-                    androidx.compose.material3.Text(text = "نسخ")
-                }
-                androidx.compose.material3.TextButton(onClick = { handlers.detectedStreams.onSave(stream) }) {
-                    androidx.compose.material3.Text(text = "حفظ")
-                }
-            }
+            DetectedStreamBar(stream = stream, streams = handlers.detectedStreams)
         }
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -106,5 +92,28 @@ fun BrowserScreen(
                 }
             },
         )
+    }
+}
+
+/** Stream bar: play / copy / save actions for the most recently detected stream. */
+@Composable
+private fun DetectedStreamBar(
+    stream: com.alraad.core.common.contracts.StreamUrl,
+    streams: DetectedStreamsUi,
+) {
+    val host = android.net.Uri.parse(stream.url).host ?: stream.url
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        androidx.compose.material3.TextButton(onClick = { streams.onPlay(stream) }) {
+            androidx.compose.material3.Text(text = "▶ $host")
+        }
+        androidx.compose.material3.TextButton(onClick = { streams.onCopy(stream) }) {
+            androidx.compose.material3.Text(text = "نسخ")
+        }
+        androidx.compose.material3.TextButton(onClick = { streams.onSave(stream) }) {
+            androidx.compose.material3.Text(text = "حفظ")
+        }
     }
 }

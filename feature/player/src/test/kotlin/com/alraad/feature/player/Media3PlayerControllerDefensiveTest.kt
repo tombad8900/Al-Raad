@@ -46,6 +46,63 @@ class Media3PlayerControllerDefensiveTest {
     }
 
     @Test
+    fun `a build failure surfaces as playbackError with the stream still on the route`() {
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example/broken.m3u8",
+                format = StreamFormat.HLS,
+                source = StreamSource.NETWORK,
+            )
+        controller.playerFactory = { throw IllegalStateException("deterministic test failure") }
+        controller.play(stream)
+        // The route keeps the stream (no placeholder regression), the failure is an
+        // in-app error state, and no exception escapes play().
+        assertEquals(stream, controller.currentStream.value)
+        assertEquals("deterministic test failure", controller.playbackError.value)
+        assertNull(controller.currentPlayer())
+    }
+
+    @Test
+    fun `after a build failure the next play recovers and clears the error`() {
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example/recover.m3u8",
+                format = StreamFormat.HLS,
+                source = StreamSource.NETWORK,
+            )
+        controller.playerFactory = { throw IllegalStateException("deterministic test failure") }
+        controller.play(stream)
+        controller.playerFactory = { ctx -> androidx.media3.exoplayer.ExoPlayer.Builder(ctx).build() }
+        controller.play(stream)
+        assertEquals(stream, controller.currentStream.value)
+        assertNull(controller.playbackError.value)
+        assertNotNull(controller.currentPlayer())
+    }
+
+    @Test
+    fun `repeating play for the same stream builds the player only once`() {
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example/once.m3u8",
+                format = StreamFormat.HLS,
+                source = StreamSource.NETWORK,
+            )
+        var builds = 0
+        controller.playerFactory = { ctx ->
+            builds++
+            androidx.media3.exoplayer.ExoPlayer.Builder(ctx).build()
+        }
+        // One tap reaches play() twice: once from stream selection in the nav
+        // callback, once from PlayerScreen's DisposableEffect. Exactly one player
+        // may be built (owner real-device double-start finding).
+        controller.play(stream)
+        controller.play(stream)
+        assertEquals(1, builds)
+        assertEquals(stream, controller.currentStream.value)
+        assertNull(controller.playbackError.value)
+    }
+
+    @Test
     fun `a subsequent play replaces the stream and clears prior error state`() {
         val first =
             StreamUrl(

@@ -7,6 +7,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -61,6 +62,34 @@ class AppScenarioTest {
         composeRule.onNodeWithText("السجل").performClick()
         waitForNode(hasText("example.com", substring = true), 15_000)
         capture("scenario-05-reopen-history.png")
+    }
+
+    /**
+     * Route regression (owner real-device finding): tapping the detected-stream bar
+     * must reach the real PLAYER route, never the no-stream placeholder, and one tap
+     * must start playback once (the controller's single-start guard covers the double
+     * call from selection + PlayerScreen). Uses ExoPlayer's own public test media as
+     * controlled authorized content; needs emulator network, and fails honestly if
+     * the media cannot be fetched.
+     */
+    @Test fun detectedStreamTapReachesPlayerRoute() {
+        composeRule.waitForIdle()
+        waitForNode(hasSetTextAction(), 20_000)
+
+        // Load a direct media URL so the sniffer detects it from the real request.
+        composeRule.onNode(hasSetTextAction())
+            .performTextInput("https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4")
+        composeRule.onNode(hasSetTextAction()).performImeAction()
+        waitForNode(hasText("\u25b6", substring = true), 30_000)
+        capture("scenario-06-stream-bar.png")
+
+        composeRule.onNodeWithText("\u25b6", substring = true).performClick()
+        // The player route shows its controls; the no-stream placeholder must be absent.
+        waitForNode(hasContentDescription("Fullscreen"), 15_000)
+        composeRule.onNodeWithText(
+            "\u0644\u0645 \u064a\u062a\u0645 \u0627\u062e\u062a\u064a\u0627\u0631 \u0628\u062b \u0628\u0639\u062f",
+        ).assertDoesNotExist()
+        capture("scenario-07-player-route.png")
     }
 
     private fun waitForNode(

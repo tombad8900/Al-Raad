@@ -5,7 +5,9 @@ import com.alraad.core.common.contracts.StreamFormat
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.core.common.contracts.StreamUrl
 import com.alraad.core.common.fakes.FakeAdBlocker
+import com.alraad.core.common.fakes.FakeBookmarksRepository
 import com.alraad.core.common.fakes.FakeDiagnosticsLogger
+import com.alraad.core.common.fakes.FakeHistoryRepository
 import com.alraad.core.common.fakes.FakePlayerController
 import com.alraad.core.common.fakes.FakeSavedStreamsRepository
 import com.alraad.core.common.fakes.FakeSettingsRepository
@@ -61,6 +63,8 @@ class BrowserViewModelStreamActionsTest {
                 sniffer = StreamSniffer(logger),
                 streamActions = streamActions,
                 settingsRepository = FakeSettingsRepository(),
+                historyRepository = FakeHistoryRepository(),
+                bookmarksRepository = FakeBookmarksRepository(),
             )
     }
 

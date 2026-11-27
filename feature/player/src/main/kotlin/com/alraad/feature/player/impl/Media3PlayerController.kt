@@ -35,6 +35,13 @@ class Media3PlayerController
     ) : PlayerController {
         private var player: ExoPlayer? = null
 
+        /**
+         * Test seam for player construction, so unit tests can force a deterministic
+         * build failure instead of relying on asynchronous ExoPlayer errors. Not used
+         * by production wiring (Hilt keeps the default).
+         */
+        internal var playerFactory: (Context) -> ExoPlayer = { ctx -> ExoPlayer.Builder(ctx).build() }
+
         // Last stream handed to play(), so the PLAYER nav route can render it.
         private val _currentStream = kotlinx.coroutines.flow.MutableStateFlow<StreamUrl?>(null)
         val currentStream: kotlinx.coroutines.flow.StateFlow<StreamUrl?> = _currentStream
@@ -60,6 +67,14 @@ class Media3PlayerController
             drmLicenseUrl: String? = null,
             quality: QualityLimit? = null,
         ) {
+            // Single-start guard: stream selection (the nav callback) and PlayerScreen's
+            // own DisposableEffect both call play() for one tap; the second call for the
+            // same stream must not tear down and rebuild a healthy player. A previous
+            // failure leaves player == null, so retries still rebuild.
+            if (_currentStream.value == stream && player != null) {
+                logger.log(DiagCategory.PLAYER, DiagLevel.DEBUG, "Play already active", mapOf("url" to stream.url))
+                return
+            }
             logger.log(
                 DiagCategory.PLAYER,
                 DiagLevel.INFO,
@@ -76,7 +91,7 @@ class Media3PlayerController
             try {
                 val mediaSource = buildMediaSource(stream, drmLicenseUrl)
                 player =
-                    ExoPlayer.Builder(context).build().apply {
+                    playerFactory(context).apply {
                         addListener(
                             object : Player.Listener {
                                 override fun onPlayerError(error: PlaybackException) {
