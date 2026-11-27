@@ -55,7 +55,6 @@ class WebViewIntegrationHelper
             onRequestObserved: (url: String, headers: Map<String, String>, pageUrl: String?) -> Unit = { _, _, _ -> },
             onPageStart: (WebView, String) -> Unit = { _, _ -> },
             onNavigationRequested: (WebView, String) -> Unit = { _, _ -> },
-            onPageFinishedWithUrl: (WebView, String) -> Unit = { _, _ -> },
         ): WebViewClient =
             object : WebViewClient() {
                 // Cached from UI-thread navigation callbacks: shouldInterceptRequest runs
@@ -89,15 +88,6 @@ class WebViewIntegrationHelper
                     if (request.isForMainFrame && request.url.scheme in setOf("http", "https")) {
                         onNavigationRequested(view, request.url.toString())
                     }
-                    return false
-                }
-
-                override fun shouldOverrideUrlLoading(
-                    view: WebView,
-                    url: String,
-                ): Boolean {
-                    val scheme = android.net.Uri.parse(url).scheme
-                    if (scheme == "http" || scheme == "https") onNavigationRequested(view, url)
                     return false
                 }
 
@@ -185,7 +175,6 @@ class WebViewIntegrationHelper
                         )
                     }
                     onPageFinished(view)
-                    onPageFinishedWithUrl(view, url)
                 }
             }
 
