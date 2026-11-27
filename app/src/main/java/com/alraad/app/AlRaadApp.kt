@@ -1,6 +1,7 @@
 package com.alraad.app
 
 import android.app.Application
+import com.alraad.core.adblocker.impl.BlocklistUpdateWorker
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.diagnostics.CrashReporter
 import dagger.hilt.android.HiltAndroidApp
@@ -15,5 +16,6 @@ class AlRaadApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashReporter(diagnosticsLogger).install()
+        BlocklistUpdateWorker.schedule(this)
     }
 }
