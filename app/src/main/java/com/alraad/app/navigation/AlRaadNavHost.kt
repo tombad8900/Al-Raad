@@ -244,7 +244,8 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
             },
             onCopy = { text ->
                 val clipboard =
-                    context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as
+                        android.content.ClipboardManager
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("diagnostics log", text))
             },
         )
