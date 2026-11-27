@@ -2,7 +2,6 @@ package com.alraad.feature.browser.ui
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,9 +53,12 @@ fun BrowserScreen(
             },
             onBookmarkClick = handlers.actions.onBookmark,
         )
-        handlers.detectedStreams.streams.lastOrNull()?.let { item ->
-            DetectedStreamBar(item = item, streams = handlers.detectedStreams)
-        }
+        DetectedStreamPicker(
+            items = handlers.detectedStreams.streams,
+            onPlay = handlers.detectedStreams.onPlay,
+            onCopy = handlers.detectedStreams.onCopy,
+            onSave = handlers.detectedStreams.onSave,
+        )
         BrowserWebView(
             activeTab = activeTab,
             environment =
@@ -72,28 +74,5 @@ fun BrowserScreen(
             pageTabAssociator = pageTabAssociator,
             onLoadingChange = { isLoading = it },
         )
-    }
-}
-
-/** Stream bar: play / copy / save for the most recently detected stream (picker UI lands in the follow-up PR). */
-@Composable
-private fun DetectedStreamBar(
-    item: DetectedStreamItem,
-    streams: DetectedStreamsUi,
-) {
-    val host = android.net.Uri.parse(item.stream.url).host ?: item.stream.url
-    androidx.compose.foundation.layout.Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-    ) {
-        androidx.compose.material3.TextButton(onClick = { streams.onPlay(item) }) {
-            androidx.compose.material3.Text(text = "▶ $host")
-        }
-        androidx.compose.material3.TextButton(onClick = { streams.onCopy(item) }) {
-            androidx.compose.material3.Text(text = "نسخ")
-        }
-        androidx.compose.material3.TextButton(onClick = { streams.onSave(item, host) }) {
-            androidx.compose.material3.Text(text = "حفظ")
-        }
     }
 }
