@@ -110,7 +110,11 @@ class StreamSniffer
         private fun pageKey(
             pageUrl: String,
             tabId: String?,
-        ): String = "${tabId.orEmpty()}\u0000$pageUrl"
+        ): String =
+            buildString {
+                append(tabId?.length ?: -1).append(':').append(tabId.orEmpty())
+                append(pageUrl)
+            }
 
         fun registerListener(listener: StreamListener) {
             listeners += listener
