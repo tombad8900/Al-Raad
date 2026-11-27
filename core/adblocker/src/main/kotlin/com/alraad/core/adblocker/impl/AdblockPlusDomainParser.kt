@@ -19,11 +19,14 @@ object AdblockPlusDomainParser {
     }
 
     private fun extractDomain(line: String): String? {
-        if (line.isEmpty() || line.startsWith("!") || line.startsWith("[")) return null
-        if (line.startsWith("@@") || line.contains("##") || line.contains("#@#")) return null
-        domainRule.matchEntire(line.lowercase())?.let { return it.groupValues[1].trimEnd('.') }
-        if (isPlainHostsLine(line)) return HostsParser.parse(line)
-        return null
+        val ruleMatch = domainRule.matchEntire(line.lowercase())
+        return when {
+            line.isEmpty() || line.startsWith("!") || line.startsWith("[") -> null
+            line.startsWith("@@") || line.contains("##") || line.contains("#@#") -> null
+            ruleMatch != null -> ruleMatch.groupValues[1].trimEnd('.')
+            isPlainHostsLine(line) -> HostsParser.parse(line)
+            else -> null
+        }
     }
 
     private fun isPlainHostsLine(line: String): Boolean = !line.startsWith("|") && !line.contains("*")
