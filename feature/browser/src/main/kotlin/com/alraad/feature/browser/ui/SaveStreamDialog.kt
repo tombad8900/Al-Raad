@@ -11,7 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
-/** Name-on-save dialog for a detected stream, prefilled with the stream host. */
+/** Name-on-save dialog, prefilled with the stream host. */
 @Composable
 fun SaveStreamDialog(
     initialTitle: String,
@@ -31,17 +31,8 @@ fun SaveStreamDialog(
             )
         },
         confirmButton = {
-            Button(
-                enabled = title.isNotBlank(),
-                onClick = { onConfirm(title.trim()) },
-            ) {
-                Text("حفظ")
-            }
+            Button(enabled = title.isNotBlank(), onClick = { onConfirm(title.trim()) }) { Text("حفظ") }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("إلغاء")
-            }
-        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("إلغاء") } },
     )
 }
