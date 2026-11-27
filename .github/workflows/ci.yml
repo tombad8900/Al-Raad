@@ -47,7 +47,7 @@ jobs:
         run: ./gradlew --no-daemon ktlintCheck detekt test assembleDebug
 
       - name: Upload Wave 3 debug APK artifact
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
         with:
           name: al-raad-debug-apk-${{ github.sha }}
@@ -57,7 +57,7 @@ jobs:
 
   emulator-android-test:
     name: emulator androidTest (main)
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') || github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 45
