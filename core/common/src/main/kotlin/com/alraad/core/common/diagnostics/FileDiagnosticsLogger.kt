@@ -14,12 +14,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * Persistent [DiagnosticsLogger]: raw, unredacted, file-backed.
+ * Persistent [DiagnosticsLogger]: file-backed with credentials redacted before
+ * persistence and again when legacy entries are loaded for display or export.
  *
- * Entries are appended verbatim (full URLs, headers, stack traces) to [logFile]
- * synchronously (single-line appends, sub-millisecond) and mirrored to an
- * in-memory flow for the Diagnostics screen, so the record always survives
- * process death and export/clear are race-free. Nothing is redacted by design.
+ * Safe URL context, non-sensitive headers, and stack traces remain available.
+ * The same sanitized entries feed the in-memory flow and text export.
  *
  * Line format v2: `V2<TAB>timestamp<TAB>CATEGORY<TAB>LEVEL<TAB>enc(message)<TAB>enc(key)=enc(value);...`
  * where enc() is UTF-8 percent-encoding, so details containing ';', '=', tabs or
@@ -83,7 +82,7 @@ class FileDiagnosticsLogger(
     override suspend fun exportAsText(): String =
         synchronized(fileLock) {
             if (!logFile.exists()) return ""
-            // Decoded rendering: the original payload survives, including newlines.
+            // Decoded rendering retains safe diagnostics and excludes credential values.
             logFile.readLines().mapNotNull { parseLine(it) }
                 .joinToString("\n") { entry ->
                     val details = entry.details.entries.joinToString(";") { (k, v) -> "$k=$v" }
