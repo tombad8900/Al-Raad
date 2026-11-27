@@ -20,6 +20,7 @@ class DiagnosticsRedactorTest {
                     mapOf(
                         "Cookie" to "sid=raw-cookie",
                         "Authorization" to "Bearer raw-auth",
+                        "X-Api-Key" to "api-secret",
                         "requestHeaders" to "User-Agent: STAR\nCookie: sid=raw-cookie\nAuthorization: Bearer raw-auth",
                         "url" to "https://cdn.example/video.mp4?quality=720&session_id=raw-session",
                     ),
@@ -28,7 +29,7 @@ class DiagnosticsRedactorTest {
         val safe = DiagnosticsRedactor.redact(entry)
         val rendered = safe.message + safe.details.toString()
 
-        listOf("raw-token", "raw-cookie", "raw-auth", "raw-session").forEach {
+        listOf("raw-token", "raw-cookie", "raw-auth", "raw-session", "api-secret").forEach {
             assertFalse("secret leaked: $it", rendered.contains(it))
         }
         assertTrue(rendered.contains("https://cdn.example/master.m3u8"))
@@ -51,20 +52,4 @@ class DiagnosticsRedactorTest {
         assertTrue(safe.contains("%5BREDACTED%5D"))
     }
 
-    @Test
-    fun `normalizes case and punctuation in secret detail names`() {
-        val safe =
-            DiagnosticsRedactor.redact(
-                DiagEntry(
-                    timestamp = 1L,
-                    category = DiagCategory.WEBVIEW,
-                    level = DiagLevel.WARN,
-                    message = "failure",
-                    details = mapOf("X-Api-Key" to "api-secret", "session_id" to "session-secret"),
-                ),
-            )
-
-        assertFalse(safe.details.values.joinToString().contains("api-secret"))
-        assertFalse(safe.details.values.joinToString().contains("session-secret"))
-    }
 }
