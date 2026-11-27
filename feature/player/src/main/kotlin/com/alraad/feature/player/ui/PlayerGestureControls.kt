@@ -1,6 +1,7 @@
 package com.alraad.feature.player.ui
 
 import android.app.Activity
+import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.ContextWrapper
 import android.media.AudioManager
@@ -32,13 +33,17 @@ class PlayerGestureController(
     private val activity: Activity?,
 ) {
     private val audioManager: AudioManager? = activity?.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    private var volumeRemainder = 0f
 
-    /** delta > 0 means the finger moved up. */
+    /** delta > 0 means the finger moved up. Fractional steps accumulate across callbacks. */
     fun adjustVolume(delta: Float) {
         val am = audioManager ?: return
         val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         val current = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-        val target = (current + (delta * max).toInt()).coerceIn(0, max)
+        val (remainder, steps) = accumulateSteps(volumeRemainder, delta, max)
+        volumeRemainder = remainder
+        if (steps == 0) return
+        val target = (current + steps).coerceIn(0, max)
         am.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
     }
 
@@ -65,18 +70,40 @@ class PlayerGestureController(
         }
     }
 
+    /**
+     * Enters PiP on API 26+. Returns false when there is no host Activity, when the
+     * platform is too old, or when the Activity throws (e.g. PiP unsupported). The
+     * SDK API returns void, so a completed call without exception is the platform's
+     * only success signal.
+     */
     fun enterPictureInPicture(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
-        return try {
-            activity?.enterPictureInPictureMode() ?: false
-            true
-        } catch (e: IllegalStateException) {
-            android.util.Log.w("PlayerGestureController", "PiP unavailable", e)
-            false
-        }
+        val host = activity?.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.O }
+        return host?.let {
+            try {
+                it.enterPictureInPictureMode(PictureInPictureParams.Builder().build())
+                true
+            } catch (e: IllegalStateException) {
+                android.util.Log.w("PlayerGestureController", "PiP unavailable", e)
+                false
+            }
+        } ?: false
     }
 
     companion object {
+        /**
+         * Accumulates fractional volume movement: returns the leftover remainder and
+         * the whole steps to apply, so gradual swipes are never truncated away.
+         */
+        internal fun accumulateSteps(
+            remainder: Float,
+            delta: Float,
+            max: Int,
+        ): Pair<Float, Int> {
+            val total = remainder + delta * max
+            val steps = total.toInt()
+            return (total - steps) to steps
+        }
+
         /** Kept for callers that gate brightness writes behind the system permission. */
         fun canWriteBrightnessSettings(context: Context): Boolean =
             Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.System.canWrite(context)
