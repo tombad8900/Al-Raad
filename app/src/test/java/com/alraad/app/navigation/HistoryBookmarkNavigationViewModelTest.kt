@@ -14,11 +14,12 @@ class HistoryBookmarkNavigationViewModelTest {
         val viewModel = HistoryBookmarkNavigationViewModel(tabs)
         var navigated = false
 
-        val opened = viewModel.open(" https://saved.example/watch?id=7 ") {
-            assertEquals("https://saved.example/watch?id=7", tabs.state.value.tabs.last().url)
-            assertEquals(tabs.state.value.tabs.last().id, tabs.state.value.activeTabId)
-            navigated = true
-        }
+        val opened =
+            viewModel.open(" https://saved.example/watch?id=7 ") {
+                assertEquals("https://saved.example/watch?id=7", tabs.state.value.tabs.last().url)
+                assertEquals(tabs.state.value.tabs.last().id, tabs.state.value.activeTabId)
+                navigated = true
+            }
 
         assertTrue(opened)
         assertTrue(navigated)
