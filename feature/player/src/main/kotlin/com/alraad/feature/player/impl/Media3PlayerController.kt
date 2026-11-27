@@ -1,8 +1,10 @@
 package com.alraad.feature.player.impl
 
 import android.content.Context
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.dash.DashMediaSource
@@ -35,7 +37,20 @@ class Media3PlayerController
         /** Exposed for PlayerScreen rendering. */
         fun currentPlayer(): Player? = player
 
-        override fun play(stream: StreamUrl) {
+        /** Requested quality ceiling; null means adaptive/auto. */
+        data class QualityLimit(val maxHeight: Int)
+
+        override fun play(stream: StreamUrl) = play(stream, drmLicenseUrl = null, quality = null)
+
+        /**
+         * Issue #8 part D: standard DRM playback (Widevine when drmLicenseUrl is
+         * provided) and quality selection (cap renditions by max height).
+         */
+        fun play(
+            stream: StreamUrl,
+            drmLicenseUrl: String? = null,
+            quality: QualityLimit? = null,
+        ) {
             logger.log(
                 DiagCategory.PLAYER,
                 DiagLevel.INFO,
@@ -45,15 +60,31 @@ class Media3PlayerController
             val dataSourceFactory =
                 DefaultHttpDataSource.Factory()
                     .setDefaultRequestProperties(stream.headers)
+            val mediaItem =
+                MediaItem.Builder().setUri(stream.url).apply {
+                    if (drmLicenseUrl != null) {
+                        setDrmConfiguration(
+                            MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
+                                .setLicenseUri(drmLicenseUrl)
+                                .build(),
+                        )
+                    }
+                }.build()
             val mediaSource =
                 when (stream.format) {
                     StreamFormat.HLS -> HlsMediaSource.Factory(dataSourceFactory)
                     StreamFormat.DASH -> DashMediaSource.Factory(dataSourceFactory)
                     else -> ProgressiveMediaSource.Factory(dataSourceFactory)
-                }.createMediaSource(MediaItem.fromUri(stream.url))
+                }.createMediaSource(mediaItem)
             release()
             player =
                 ExoPlayer.Builder(context).build().apply {
+                    if (quality != null) {
+                        trackSelectionParameters =
+                            TrackSelectionParameters.Builder(context)
+                                .setMaxVideoSize(Int.MAX_VALUE, quality.maxHeight)
+                                .build()
+                    }
                     setMediaSource(mediaSource)
                     prepare()
                     playWhenReady = true
