@@ -49,6 +49,38 @@ class WebViewIntegrationHelper
                     return null
                 }
 
+                override fun onReceivedError(
+                    view: WebView,
+                    request: android.webkit.WebResourceRequest,
+                    error: android.webkit.WebResourceError,
+                ) {
+                    if (request.isForMainFrame) {
+                        logger.log(
+                            DiagCategory.WEBVIEW,
+                            DiagLevel.ERROR,
+                            "Load failed",
+                            mapOf(
+                                "url" to request.url.toString(),
+                                "errorCode" to error.errorCode.toString(),
+                                "description" to (error.description?.toString() ?: ""),
+                            ),
+                        )
+                    }
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView,
+                    request: android.webkit.WebResourceRequest,
+                    errorResponse: WebResourceResponse,
+                ) {
+                    logger.log(
+                        DiagCategory.WEBVIEW,
+                        DiagLevel.WARN,
+                        "HTTP error",
+                        mapOf("url" to request.url.toString(), "status" to errorResponse.statusCode.toString()),
+                    )
+                }
+
                 override fun onPageFinished(
                     view: WebView,
                     url: String,
