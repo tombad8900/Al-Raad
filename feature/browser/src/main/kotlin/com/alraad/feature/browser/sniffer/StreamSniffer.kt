@@ -11,9 +11,7 @@ import javax.inject.Singleton
 
 /**
  * Detects media streams from observed requests (WebView network, JS bridge, DOM).
- * Captures the full request headers verbatim (needed for later playback), the
- * Content-Length size when present, and dedups repeated observations of the same
- * URL+headers pair. Every detection is logged raw and unredacted.
+ * Captures request headers verbatim and deduplicates repeated URL+headers pairs.
  */
 private const val MAX_SEEN_KEYS = 1000
 
@@ -24,22 +22,18 @@ class StreamSniffer
         private val logger: DiagnosticsLogger,
     ) {
         private val listeners = java.util.concurrent.CopyOnWriteArrayList<StreamListener>()
+        private val observationListeners = java.util.concurrent.CopyOnWriteArrayList<StreamObservationListener>()
 
         @Volatile
         private var lastDetected: StreamUrl? = null
 
-        // Most recent detected stream per page URL, so a license request attaches to
-        // the stream of the document that issued it, not a stream from another tab/page.
-        private val lastDetectedByPage =
+        private val lastDetectedByPageAndTab =
             java.util.Collections.synchronizedMap(
                 object : LinkedHashMap<String, StreamUrl>(16, 0.75f, true) {
                     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, StreamUrl>?): Boolean = size > MAX_SEEN_KEYS
                 },
             )
 
-        // Detectable standard EME/Widevine license endpoint hints (case-insensitive).
-        // Deliberately excludes a bare "drm" substring: media URLs like /drm/manifest.mpd
-        // must classify as streams via StreamFormatDetector, never as license requests.
         private val licenseUrlHints = listOf("widevine", "playready", "clearkey", "/license", "licensekey", "acquirelicense")
 
         fun isLicenseRequest(url: String): Boolean {
@@ -47,15 +41,11 @@ class StreamSniffer
             return licenseUrlHints.any { lower.contains(it) }
         }
 
-        /**
-         * Records a detected license request and attaches it to the stream detected on
-         * the same page when [pageUrl] is known, falling back to the most recent stream
-         * overall. License-request headers stay distinct from stream headers.
-         */
         fun onDrmLicenseObserved(
             url: String,
             headers: Map<String, String> = emptyMap(),
             pageUrl: String? = null,
+            tabId: String? = null,
         ) {
             if (!isLicenseRequest(url)) return
             logger.log(
@@ -64,24 +54,21 @@ class StreamSniffer
                 "DRM license request detected",
                 mapOf("url" to url, "headers" to headers.toString()),
             )
-            // Correlate strictly by page: when the page is known, only that page's stream
-            // may take the license; a license from a page with no detected stream stays
-            // unattached rather than landing on another page's stream.
             val target =
                 if (pageUrl != null) {
-                    lastDetectedByPage[pageUrl]
+                    lastDetectedByPageAndTab[pageKey(pageUrl, tabId)]
                 } else {
                     lastDetected
                 }
             target?.let { found ->
                 val updated = found.copy(drmLicenseUrl = url, drmLicenseRequestHeaders = headers)
                 if (lastDetected?.url == found.url) lastDetected = updated
-                pageUrl?.let { lastDetectedByPage[it] = updated }
+                pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = updated }
                 listeners.forEach { it.onStreamUpdated(updated) }
+                observationListeners.forEach { it.onStreamObserved(updated, pageUrl, tabId) }
             }
         }
 
-        // Access-order LRU, bounded: long sessions evict the oldest unique keys.
         private val seen =
             java.util.Collections.synchronizedMap(
                 object : LinkedHashMap<String, Long>(16, 0.75f, true) {
@@ -89,8 +76,6 @@ class StreamSniffer
                 },
             )
 
-        // Length-prefixed canonical encoding: unambiguous even when header values
-        // contain separators like '=' or ';'.
         private fun dedupKey(
             url: String,
             headers: Map<String, String>,
@@ -103,6 +88,15 @@ class StreamSniffer
                 }
             }
 
+        private fun pageKey(
+            pageUrl: String,
+            tabId: String?,
+        ): String =
+            buildString {
+                append(tabId?.length ?: -1).append(':').append(tabId.orEmpty())
+                append(pageUrl)
+            }
+
         fun registerListener(listener: StreamListener) {
             listeners += listener
         }
@@ -111,17 +105,26 @@ class StreamSniffer
             listeners -= listener
         }
 
+        fun registerObservationListener(listener: StreamObservationListener) {
+            observationListeners += listener
+        }
+
+        fun unregisterObservationListener(listener: StreamObservationListener) {
+            observationListeners -= listener
+        }
+
         fun onRequestObserved(
             url: String,
             headers: Map<String, String> = emptyMap(),
             contentType: String? = null,
             source: StreamSource = StreamSource.NETWORK,
             pageUrl: String? = null,
+            tabId: String? = null,
         ): StreamUrl? {
-            if (StreamFormatDetector.isStream(url, contentType)) return detectStream(url, headers, contentType, source, pageUrl)
-            if (isLicenseRequest(url)) {
-                onDrmLicenseObserved(url, headers, pageUrl)
+            if (StreamFormatDetector.isStream(url, contentType)) {
+                return detectStream(url, headers, contentType, source, pageUrl, tabId)
             }
+            if (isLicenseRequest(url)) onDrmLicenseObserved(url, headers, pageUrl, tabId)
             return null
         }
 
@@ -130,28 +133,25 @@ class StreamSniffer
             headers: Map<String, String>,
             contentType: String?,
             source: StreamSource,
-            pageUrl: String? = null,
+            pageUrl: String?,
+            tabId: String?,
         ): StreamUrl? {
+            val detected =
+                StreamUrl(
+                    url = url,
+                    format = StreamFormatDetector.detect(url, contentType),
+                    source = source,
+                    headers = headers,
+                    size =
+                        headers.entries
+                            .firstOrNull { it.key.equals("Content-Length", ignoreCase = true) }
+                            ?.value
+                            ?.toLongOrNull(),
+                )
             val isDuplicate = seen.put(dedupKey(url, headers), System.currentTimeMillis()) != null
-            val stream =
-                if (isDuplicate) {
-                    null
-                } else {
-                    StreamUrl(
-                        url = url,
-                        format = StreamFormatDetector.detect(url, contentType),
-                        source = source,
-                        headers = headers,
-                        size =
-                            headers.entries
-                                .firstOrNull { it.key.equals("Content-Length", ignoreCase = true) }
-                                ?.value
-                                ?.toLongOrNull(),
-                    )
-                }
-            stream?.let { detected ->
-                lastDetected = detected
-                pageUrl?.let { lastDetectedByPage[it] = detected }
+            lastDetected = detected
+            pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = detected }
+            if (!isDuplicate) {
                 logger.log(
                     DiagCategory.SNIFFER,
                     DiagLevel.INFO,
@@ -165,6 +165,16 @@ class StreamSniffer
                 )
                 listeners.forEach { it.onStreamDetected(detected) }
             }
-            return stream
+            observationListeners.forEach { it.onStreamObserved(detected, pageUrl, tabId) }
+            return if (isDuplicate) null else detected
         }
     }
+
+/** Browser-module metadata channel; the frozen common StreamListener stays unchanged. */
+fun interface StreamObservationListener {
+    fun onStreamObserved(
+        stream: StreamUrl,
+        pageUrl: String?,
+        tabId: String?,
+    )
+}
