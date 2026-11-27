@@ -50,7 +50,12 @@ class DiagnosticsScreenSecurityTest {
             )
         val logger =
             object : DiagnosticsLogger {
-                override fun log(category: DiagCategory, level: DiagLevel, message: String, details: Map<String, String>) = Unit
+                override fun log(
+                    category: DiagCategory,
+                    level: DiagLevel,
+                    message: String,
+                    details: Map<String, String>,
+                ) = Unit
                 override fun observeLogs(): Flow<List<DiagEntry>> = flowOf(listOf(entry))
                 override suspend fun exportAsText(): String =
                     "Cookie=export-cookie\\nAuthorization=Bearer export-auth\\n" +
