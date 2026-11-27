@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -21,7 +22,7 @@ class FileDiagnosticsLoggerTest {
         FileDiagnosticsLogger(file, backgroundScope, ioDispatcher = StandardTestDispatcher(testScheduler))
 
     @Test
-    fun `entries persist raw to file and survive a fresh logger instance`() =
+    fun `entries persist redacted data and survive a fresh logger instance`() =
         runTest {
             val file = tmp.newFile("diag.log")
             val rawUrl = "https://cdn.test/master.m3u8?token=secret-token"
@@ -33,13 +34,15 @@ class FileDiagnosticsLoggerTest {
                 mapOf("url" to rawUrl, "Cookie" to "session=abc123"),
             )
             val written = first.exportAsText()
-            assertTrue(written.contains(rawUrl))
-            assertTrue(written.contains("session=abc123"))
+            assertFalse(written.contains("secret-token"))
+            assertFalse(written.contains("session=abc123"))
+            assertTrue(written.contains("https://cdn.test/master.m3u8?token=[REDACTED]"))
 
             val reloaded = logger(file)
             val entries = reloaded.observeLogs().first { it.isNotEmpty() }
             assertEquals(1, entries.size)
-            assertEquals(rawUrl, entries[0].details["url"])
+            assertEquals("https://cdn.test/master.m3u8?token=[REDACTED]", entries[0].details["url"])
+            assertEquals("[REDACTED]", entries[0].details["Cookie"])
             assertEquals("stream detected", entries[0].message)
         }
 
@@ -88,19 +91,47 @@ class FileDiagnosticsLoggerTest {
             val reloaded = logger(file)
             val entries = reloaded.observeLogs().first { it.isNotEmpty() }
             val entry = entries.single { it.category == DiagCategory.WEBVIEW }
-            assertEquals(nasty, entry.details)
+            assertEquals("[REDACTED]", entry.details["Cookie"])
+            assertEquals("line1\nline2\r\nline3\ttab", entry.details["multiline"])
+            assertEquals("v;v", entry.details["semicolon;key"])
+            assertEquals("a+b c", entry.details["plus"])
             assertEquals("raw=message; with; semis", entry.message)
         }
 
     @Test
-    fun `export preserves the original payload`() =
+    fun `export redacts credentials but preserves safe diagnostic details`() =
         runTest {
             val file = tmp.newFile("diag-export.log")
             val logger = logger(file)
             logger.log(DiagCategory.SNIFFER, DiagLevel.WARN, "m", mapOf("Cookie" to "a=1; b=2", "body" to "x\ny"))
             val exported = logger.exportAsText()
-            assertTrue(exported.contains("Cookie=a=1; b=2"))
+            assertTrue(exported.contains("Cookie=[REDACTED]"))
+            assertFalse(exported.contains("a=1"))
             assertTrue(exported.contains("x\ny"))
+        }
+
+
+    @Test
+    fun `legacy raw secrets are redacted before observation export and migration`() =
+        runTest {
+            val file = tmp.newFile("diag-legacy-secrets.log")
+            file.writeText(
+                "1700000000000\\tWEBVIEW\\tERROR\\trequest https://a.example/p?access_token=old-token" +
+                    "\\tCookie=session=old-cookie;Authorization=Bearer old-auth\\n",
+            )
+
+            val logger = logger(file)
+            val entry = logger.observeLogs().first { it.isNotEmpty() }.single()
+            val exported = logger.exportAsText()
+            val persisted = file.readText()
+
+            listOf("old-token", "old-cookie", "old-auth").forEach {
+                assertFalse(entry.message.contains(it))
+                assertFalse(entry.details.values.joinToString().contains(it))
+                assertFalse(exported.contains(it))
+                assertFalse(persisted.contains(it))
+            }
+            assertTrue(entry.message.contains("access_token=[REDACTED]"))
         }
 
     @Test
