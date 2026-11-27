@@ -13,9 +13,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -35,14 +33,10 @@ fun DetectedStreamPicker(
     val sortedItems = remember(items) { sortDetectedStreamItems(items) }
     val tabId = sortedItems.first().sourceTabId
     val pageUrl = sortedItems.first().sourcePageUrl
-    var selectedUrl by remember(tabId, pageUrl) { mutableStateOf<String?>(null) }
+    var selectedUrl by remember(tabId, pageUrl) { mutableStateOf(sortedItems.firstOrNull()?.stream?.url) }
     val selected = sortedItems.firstOrNull { it.stream.url == selectedUrl } ?: sortedItems.first()
     var menuExpanded by remember { mutableStateOf(false) }
     var saveDialogItem by remember { mutableStateOf<DetectedStreamItem?>(null) }
-
-    LaunchedEffect(sortedItems, selectedUrl) {
-        if (sortedItems.none { it.stream.url == selectedUrl }) selectedUrl = sortedItems.firstOrNull()?.stream?.url
-    }
 
     Column(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -92,15 +86,13 @@ fun DetectedStreamPicker(
     }
 
     saveDialogItem?.let { item ->
-        key(item.stream.url) {
-            SaveStreamDialog(
-                initialTitle = android.net.Uri.parse(item.stream.url).host ?: item.stream.url,
-                onConfirm = { title ->
-                    onSave(item, title)
-                    saveDialogItem = null
-                },
-                onDismiss = { saveDialogItem = null },
-            )
-        }
+        SaveStreamDialog(
+            initialTitle = android.net.Uri.parse(item.stream.url).host ?: item.stream.url,
+            onConfirm = { title ->
+                onSave(item, title)
+                saveDialogItem = null
+            },
+            onDismiss = { saveDialogItem = null },
+        )
     }
 }
