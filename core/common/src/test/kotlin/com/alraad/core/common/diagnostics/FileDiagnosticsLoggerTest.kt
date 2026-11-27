@@ -59,19 +59,25 @@ class FileDiagnosticsLoggerTest {
         }
 
     @Test
-    fun `crash reporter logs full raw stacktrace and delegates to previous handler`() =
+    fun `crash reporter redacts credentials and delegates to previous handler`() =
         runTest {
             val file = tmp.newFile("crash.log")
             val logger = logger(file)
             var delegated: Throwable? = null
             val reporter = CrashReporter(logger) { _, e -> delegated = e }
-            val boom = IllegalStateException("raw failure at https://internal.test/x")
+            val boom =
+                IllegalStateException(
+                    "failure Authorization: Bearer crash-secret at https://internal.test/x?token=crash-token",
+                )
             reporter.uncaughtException(Thread.currentThread(), boom)
 
             val entries = logger.observeLogs().first { it.isNotEmpty() }
             assertEquals(DiagCategory.CRASH, entries[0].category)
-            assertTrue(entries[0].details["stacktrace"]!!.contains("raw failure at https://internal.test/x"))
-            assertTrue(entries[0].details["stacktrace"]!!.contains("IllegalStateException"))
+            val safeStack = entries[0].details["stacktrace"]!!
+            assertFalse(safeStack.contains("crash-secret"))
+            assertFalse(safeStack.contains("crash-token"))
+            assertTrue(safeStack.contains("https://internal.test/x?token=[REDACTED]"))
+            assertTrue(safeStack.contains("IllegalStateException"))
             assertEquals(boom, delegated)
         }
 
