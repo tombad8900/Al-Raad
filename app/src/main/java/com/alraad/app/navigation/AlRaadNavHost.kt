@@ -152,15 +152,33 @@ private fun NavGraphBuilder.libraryDestination(navController: NavHostController)
 
 private fun NavGraphBuilder.historyBookmarksDestinations(navController: NavHostController) {
     composable(Routes.HISTORY) {
+        val navigationViewModel: HistoryBookmarkNavigationViewModel = hiltViewModel()
         HistoryScreen(
             viewModel = hiltViewModel<HistoryBookmarksViewModel>(),
-            onOpen = { navController.navigate(Routes.BROWSER) },
+            onOpen = { url ->
+                navigationViewModel.open(url) {
+                    navController.navigate(Routes.BROWSER) {
+                        popUpTo(Routes.BROWSER) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            },
         )
     }
     composable(Routes.BOOKMARKS) {
+        val navigationViewModel: HistoryBookmarkNavigationViewModel = hiltViewModel()
         BookmarksScreen(
             viewModel = hiltViewModel<HistoryBookmarksViewModel>(),
-            onOpen = { navController.navigate(Routes.BROWSER) },
+            onOpen = { url ->
+                navigationViewModel.open(url) {
+                    navController.navigate(Routes.BROWSER) {
+                        popUpTo(Routes.BROWSER) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            },
         )
     }
 }
