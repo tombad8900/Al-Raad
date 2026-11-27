@@ -20,6 +20,13 @@ object BlocklistCatalog {
     val sources =
         listOf(
             BlocklistSource(
+                id = "stevenblack-hosts",
+                name = "StevenBlack hosts",
+                url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
+                license = "MIT",
+                enabledByDefault = true,
+            ),
+            BlocklistSource(
                 id = "easylist",
                 name = "EasyList",
                 url = "https://easylist.to/easylist/easylist.txt",
