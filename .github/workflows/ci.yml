@@ -97,7 +97,7 @@ jobs:
             ./gradlew --no-daemon :app:connectedDebugAndroidTest
             adb pull /sdcard/Download/app-launch.png app-launch.png
             test -s app-launch.png
-            head -c 8 app-launch.png | grep -q $'\x89PNG\x0d\x0a\x1a\x0a'
+            [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d ' \n')" = "89504e470d0a1a0a" ]
 
       - name: Upload app-launch screenshot
         uses: actions/upload-artifact@v7
