@@ -94,7 +94,7 @@ class WebViewIntegrationHelperErrorLoggingTest {
     fun `webViewClient reports main frame start for tab correlation`() {
         val helper = WebViewIntegrationHelper(allowAll, logger, CoroutineScope(Dispatchers.Main))
         var startedUrl: String? = null
-        val client = helper.webViewClient(onPageStarted = { _, url -> startedUrl = url })
+        val client = helper.webViewClient(onPageStart = { _, url -> startedUrl = url })
         val view = android.webkit.WebView(org.robolectric.RuntimeEnvironment.getApplication())
 
         client.onPageStarted(view, "https://page.example/watch", null)
