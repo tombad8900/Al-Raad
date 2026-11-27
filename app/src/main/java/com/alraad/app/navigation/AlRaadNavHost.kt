@@ -56,22 +56,30 @@ private val SECTIONS =
 @Composable
 fun AlRaadNavHost(navController: NavHostController) {
     val backStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = backStackEntry?.destination?.route
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                SECTIONS.forEach { section ->
-                    NavigationBarItem(
-                        selected = backStackEntry?.destination?.route == section.route,
-                        onClick = {
-                            navController.navigate(section.route) {
-                                popUpTo(Routes.BROWSER) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        icon = { Icon(section.icon, contentDescription = section.label) },
-                        label = { Text(section.label) },
-                    )
+            // Owner directive: the bottom bar hides while the player is on screen.
+            if (currentRoute != Routes.PLAYER) {
+                NavigationBar {
+                    SECTIONS.forEach { section ->
+                        NavigationBarItem(
+                            selected = currentRoute == section.route,
+                            onClick = {
+                                navController.navigate(section.route) {
+                                    // No saveState/restoreState: restoring a saved PLAYER
+                                    // back-stack entry resurfaced the player route with a
+                                    // cleared selection (the "no stream selected" placeholder
+                                    // after section switches, owner finding 6). Section state
+                                    // survives in the TabManager singleton instead.
+                                    popUpTo(Routes.BROWSER)
+                                    launchSingleTop = true
+                                }
+                            },
+                            icon = { Icon(section.icon, contentDescription = section.label) },
+                            label = { Text(section.label) },
+                        )
+                    }
                 }
             }
         },

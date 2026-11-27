@@ -187,6 +187,10 @@ class Media3PlayerController
         override fun release() {
             player?.release()
             player = null
+        }
+
+        override fun stop() {
+            release()
             _currentStream.value = null
         }
     }

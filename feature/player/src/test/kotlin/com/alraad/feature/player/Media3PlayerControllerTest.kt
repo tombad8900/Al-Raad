@@ -56,6 +56,49 @@ class Media3PlayerControllerTest {
         assertNull(controller.currentPlayer())
     }
 
+    @Test fun `release frees the player but preserves the stream selection`() {
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example.com/v.mp4",
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+                headers = emptyMap(),
+            )
+        controller.play(stream)
+        controller.release()
+        assertNull(controller.currentPlayer())
+        assertEquals(stream, controller.currentStream.value)
+    }
+
+    @Test fun `stop frees the player and clears the stream selection`() {
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example.com/v.mp4",
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+                headers = emptyMap(),
+            )
+        controller.play(stream)
+        controller.stop()
+        assertNull(controller.currentPlayer())
+        assertNull(controller.currentStream.value)
+    }
+
+    @Test fun `play rebuilds from a preserved selection after release`() {
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example.com/v.mp4",
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+                headers = emptyMap(),
+            )
+        controller.play(stream)
+        controller.release()
+        controller.play(stream)
+        assertNotNull(controller.currentPlayer())
+        assertEquals(stream, controller.currentStream.value)
+    }
+
     @Test fun `play propagates stream drm license url and license request headers to the media item`() {
         val stream =
             StreamUrl(

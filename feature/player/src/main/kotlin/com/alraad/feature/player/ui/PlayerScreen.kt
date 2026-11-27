@@ -106,6 +106,9 @@ fun PlayerScreen(
         controller.play(stream, drmLicenseUrl = drmLicenseUrl)
         player = controller.currentPlayer()
         onDispose {
+            // release() frees resources but preserves the selection, so a recreate
+            // or back-stack restore rebuilds playback instead of landing on the
+            // no-stream placeholder (owner real-device finding).
             controller.release()
             player = null
         }

@@ -30,4 +30,11 @@ class FakePlayerController : PlayerController {
     override fun release() {
         releaseCount++
     }
+
+    var stopCount = 0
+        private set
+
+    override fun stop() {
+        stopCount++
+    }
 }

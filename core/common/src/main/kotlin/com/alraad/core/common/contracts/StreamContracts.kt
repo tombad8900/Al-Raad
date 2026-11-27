@@ -48,5 +48,13 @@ interface PlayerController {
 
     fun seekTo(ms: Long)
 
+    /**
+     * Frees the underlying player resources but PRESERVES the current stream
+     * selection, so the player route can rebuild after an activity recreate or a
+     * back-stack restore. Use [stop] to end the session and clear the selection.
+     */
     fun release()
+
+    /** Ends playback: releases resources and clears the stream selection. */
+    fun stop()
 }
