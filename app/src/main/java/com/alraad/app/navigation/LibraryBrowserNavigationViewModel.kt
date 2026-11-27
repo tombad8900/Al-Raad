@@ -1,9 +1,9 @@
 package com.alraad.app.navigation
 
-import java.net.URI
 import androidx.lifecycle.ViewModel
 import com.alraad.feature.browser.tabs.TabManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.net.URI
 import javax.inject.Inject
 
 /**
