@@ -3,8 +3,9 @@ package com.alraad.core.common.contracts
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Frozen diagnostics contracts (Issue #1). Raw, unredacted logging by design:
- * full URLs, headers and errors are recorded so the owner can inspect them.
+ * Frozen diagnostics contracts (Issue #1). Diagnostic payloads retain useful
+ * URLs and non-sensitive headers; credentials are redacted before persistence
+ * and before any display or export.
  */
 
 enum class DiagCategory { WEBVIEW, ADBLOCK, SNIFFER, PLAYER, LIBRARY, DATABASE, APP, CRASH }
