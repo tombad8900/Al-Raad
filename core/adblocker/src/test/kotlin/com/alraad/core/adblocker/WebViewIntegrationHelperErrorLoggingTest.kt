@@ -51,6 +51,38 @@ class WebViewIntegrationHelperErrorLoggingTest {
         assertEquals("false", entry.details["mainFrame"])
     }
 
+    @Test fun `webViewClient dispatches subresource onReceivedError to the logger`() {
+        // Regression: must exercise the actual WebViewClient callback so a dropped
+        // isForMainFrame == false forward cannot pass unnoticed.
+        val helper = WebViewIntegrationHelper(allowAll, logger, CoroutineScope(Dispatchers.Main))
+        val client = helper.webViewClient()
+        val view = android.webkit.WebView(org.robolectric.RuntimeEnvironment.getApplication())
+        val request =
+            object : android.webkit.WebResourceRequest {
+                override fun getUrl() = android.net.Uri.parse("https://cdn.example/ad.js")
+
+                override fun isForMainFrame() = false
+
+                override fun isRedirect() = false
+
+                override fun hasGesture() = false
+
+                override fun getMethod() = "GET"
+
+                override fun getRequestHeaders(): Map<String, String> = emptyMap()
+            }
+        val error = org.mockito.Mockito.mock(android.webkit.WebResourceError::class.java)
+        org.mockito.Mockito.`when`(error.errorCode).thenReturn(-2)
+        org.mockito.Mockito.`when`(error.description).thenReturn("net::ERR_FAILED")
+        client.onReceivedError(view, request, error)
+        val entry = recorded.single { it.details["url"] == "https://cdn.example/ad.js" }
+        assertEquals(DiagCategory.WEBVIEW, entry.category)
+        assertEquals(DiagLevel.WARN, entry.level)
+        assertEquals("-2", entry.details["errorCode"])
+        assertEquals("net::ERR_FAILED", entry.details["description"])
+        assertEquals("false", entry.details["mainFrame"])
+    }
+
     @Test fun `main-frame failures log at ERROR`() {
         val helper = WebViewIntegrationHelper(allowAll, logger, CoroutineScope(Dispatchers.Main))
         helper.logLoadError("https://site.example/", -6, "net::ERR_FILE_NOT_FOUND", isMainFrame = true)
