@@ -22,15 +22,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
-/** Normalizes user input into a browsable URL (adds https:// when no scheme). */
+/** Routes a search query (no TLD dot, or contains spaces) to the search engine. */
+private fun searchUrl(query: String): String = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query.trim(), "UTF-8")
+
 private val SCHEME_PREFIX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
 
+private val DOMAIN_LIKE = Regex("^[^\\s]+\\.[^\\s]+$")
+
+/** Normalizes user input: real domains/URLs browse directly, anything else searches. */
 fun normalizeAddress(input: String): String {
     val trimmed = input.trim()
-    return if (SCHEME_PREFIX.containsMatchIn(trimmed)) trimmed else "https://$trimmed"
+    return when {
+        SCHEME_PREFIX.containsMatchIn(trimmed) -> trimmed
+        DOMAIN_LIKE.containsMatchIn(trimmed) -> "https://$trimmed"
+        else -> searchUrl(trimmed)
+    }
 }
 
 @Composable
@@ -51,7 +61,8 @@ fun AddressBar(
             onValueChange = { text = it },
             modifier = Modifier.weight(1f),
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium,
+            // URLs read left-to-right even inside the RTL shell.
+            textStyle = MaterialTheme.typography.bodyMedium.copy(textDirection = TextDirection.Ltr),
             placeholder = { Text(if (isRtl) "ابحث أو أدخل الرابط" else "Search or enter address") },
             leadingIcon = {
                 Icon(
