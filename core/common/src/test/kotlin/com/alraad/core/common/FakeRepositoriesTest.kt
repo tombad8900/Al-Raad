@@ -43,6 +43,32 @@ class FakeRepositoriesTest {
         }
 
     @Test
+    fun `rename changes only the selected title and preserves the saved stream`() =
+        runTest {
+            val repo = FakeSavedStreamsRepository()
+            val headers = mapOf("User-Agent" to "Target UA", "Referer" to "https://target.test/", "Cookie" to "sid=one")
+            val targetId = repo.save(stream(headers))
+            val otherId =
+                repo.save(
+                    stream(mapOf("Origin" to "https://other.test"))
+                        .copy(
+                            title = "Untouched stream",
+                            thumbnailUrl = "https://other.test/image.jpg",
+                            sourcePageUrl = "https://other.test/watch",
+                            createdAt = 1_800_000_000_000L,
+                        ),
+                )
+            val targetBefore = requireNotNull(repo.getById(targetId))
+            val otherBefore = requireNotNull(repo.getById(otherId))
+
+            repo.rename(targetId, "اسم جديد")
+
+            assertEquals(targetBefore.copy(title = "اسم جديد"), repo.getById(targetId))
+            assertEquals(otherBefore, repo.getById(otherId))
+            assertEquals(2, repo.observeStreams().first().size)
+        }
+
+    @Test
     fun `delete removes the stream`() =
         runTest {
             val repo = FakeSavedStreamsRepository()

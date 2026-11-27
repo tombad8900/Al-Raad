@@ -52,6 +52,8 @@ interface SavedStreamsRepository {
 
     suspend fun save(stream: SavedStream): Long
 
+    suspend fun rename(id: Long, title: String)
+
     suspend fun delete(id: Long)
 }
 

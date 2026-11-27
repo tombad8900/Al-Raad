@@ -57,6 +57,38 @@ class SavedStreamDaoTest {
         }
 
     @Test
+    fun `rename updates only title and preserves every other saved stream field`() =
+        runTest {
+            val headersJson = """{"User-Agent":"Target UA","Referer":"https://source.test/","Cookie":"sid=one"}"""
+            val targetId =
+                dao.upsert(
+                    entity(headersJson).copy(
+                        title = "Original title",
+                        sizeBytes = 128_000L,
+                        drmLicenseUrl = "https://license.test/acquire",
+                        drmHeadersJson = """{"Authorization":"Bearer raw-value"}""",
+                    ),
+                )
+            val otherId =
+                dao.upsert(
+                    entity("""{"Origin":"https://other.test"}""").copy(
+                        title = "Untouched stream",
+                        url = "https://other.test/stream.mpd",
+                        sourcePageUrl = "https://other.test/watch",
+                        createdAt = 1_800_000_000_000L,
+                    ),
+                )
+            val targetBefore = requireNotNull(dao.getById(targetId))
+            val otherBefore = requireNotNull(dao.getById(otherId))
+
+            dao.rename(targetId, "Renamed title")
+
+            assertEquals(targetBefore.copy(title = "Renamed title"), dao.getById(targetId))
+            assertEquals(otherBefore, dao.getById(otherId))
+            assertEquals(2, dao.observeAll().first().size)
+        }
+
+    @Test
     fun `delete removes the row`() =
         runTest {
             val id = dao.upsert(entity("{}"))

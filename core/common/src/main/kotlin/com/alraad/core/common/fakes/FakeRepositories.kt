@@ -67,6 +67,12 @@ class FakeSavedStreamsRepository : SavedStreamsRepository {
 
     override suspend fun getById(id: Long): SavedStream? = items.value.firstOrNull { it.id == id }
 
+    override suspend fun rename(id: Long, title: String) {
+        items.update { list ->
+            list.map { saved -> if (saved.id == id) saved.copy(title = title) else saved }
+        }
+    }
+
     override suspend fun save(stream: SavedStream): Long {
         val id = if (stream.id != 0L) stream.id else nextId++
         val stored = stream.copy(id = id)
