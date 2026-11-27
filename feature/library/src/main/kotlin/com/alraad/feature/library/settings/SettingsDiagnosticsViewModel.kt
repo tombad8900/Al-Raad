@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.alraad.core.common.contracts.AppSettings
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagEntry
+import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.SettingsRepository
 import com.alraad.core.common.diagnostics.DiagnosticsRedactor
@@ -17,7 +18,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Settings + Diagnostics state (Issue #9, part C). */
+/** Settings and searchable, filterable diagnostics state. */
 @HiltViewModel
 class SettingsDiagnosticsViewModel
     @Inject
@@ -30,11 +31,22 @@ class SettingsDiagnosticsViewModel
                 .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings())
 
         val categoryFilter = MutableStateFlow<DiagCategory?>(null)
+        val levelFilter = MutableStateFlow<DiagLevel?>(null)
+        val searchQuery = MutableStateFlow("")
 
         val logs: StateFlow<List<DiagEntry>> =
-            combine(diagnosticsLogger.observeLogs(), categoryFilter) { entries, filter ->
+            combine(diagnosticsLogger.observeLogs(), categoryFilter, levelFilter, searchQuery) {
+                    entries,
+                    category,
+                    level,
+                    query,
+                ->
                 val safeEntries = entries.map(DiagnosticsRedactor::redact)
-                if (filter == null) safeEntries else safeEntries.filter { it.category == filter }
+                safeEntries.filter { entry ->
+                    (category == null || entry.category == category) &&
+                        (level == null || entry.level == level) &&
+                        matchesQuery(entry, query)
+                }
             }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         fun update(transform: (AppSettings) -> AppSettings) {
@@ -43,7 +55,28 @@ class SettingsDiagnosticsViewModel
 
         suspend fun exportLogs(): String = DiagnosticsRedactor.redactText(diagnosticsLogger.exportAsText())
 
+        /** Copies/exports the visible filtered set, already redacted for display. */
+        fun exportVisibleLogs(): String =
+            logs.value.joinToString("\n") { entry ->
+                val details = entry.details.entries.joinToString(";") { (key, value) -> "$key=$value" }
+                "${entry.timestamp}\t${entry.category}\t${entry.level}\t${entry.message}\t$details"
+            }
+
         fun clearLogs() {
             viewModelScope.launch { diagnosticsLogger.clear() }
+        }
+
+        private fun matchesQuery(
+            entry: DiagEntry,
+            rawQuery: String,
+        ): Boolean {
+            val query = rawQuery.trim()
+            if (query.isEmpty()) return true
+            return entry.message.contains(query, ignoreCase = true) ||
+                entry.category.name.contains(query, ignoreCase = true) ||
+                entry.level.name.contains(query, ignoreCase = true) ||
+                entry.details.any { (key, value) ->
+                    key.contains(query, ignoreCase = true) || value.contains(query, ignoreCase = true)
+                }
         }
     }
