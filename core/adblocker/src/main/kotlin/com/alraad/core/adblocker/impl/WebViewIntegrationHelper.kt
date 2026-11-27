@@ -113,6 +113,26 @@ class WebViewIntegrationHelper
                         description = error.description?.toString() ?: "",
                         isMainFrame = request.isForMainFrame,
                     )
+                    if (request.isForMainFrame) {
+                        // Replace WebView's unreadable default error text with a dark,
+                        // RTL-readable page offering a retry back to the failed URL.
+                        val failedUrl = jsQuote(request.url.toString())
+                        val description = error.description?.toString() ?: ""
+                        view.loadDataWithBaseURL(
+                            null,
+                            "<html dir=\"rtl\"><head><meta name=\"viewport\" content=\"width=device-width\">" +
+                                "<body style=\"background:#0B0E13;color:#E5E9F0;font-family:sans-serif;" +
+                                "display:flex;flex-direction:column;align-items:center;justify-content:center;" +
+                                "min-height:90vh;margin:0;text-align:center\">" +
+                                "<h2>تعذر تحميل الصفحة</h2><p>" + description + "</p>" +
+                                "<button style=\"padding:12px 24px;font-size:16px\" " +
+                                "onclick=\"location.href=" + failedUrl + "\">إعادة المحاولة</button>" +
+                                "</body></html>",
+                            "text/html",
+                            "utf-8",
+                            null,
+                        )
+                    }
                 }
 
                 override fun onReceivedHttpError(
