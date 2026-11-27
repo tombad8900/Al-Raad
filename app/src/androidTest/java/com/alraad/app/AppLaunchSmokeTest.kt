@@ -11,8 +11,11 @@ import androidx.compose.ui.test.onRoot
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
+import com.alraad.core.common.diagnostics.FileDiagnosticsLogger
 import java.io.File
 import java.io.FileOutputStream
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -59,7 +62,14 @@ class AppLaunchSmokeTest {
         // Exercise the raw diagnostics export path on-device: log one marker through the
         // real FileDiagnosticsLogger, export, and publish the text next to the screenshot
         // so CI can upload it for inspection.
-        val logger = (context.applicationContext as AlRaadApp).diagnosticsLogger
+        // Isolated logger with its own file: exercises the real FileDiagnosticsLogger
+        // export path on-device without publishing the app's live log (which may
+        // contain browsing URLs, headers, or other session data).
+        val logger =
+            FileDiagnosticsLogger(
+                File(context.cacheDir, "smoke-diagnostics.log"),
+                CoroutineScope(Dispatchers.IO),
+            )
         val marker = "smoke-export-marker"
         logger.log(DiagCategory.APP, DiagLevel.INFO, marker, mapOf("source" to "AppLaunchSmokeTest"))
         val export = runBlocking { logger.exportAsText() }
