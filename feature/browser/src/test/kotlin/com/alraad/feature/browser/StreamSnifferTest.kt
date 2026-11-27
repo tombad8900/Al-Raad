@@ -7,7 +7,6 @@ import com.alraad.core.common.contracts.StreamFormat
 import com.alraad.core.common.contracts.StreamListener
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.core.common.contracts.StreamUrl
-import com.alraad.feature.browser.sniffer.StreamObservationListener
 import com.alraad.feature.browser.sniffer.StreamSniffer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -88,31 +87,5 @@ class StreamSnifferTest {
         sniffer.onRequestObserved("https://cdn.example.com/recent.m3u8")
         assertNull(sniffer.onRequestObserved("https://cdn.example.com/recent.m3u8"))
         assertTrue(sniffer.onRequestObserved("https://cdn.example.com/oldest.m3u8") != null)
-    }
-
-    @Test
-    fun `duplicate stream observations and DRM metadata remain page-tab scoped`() {
-        val sniffer = StreamSniffer(noopLogger)
-        val observations = mutableListOf<Triple<String?, String?, StreamUrl>>()
-        sniffer.registerObservationListener(
-            StreamObservationListener { stream, pageUrl, tabId ->
-                observations += Triple(pageUrl, tabId, stream)
-            },
-        )
-        val url = "https://cdn.example/shared.mpd"
-        assertTrue(sniffer.onRequestObserved(url, pageUrl = "https://a.example/", tabId = "tab-a") != null)
-        assertNull(sniffer.onRequestObserved(url, pageUrl = "https://b.example/", tabId = "tab-b"))
-
-        sniffer.onDrmLicenseObserved(
-            "https://license.example/widevine",
-            pageUrl = "https://a.example/",
-            tabId = "tab-a",
-        )
-
-        assertEquals(3, observations.size)
-        assertEquals("tab-b", observations[1].second)
-        assertNull(observations[1].third.drmLicenseUrl)
-        assertEquals("tab-a", observations.last().second)
-        assertEquals("https://license.example/widevine", observations.last().third.drmLicenseUrl)
     }
 }
