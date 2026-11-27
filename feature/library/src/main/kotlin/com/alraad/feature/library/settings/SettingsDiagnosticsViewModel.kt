@@ -7,6 +7,7 @@ import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagEntry
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.SettingsRepository
+import com.alraad.core.common.diagnostics.DiagnosticsRedactor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,14 +33,15 @@ class SettingsDiagnosticsViewModel
 
         val logs: StateFlow<List<DiagEntry>> =
             combine(diagnosticsLogger.observeLogs(), categoryFilter) { entries, filter ->
-                if (filter == null) entries else entries.filter { it.category == filter }
+                val safeEntries = entries.map(DiagnosticsRedactor::redact)
+                if (filter == null) safeEntries else safeEntries.filter { it.category == filter }
             }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         fun update(transform: (AppSettings) -> AppSettings) {
             viewModelScope.launch { settingsRepository.update(transform(settings.value)) }
         }
 
-        suspend fun exportLogs(): String = diagnosticsLogger.exportAsText()
+        suspend fun exportLogs(): String = DiagnosticsRedactor.redactText(diagnosticsLogger.exportAsText())
 
         fun clearLogs() {
             viewModelScope.launch { diagnosticsLogger.clear() }
