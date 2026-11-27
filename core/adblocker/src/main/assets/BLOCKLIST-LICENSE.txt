@@ -1,0 +1,4 @@
+# Blocklist sources and licenses
+# Baseline entries derived from public blocklists such as StevenBlack/hosts (MIT License).
+# https://github.com/StevenBlack/hosts - MIT: permission to use, copy, modify, distribute.
+# This app ships a static snapshot only; no runtime downloads.
