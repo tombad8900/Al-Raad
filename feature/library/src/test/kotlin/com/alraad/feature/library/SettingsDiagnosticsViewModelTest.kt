@@ -26,7 +26,13 @@ import org.junit.Test
 class SettingsDiagnosticsViewModelTest {
     private val entries =
         DiagCategory.entries.mapIndexed { i, cat ->
-            DiagEntry(id = i.toLong() + 1, timestamp = 0L, category = cat, level = DiagLevel.INFO, message = "m$i")
+            DiagEntry(
+                id = i.toLong() + 1,
+                timestamp = 0L,
+                category = cat,
+                level = if (i % 2 == 0) DiagLevel.ERROR else DiagLevel.INFO,
+                message = "event-$i ${cat.name}",
+            )
         }
     private val fakeLogger =
         object : DiagnosticsLogger {
@@ -97,7 +103,26 @@ class SettingsDiagnosticsViewModelTest {
             assertFalse(exported.contains("export-secret"))
             assertFalse(exported.contains("export-token"))
             assertTrue(exported.contains("[REDACTED]"))
+            val visible = vm.exportVisibleLogs()
+            assertFalse(visible.contains("display-secret"))
+            assertFalse(visible.contains("header-secret"))
+            assertFalse(visible.contains("url-secret"))
         }
+    }
+
+    @Test
+    fun `severity and text filters narrow visible logs and export`() {
+        val vm = SettingsDiagnosticsViewModel(fakeSettings, fakeLogger)
+        vm.levelFilter.value = DiagLevel.ERROR
+        assertTrue(vm.logs.value.all { it.level == DiagLevel.ERROR })
+
+        val target = vm.logs.value.first()
+        vm.searchQuery.value = target.category.name.lowercase()
+
+        assertEquals(1, vm.logs.value.size)
+        assertTrue(vm.logs.value.single().message.contains(target.category.name))
+        assertTrue(vm.exportVisibleLogs().contains(target.message))
+        assertFalse(vm.exportVisibleLogs().contains("event-1"))
     }
 
     @Test fun `every DiagCategory is filterable and narrows the log list`() {

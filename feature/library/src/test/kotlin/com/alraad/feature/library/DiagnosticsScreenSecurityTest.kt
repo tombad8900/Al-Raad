@@ -93,7 +93,7 @@ class DiagnosticsScreenSecurityTest {
 
         composeRule.onNodeWithText("نسخ / Copy").performClick()
         composeRule.waitUntil(5_000) { copied.isNotEmpty() }
-        composeRule.onNodeWithText("تصدير ملف / Export").performClick()
+        composeRule.onNodeWithText("تصدير النتائج / Export").performClick()
         composeRule.waitUntil(5_000) { exported.isNotEmpty() }
 
         listOf(copied, exported).forEach { output ->
@@ -101,7 +101,7 @@ class DiagnosticsScreenSecurityTest {
                 assertFalse(output.contains(it))
             }
             assertTrue(output.contains("[REDACTED]"))
-            assertTrue(output.contains("quality=1080"))
+            assertTrue(output.contains("quality=720"))
         }
     }
 }
