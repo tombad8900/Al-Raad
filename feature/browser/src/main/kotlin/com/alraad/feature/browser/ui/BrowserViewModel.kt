@@ -12,6 +12,7 @@ import com.alraad.core.common.contracts.HistoryRepository
 import com.alraad.core.common.contracts.SettingsRepository
 import com.alraad.core.common.contracts.StreamUrl
 import com.alraad.feature.browser.actions.StreamActions
+import com.alraad.feature.browser.sniffer.StreamObservationListener
 import com.alraad.feature.browser.tabs.TabManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
