@@ -29,7 +29,10 @@ class OfflineAdBlocker
         private val loadMutex = Mutex()
 
         @Volatile private var index: DomainIndex? = null
-        private val whitelist = HashSet<String>()
+
+        // Weakly-consistent concurrent set: whitelist toggles can race with
+        // concurrent WebView shouldBlock() calls without ConcurrentModificationException.
+        private val whitelist = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
         fun addToWhitelist(host: String) {
             whitelist += host.lowercase()
