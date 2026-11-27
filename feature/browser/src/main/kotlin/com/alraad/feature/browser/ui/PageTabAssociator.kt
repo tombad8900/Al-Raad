@@ -22,6 +22,15 @@ class PageTabAssociator {
         if (pendingNavigationTabs.size > MAX_PENDING_NAVIGATIONS) pendingNavigationTabs.removeAt(0)
     }
 
+    /** Remove navigation and page ownership state for tabs that have been closed. */
+    @Synchronized
+    fun retainTabs(activeTabIds: Set<String>) {
+        pendingNavigationTabs.removeAll { it.second !in activeTabIds }
+        pageTabIds.entries.removeAll { it.value !in activeTabIds }
+        if (lastBoundTabId !in activeTabIds) lastBoundTabId = null
+        if (lastRequestedNavigation?.first !in activeTabIds) lastRequestedNavigation = null
+    }
+
     @Synchronized
     fun onPageStartedWithContext(url: String, activeTabId: String?): PageStartAssociation {
         val matchIndex = pendingNavigationTabs.indexOfFirst { it.first == url }
