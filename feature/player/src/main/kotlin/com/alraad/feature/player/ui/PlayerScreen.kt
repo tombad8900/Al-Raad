@@ -54,6 +54,7 @@ fun PlayerScreen(
     controller: Media3PlayerController,
     stream: StreamUrl,
     modifier: Modifier = Modifier,
+    drmLicenseUrl: String? = null,
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val gestures = rememberPlayerGestureController()
@@ -61,7 +62,7 @@ fun PlayerScreen(
     var fullscreen by remember { mutableStateOf(false) }
 
     DisposableEffect(stream) {
-        controller.play(stream)
+        controller.play(stream, drmLicenseUrl = drmLicenseUrl)
         onDispose { controller.release() }
     }
 
@@ -72,6 +73,7 @@ fun PlayerScreen(
             horizontalArrangement = Arrangement.End,
         ) {
             PlayerControlsRow(
+                controller = controller,
                 fullscreen = fullscreen,
                 onToggleFullscreen = {
                     fullscreen = !fullscreen
@@ -115,14 +117,18 @@ private fun SpeedMenu(
     }
 }
 
+private val QUALITY_OPTIONS = listOf<Int?>(null, 1080, 720, 480)
+
 @Composable
 private fun PlayerControlsRow(
+    controller: Media3PlayerController,
     fullscreen: Boolean,
     onToggleFullscreen: () -> Unit,
     onEnterPip: () -> Unit,
     speed: Float,
     onSelectSpeed: (Float) -> Unit,
 ) {
+    var qualityMenuOpen by remember { mutableStateOf(false) }
     IconButton(onClick = onToggleFullscreen) {
         Icon(
             if (fullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
@@ -132,6 +138,22 @@ private fun PlayerControlsRow(
     }
     IconButton(onClick = onEnterPip) {
         Icon(Icons.Default.PictureInPictureAlt, contentDescription = "Picture in picture", tint = Color.White)
+    }
+    Box {
+        TextButton(onClick = { qualityMenuOpen = true }) {
+            Text("جودة / Quality", color = Color.White, style = MaterialTheme.typography.labelLarge)
+        }
+        DropdownMenu(expanded = qualityMenuOpen, onDismissRequest = { qualityMenuOpen = false }) {
+            QUALITY_OPTIONS.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option?.let { "${it}p" } ?: "Auto") },
+                    onClick = {
+                        qualityMenuOpen = false
+                        controller.setQuality(option?.let { Media3PlayerController.QualityLimit(it) })
+                    },
+                )
+            }
+        }
     }
     SpeedMenu(speed = speed, onSelect = onSelectSpeed)
 }
