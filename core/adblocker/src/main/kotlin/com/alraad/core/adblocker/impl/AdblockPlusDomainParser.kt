@@ -24,7 +24,7 @@ object AdblockPlusDomainParser {
             line.isEmpty() || line.startsWith("!") || line.startsWith("[") -> null
             line.startsWith("@@") || line.contains("##") || line.contains("#@#") -> null
             ruleMatch != null -> ruleMatch.groupValues[1].trimEnd('.')
-            isPlainHostsLine(line) -> HostsParser.parse(line)
+            isPlainHostsLine(line) -> HostsParser.parse(line).firstOrNull()
             else -> null
         }
     }
