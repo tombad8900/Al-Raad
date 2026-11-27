@@ -1,12 +1,14 @@
 package com.alraad.feature.player.ui
 
 import android.app.Activity
+import android.net.Uri
 import android.content.pm.ActivityInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -138,6 +140,11 @@ fun PlayerScreen(
                             .show()
                     }
                 },
+                playbackRequest = playbackRequest,
+                onSelectSource = { index ->
+                    controller.play(playbackRequest.selectSource(index))
+                    player = controller.currentPlayer()
+                },
                 speed = speed,
                 onSelectSpeed = { option ->
                     speed = option
@@ -164,6 +171,44 @@ private fun PlaybackErrorOverlay(
             color = Color.White,
             style = MaterialTheme.typography.bodyLarge,
         )
+    }
+}
+
+@Composable
+private fun PlayerSourcePicker(
+    playbackRequest: PlaybackRequest,
+    onSelectSource: (Int) -> Unit,
+) {
+    if (playbackRequest.sources.size <= 1) return
+    var expanded by remember(playbackRequest) { mutableStateOf(false) }
+    TextButton(onClick = { expanded = true }) {
+        Text(
+            "المصدر: ${playbackRequest.selectedStream.format.name}",
+            color = Color.White,
+            style = MaterialTheme.typography.labelLarge,
+        )
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        playbackRequest.sources.forEachIndexed { index, source ->
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text(source.format.name)
+                        Text(
+                            Uri.parse(source.url).host ?: "مصدر",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        source.size?.let {
+                            Text("${it} B", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                },
+                onClick = {
+                    expanded = false
+                    onSelectSource(index)
+                },
+            )
+        }
     }
 }
 
@@ -210,6 +255,8 @@ private fun PlayerControlsRow(
     onEnterPip: () -> Unit,
     player: Player?,
     onSelectSubtitles: () -> Unit,
+    playbackRequest: PlaybackRequest,
+    onSelectSource: (Int) -> Unit,
     speed: Float,
     onSelectSpeed: (Float) -> Unit,
 ) {
@@ -227,6 +274,7 @@ private fun PlayerControlsRow(
     TextButton(onClick = onSelectSubtitles, enabled = player != null) {
         Text("الترجمة", color = Color.White, style = MaterialTheme.typography.labelLarge)
     }
+    PlayerSourcePicker(playbackRequest = playbackRequest, onSelectSource = onSelectSource)
     IconButton(onClick = display.onToggleFill) {
         Icon(
             if (display.fillScreen) Icons.Default.FitScreen else Icons.Default.AspectRatio,
