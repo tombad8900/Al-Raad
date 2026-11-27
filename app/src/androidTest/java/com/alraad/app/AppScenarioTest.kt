@@ -19,11 +19,16 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
-import androidx.test.platform.app.InstrumentationRegistry
+import androidx.media3.ui.PlayerView
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
-import androidx.media3.ui.PlayerView
+import androidx.test.platform.app.InstrumentationRegistry
+import com.alraad.feature.browser.tabs.TabManagerTestEntryPoint
+import dagger.hilt.android.EntryPointAccessors
+import java.io.File
+import java.io.FileOutputStream
+import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.Dispatcher
@@ -31,11 +36,6 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
-import java.util.concurrent.TimeUnit
-import com.alraad.feature.browser.tabs.TabManagerTestEntryPoint
-import dagger.hilt.android.EntryPointAccessors
-import java.io.File
-import java.io.FileOutputStream
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -106,23 +106,46 @@ class AppScenarioTest {
      * controlled authorized content; needs emulator network, and fails honestly if
      * the media cannot be fetched.
      */
-    @Test fun localVideoRendersInPlayerAndFitFillCaptures() {
+    @Test
+    fun localVideoRendersInPlayerAndFitFillCaptures() {
         composeRule.waitForIdle()
         waitForNode(hasSetTextAction(), 20_000)
+        val server = localPlaybackServer(downloadPlaybackFixture())
+        try {
+            val pageUrl = server.url("/player.html").toString()
+            composeRule.onNode(hasSetTextAction()).performTextInput(pageUrl)
+            composeRule.onNode(hasSetTextAction()).performImeAction()
+            waitForNode(hasText("▶", substring = true), 45_000)
+            composeRule.onNodeWithText("▶", substring = true).performClick()
+            waitForNode(hasContentDescription("Fullscreen"), 15_000)
+            waitForRenderedVideoFrames()
+            Thread.sleep(1_000)
+            capture("scenario-player-fit-frames.png")
 
-        // Reuse the repository's established ExoPlayer test clip, but serve it from
-        // this test's local MockWebServer so the player consumes a local fixture URL.
+            composeRule.onNode(hasContentDescription("Fill screen")).performClick()
+            waitForNode(hasContentDescription("Fit video inside screen"), 10_000)
+            composeRule.waitForIdle()
+            Thread.sleep(500)
+            capture("scenario-player-fill-frames.png")
+        } finally {
+            server.shutdown()
+        }
+    }
+
+    private fun downloadPlaybackFixture(): ByteArray {
         val fixtureUrl =
             "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4"
-        val fixtureBytes =
-            OkHttpClient.Builder().callTimeout(90, TimeUnit.SECONDS).build()
-                .newCall(Request.Builder().url(fixtureUrl).build())
-                .execute().use { response ->
-                    check(response.isSuccessful) { "Test video download failed: HTTP ${response.code}" }
-                    requireNotNull(response.body).bytes()
-                }
-        check(fixtureBytes.isNotEmpty()) { "Test video fixture is empty" }
+        val client = OkHttpClient.Builder().callTimeout(90, TimeUnit.SECONDS).build()
+        val bytes =
+            client.newCall(Request.Builder().url(fixtureUrl).build()).execute().use { response ->
+                check(response.isSuccessful) { "Test video download failed: HTTP ${response.code}" }
+                requireNotNull(response.body).bytes()
+            }
+        check(bytes.isNotEmpty()) { "Test video fixture is empty" }
+        return bytes
+    }
 
+    private fun localPlaybackServer(fixture: ByteArray): MockWebServer {
         val server = MockWebServer()
         server.dispatcher =
             object : Dispatcher() {
@@ -138,46 +161,27 @@ class AppScenarioTest {
                             MockResponse()
                                 .setHeader("Content-Type", "video/mp4")
                                 .setHeader("Accept-Ranges", "bytes")
-                                .setBody(Buffer().write(fixtureBytes))
+                                .setBody(Buffer().write(fixture))
                         else -> MockResponse().setResponseCode(404)
                     }
             }
         server.start()
-        try {
-            composeRule.onNode(hasSetTextAction()).performTextInput(server.url("/player.html").toString())
-            composeRule.onNode(hasSetTextAction()).performImeAction()
+        return server
+    }
 
-            // Wait for the locally served MP4 to be detected and handed to PlayerScreen.
-            waitForNode(hasText("▶", substring = true), 45_000)
-            composeRule.onNodeWithText("▶", substring = true).performClick()
-            waitForNode(hasContentDescription("Fullscreen"), 15_000)
-
-            // Do not treat a composed PlayerView as proof of playback: require a
-            // playing Media3 instance with decoded video dimensions before capture.
-            composeRule.waitUntil(timeoutMillis = 90_000) {
-                runCatching {
-                    onView(isAssignableFrom(PlayerView::class.java)).check(
-                        matches { view ->
-                            val player = (view as PlayerView).player
-                            player != null &&
-                                player.isPlaying &&
-                                player.videoSize.width > 0 &&
-                                player.videoSize.height > 0
-                        },
-                    )
-                }.isSuccess
-            }
-            Thread.sleep(1_000)
-            capture("scenario-player-fit-frames.png")
-
-            // Fit is the initial mode. Switch to Fill and capture the rendered result.
-            composeRule.onNode(hasContentDescription("Fill screen")).performClick()
-            waitForNode(hasContentDescription("Fit video inside screen"), 10_000)
-            composeRule.waitForIdle()
-            Thread.sleep(500)
-            capture("scenario-player-fill-frames.png")
-        } finally {
-            server.shutdown()
+    private fun waitForRenderedVideoFrames() {
+        composeRule.waitUntil(timeoutMillis = 90_000) {
+            runCatching {
+                onView(isAssignableFrom(PlayerView::class.java)).check(
+                    matches { view ->
+                        val player = (view as PlayerView).player
+                        player != null &&
+                            player.isPlaying &&
+                            player.videoSize.width > 0 &&
+                            player.videoSize.height > 0
+                    },
+                )
+            }.isSuccess
         }
     }
 
