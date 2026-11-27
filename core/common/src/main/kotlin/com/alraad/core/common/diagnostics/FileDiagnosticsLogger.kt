@@ -40,7 +40,15 @@ class FileDiagnosticsLogger(
         scope.launch(ioDispatcher) {
             synchronized(fileLock) {
                 if (logFile.exists()) {
-                    entries.value = logFile.readLines().mapNotNull { parseLine(it) }.takeLast(maxInMemory)
+                    val rawLines = logFile.readLines()
+                    val loaded = rawLines.mapNotNull { parseLine(it) }
+                    entries.value = loaded.takeLast(maxInMemory)
+                    // Migrate valid legacy/raw entries in place so secrets are not left
+                    // on disk after the new redaction policy is introduced.
+                    if (loaded.size == rawLines.count { it.isNotBlank() }) {
+                        val safeContent = loaded.joinToString(separator = "\n", postfix = if (loaded.isEmpty()) "" else "\n", transform = ::formatLine)
+                        if (safeContent != logFile.readText()) logFile.writeText(safeContent)
+                    }
                 }
             }
         }
@@ -53,13 +61,15 @@ class FileDiagnosticsLogger(
         details: Map<String, String>,
     ) {
         val entry =
-            DiagEntry(
-                id = nextId++,
-                timestamp = System.currentTimeMillis(),
-                category = category,
-                level = level,
-                message = message,
-                details = details,
+            DiagnosticsRedactor.redact(
+                DiagEntry(
+                    id = nextId++,
+                    timestamp = System.currentTimeMillis(),
+                    category = category,
+                    level = level,
+                    message = message,
+                    details = details,
+                ),
             )
         entries.update { (it + entry).takeLast(maxInMemory) }
         synchronized(fileLock) {
