@@ -33,6 +33,11 @@ fun BrowserScreen(
     val backgroundColor = MaterialTheme.colorScheme.background
 
     val pageTabAssociator = remember { PageTabAssociator() }
+    val liveTabIds = tabState.tabs.map { it.id }.toSet()
+
+    LaunchedEffect(liveTabIds) {
+        pageTabAssociator.retainTabs(liveTabIds)
+    }
 
     LaunchedEffect(Unit) {
         if (tabState.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
