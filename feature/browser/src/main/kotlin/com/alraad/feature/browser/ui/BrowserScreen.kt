@@ -17,9 +17,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,7 +56,26 @@ fun BrowserScreen(
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
     var isLoading by remember { mutableStateOf(false) }
     val backgroundColor = MaterialTheme.colorScheme.background
-    val pageTabIds = remember { java.util.concurrent.ConcurrentHashMap<String, String>() }
+    val webViews = remember { mutableMapOf<String, WebView>() }
+
+    LaunchedEffect(tabState.tabs.map { it.id }) {
+        val liveTabIds = tabState.tabs.mapTo(mutableSetOf()) { it.id }
+        webViews.keys.filterNot { it in liveTabIds }.forEach { id ->
+            webViews.remove(id)?.apply {
+                stopLoading()
+                destroy()
+            }
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            webViews.values.forEach { webView ->
+                webView.stopLoading()
+                webView.destroy()
+            }
+            webViews.clear()
+        }
+    }
 
     // Open the homepage tab on first launch so the WebView is never left blank.
     LaunchedEffect(Unit) {
@@ -75,53 +96,48 @@ fun BrowserScreen(
         handlers.detectedStreams.streams.takeIf { it.isNotEmpty() }?.let { items ->
             DetectedStreamBar(items = items, actions = handlers.detectedStreams)
         }
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                WebView(context).apply {
-                    // Match the app background so an empty WebView is never a white screen.
-                    setBackgroundColor(backgroundColor.toArgb())
-                    SafeWebViewConfig.apply(this, settings)
-                    webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
-                    webViewClient =
-                        webViewIntegration.webViewClient(
-                            onPageFinished = { webView ->
-                                isLoading = false
-                                webView.url?.let { loaded ->
-                                    val tabId =
-                                        pageTabIds[loaded]
-                                            ?: tabManager.state.value.tabs.firstOrNull { it.url == loaded }?.id
-                                            ?: tabManager.state.value.activeTabId
-                                    if (tabId != null) {
-                                        pageTabIds[loaded] = tabId
-                                        handlers.actions.onPageVisited(loaded, webView.title ?: "", tabId)
-                                    }
-                                }
-                            },
-                            onRequestObserved = { url, headers, pageUrl ->
-                                val tabId =
-                                    pageUrl?.let { pageTabIds[it] }
-                                        ?: pageUrl?.let { page ->
-                                            tabManager.state.value.tabs.firstOrNull { it.url == page }?.id
-                                        }
-                                        ?: tabManager.state.value.activeTabId
-                                sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl, tabId)
-                            },
-                            onPageStart = { _, startedUrl ->
-                                if (pageTabIds.size > 100) pageTabIds.clear()
-                                tabManager.state.value.activeTabId?.let { pageTabIds[startedUrl] = it }
-                            },
-                        )
-                }
-            },
-            update = { webView ->
-                activeTab?.url?.takeIf { it.isNotBlank() && it != webView.url }?.let {
-                    isLoading = true
-                    webView.loadUrl(it)
-                }
-            },
-        )
-    }
+        activeTab?.let { tab ->
+            key(tab.id) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { context ->
+                        webViews.getOrPut(tab.id) {
+                            WebView(context).apply {
+                                setBackgroundColor(backgroundColor.toArgb())
+                                SafeWebViewConfig.apply(this, settings)
+                                webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
+                                webViewClient =
+                                    webViewIntegration.webViewClient(
+                                        onPageFinished = { webView ->
+                                            isLoading = false
+                                            webView.url?.let { loaded ->
+                                                handlers.actions.onPageVisited(loaded, webView.title ?: "", tab.id)
+                                            }
+                                        },
+                                        onRequestObserved = { url, headers, pageUrl ->
+                                            sniffer.onRequestObserved(
+                                                url,
+                                                headers,
+                                                null,
+                                                StreamSource.NETWORK,
+                                                pageUrl,
+                                                tab.id,
+                                            )
+                                        },
+                                        onPageStart = { _, _ -> isLoading = true },
+                                    )
+                            }
+                        }
+                    },
+                    update = { webView ->
+                        tab.url.takeIf { it.isNotBlank() && it != webView.url }?.let {
+                            isLoading = true
+                            webView.loadUrl(it)
+                        }
+                    },
+                )
+            }
+        }    }
 }
 
 /** Current-page stream picker with a direct path when only one URL was detected. */
