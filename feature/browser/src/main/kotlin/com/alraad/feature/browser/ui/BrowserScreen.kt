@@ -1,16 +1,10 @@
 package com.alraad.feature.browser.ui
 
-import android.webkit.WebView
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -19,16 +13,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.viewinterop.AndroidView
 import com.alraad.core.adblocker.impl.WebViewIntegrationHelper
 import com.alraad.core.common.contracts.AppSettings
 import com.alraad.core.common.contracts.DiagnosticsLogger
-import com.alraad.core.common.contracts.StreamSource
 import com.alraad.feature.browser.sniffer.StreamSniffer
 import com.alraad.feature.browser.tabs.TabManager
-import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
-import com.alraad.feature.browser.web.SafeWebViewConfig
 
 /**
  * Browser shell: the WebView's page-start/page-finish callbacks are associated with
@@ -49,15 +38,12 @@ fun BrowserScreen(
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
     var isLoading by remember { mutableStateOf(false) }
     var saveDialogStream by remember { mutableStateOf<com.alraad.core.common.contracts.StreamUrl?>(null) }
-    var saveTitle by remember { mutableStateOf("") }
     val backgroundColor = MaterialTheme.colorScheme.background
 
-    // A load request is queued before loadUrl; onPageStarted binds its actual URL
-    // (including redirects) to the originating tab. Finished callbacks then use
-    // that immutable association even after the user switches tabs.
-    val pendingNavigationTabs = remember { mutableListOf<Pair<String, String>>() }
-    val pageTabIds = remember { mutableMapOf<String, String>() }
-    var lastRequestedNavigation by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // Load requests are recorded before loadUrl; onPageStarted binds the actual URL
+    // (including redirects) to the originating tab, so finish callbacks landing
+    // after a tab switch still update the right tab.
+    val pageTabAssociator = remember { PageTabAssociator() }
 
     LaunchedEffect(Unit) {
         if (tabState.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
@@ -77,88 +63,32 @@ fun BrowserScreen(
             DetectedStreamBar(
                 stream = stream,
                 streams = handlers.detectedStreams,
-                onSaveClick = {
-                    saveTitle = android.net.Uri.parse(stream.url).host ?: stream.url
-                    saveDialogStream = stream
-                },
+                onSaveClick = { saveDialogStream = stream },
             )
         }
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { context ->
-                WebView(context).apply {
-                    setBackgroundColor(backgroundColor.toArgb())
-                    SafeWebViewConfig.apply(this, settings)
-                    webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
-                    webViewClient =
-                        webViewIntegration.webViewClient(
-                            onPageStarted = { _, url ->
-                                val matchIndex = pendingNavigationTabs.indexOfFirst { it.first == url }
-                                val ownerTabId =
-                                    if (matchIndex >= 0) {
-                                        pendingNavigationTabs.removeAt(matchIndex).second
-                                    } else if (pendingNavigationTabs.isNotEmpty()) {
-                                        pendingNavigationTabs.removeAt(0).second
-                                    } else {
-                                        tabManager.state.value.activeTabId
-                                    }
-                                if (ownerTabId != null) {
-                                    pageTabIds[url] = ownerTabId
-                                    if (ownerTabId == tabManager.state.value.activeTabId) isLoading = true
-                                }
-                            },
-                            onPageFinishedWithUrl = { webView, loadedUrl ->
-                                val ownerTabId = pageTabIds.remove(loadedUrl)
-                                if (ownerTabId == tabManager.state.value.activeTabId) isLoading = false
-                                ownerTabId?.let {
-                                    handlers.actions.onPageFinished(it, loadedUrl, webView.title ?: "")
-                                }
-                            },
-                            onRequestObserved = { url, headers, pageUrl ->
-                                sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl)
-                            },
-                        )
-                }
-            },
-            update = { webView ->
-                activeTab?.let { tab ->
-                    val request = tab.id to tab.url
-                    if (tab.url.isNotBlank() && tab.url != webView.url && request != lastRequestedNavigation) {
-                        lastRequestedNavigation = request
-                        pendingNavigationTabs.add(tab.url to tab.id)
-                        isLoading = true
-                        webView.loadUrl(tab.url)
-                    }
-                }
-            },
+        BrowserWebView(
+            activeTab = activeTab,
+            environment =
+                BrowserWebViewEnvironment(
+                    tabManager = tabManager,
+                    webViewIntegration = webViewIntegration,
+                    diagnosticsLogger = diagnosticsLogger,
+                    sniffer = sniffer,
+                    settings = settings,
+                ),
+            backgroundColor = backgroundColor,
+            handlers = handlers,
+            pageTabAssociator = pageTabAssociator,
+            onLoadingChange = { isLoading = it },
         )
         saveDialogStream?.let { stream ->
-            AlertDialog(
-                onDismissRequest = { saveDialogStream = null },
-                title = { Text("حفظ البث") },
-                text = {
-                    OutlinedTextField(
-                        value = saveTitle,
-                        onValueChange = { saveTitle = it },
-                        singleLine = true,
-                        label = { Text("اسم البث") },
-                    )
+            SaveStreamDialog(
+                initialTitle = android.net.Uri.parse(stream.url).host ?: stream.url,
+                onConfirm = { title ->
+                    handlers.detectedStreams.onSave(stream, title)
+                    saveDialogStream = null
                 },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            handlers.detectedStreams.onSave(stream, saveTitle.trim())
-                            saveDialogStream = null
-                        },
-                    ) {
-                        Text("حفظ")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { saveDialogStream = null }) {
-                        Text("إلغاء")
-                    }
-                },
+                onDismiss = { saveDialogStream = null },
             )
         }
     }
