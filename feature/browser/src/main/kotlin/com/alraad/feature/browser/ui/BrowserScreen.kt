@@ -35,6 +35,7 @@ import com.alraad.core.common.contracts.AppSettings
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.feature.browser.sniffer.StreamSniffer
+import com.alraad.feature.browser.sniffer.SubtitleSniffer
 import com.alraad.feature.browser.tabs.TabManager
 import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
 import com.alraad.feature.browser.web.SafeWebViewConfig
@@ -50,6 +51,7 @@ fun BrowserScreen(
     webViewIntegration: WebViewIntegrationHelper,
     diagnosticsLogger: DiagnosticsLogger,
     sniffer: StreamSniffer,
+    subtitleSniffer: SubtitleSniffer,
     settings: AppSettings,
     modifier: Modifier = Modifier,
     handlers: BrowserHandlers = BrowserHandlers(),
@@ -127,6 +129,7 @@ fun BrowserScreen(
                                                 pageUrl,
                                                 tab.id,
                                             )
+                                            subtitleSniffer.onRequestObserved(url, headers, pageUrl, tab.id)
                                         },
                                         onPageStart = { _, _ -> loadingByTab[tab.id] = true },
                                     )
