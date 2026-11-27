@@ -90,7 +90,7 @@ class FileDiagnosticsLogger(
             // Decoded rendering retains safe diagnostics and excludes credential values.
             logFile.readLines().mapNotNull { parseLine(it) }
                 .joinToString("\n") { entry ->
-                    val details = entry.details.entries.joinToString("\\n") { (k, v) -> "$k=$v" }
+                    val details = entry.details.entries.joinToString("\n") { (k, v) -> "$k=$v" }
                     "${entry.timestamp}\t${entry.category}\t${entry.level}\t${entry.message}\t$details"
                 }
         }
