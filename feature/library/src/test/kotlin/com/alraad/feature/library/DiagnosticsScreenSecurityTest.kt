@@ -1,8 +1,10 @@
 package com.alraad.feature.library
 
-import androidx.compose.ui.test.assertDoesNotExist
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.alraad.core.common.contracts.AppSettings
@@ -56,15 +58,19 @@ class DiagnosticsScreenSecurityTest {
                     message: String,
                     details: Map<String, String>,
                 ) = Unit
+
                 override fun observeLogs(): Flow<List<DiagEntry>> = flowOf(listOf(entry))
+
                 override suspend fun exportAsText(): String =
-                    "Cookie=export-cookie\\nAuthorization=Bearer export-auth\\n" +
+                    "Cookie=export-cookie\nAuthorization=Bearer export-auth\n" +
                         "url=https://cdn.example/a.m3u8?refresh_token=export-token&quality=1080"
+
                 override suspend fun clear() = Unit
             }
         val settings =
             object : SettingsRepository {
                 override fun observeSettings(): Flow<AppSettings> = flowOf(AppSettings())
+
                 override suspend fun update(settings: AppSettings) = Unit
             }
         val viewModel = SettingsDiagnosticsViewModel(settings, logger)
@@ -79,11 +85,11 @@ class DiagnosticsScreenSecurityTest {
             )
         }
 
-        composeRule.onNodeWithText("Cookie=[REDACTED]", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("token=[REDACTED]", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("display-secret").assertDoesNotExist()
-        composeRule.onNodeWithText("display-cookie").assertDoesNotExist()
-        composeRule.onNodeWithText("display-auth").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Cookie=[REDACTED]", substring = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("token=[REDACTED]", substring = true).onFirst().assertIsDisplayed()
+        composeRule.onAllNodesWithText("display-secret").assertCountEquals(0)
+        composeRule.onAllNodesWithText("display-cookie").assertCountEquals(0)
+        composeRule.onAllNodesWithText("display-auth").assertCountEquals(0)
 
         composeRule.onNodeWithText("نسخ / Copy").performClick()
         composeRule.waitUntil(5_000) { copied.isNotEmpty() }

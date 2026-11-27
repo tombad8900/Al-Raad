@@ -116,7 +116,6 @@ class FileDiagnosticsLoggerTest {
             assertTrue(exported.contains("x\ny"))
         }
 
-
     @Test
     fun `legacy raw secrets are redacted before observation export and migration`() =
         runTest {
