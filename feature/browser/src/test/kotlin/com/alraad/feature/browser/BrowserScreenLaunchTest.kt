@@ -59,7 +59,15 @@ class BrowserScreenLaunchTest {
         val tabManager = TabManager()
         val helper = WebViewIntegrationHelper(fakeAdBlocker, fakeLogger, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined))
         val settings = AppSettings(homepageUrl = "https://home.example")
-        composeRule.setContent { BrowserScreen(tabManager, helper, fakeLogger, StreamSniffer(fakeLogger), settings) }
+        composeRule.setContent {
+            BrowserScreen(
+                tabManager,
+                helper,
+                fakeLogger,
+                StreamSniffer(fakeLogger),
+                settings,
+            )
+        }
         composeRule.waitForIdle()
         assertTrue(tabManager.state.value.tabs.any { it.url == "https://home.example" })
         composeRule.onNodeWithText("https://home.example").assertIsDisplayed()
