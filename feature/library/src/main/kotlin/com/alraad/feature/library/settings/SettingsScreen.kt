@@ -86,58 +86,108 @@ fun DiagnosticsScreen(
     var confirmClear by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize()) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { viewModel.searchQuery.value = it },
-            label = { Text("بحث في السجل / Search logs") },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            singleLine = true,
+        DiagnosticsSearchField(query) { viewModel.searchQuery.value = it }
+        DiagnosticsCategoryFilters(category) { viewModel.categoryFilter.value = it }
+        DiagnosticsLevelFilters(level) { viewModel.levelFilter.value = it }
+        DiagnosticsActions(
+            onCopy = { scope.launch { onCopy(viewModel.exportVisibleLogs()) } },
+            onExport = { scope.launch { onExport(viewModel.exportVisibleLogs()) } },
+            onClear = { confirmClear = true },
         )
-        LazyRow(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-            item {
-                FilterChip(
-                    selected = category == null,
-                    onClick = { viewModel.categoryFilter.value = null },
-                    label = { Text("كل الأنواع / All") },
-                )
-            }
-            items(DiagCategory.entries.toList(), key = { it.name }) { item ->
-                FilterChip(
-                    selected = category == item,
-                    onClick = { viewModel.categoryFilter.value = item },
-                    label = { Text(item.name) },
-                    modifier = Modifier.padding(start = 4.dp),
-                )
-            }
+        DiagnosticsLogList(logs)
+    }
+
+    if (confirmClear) {
+        ClearDiagnosticsDialog(
+            onConfirm = {
+                viewModel.clearLogs()
+                confirmClear = false
+            },
+            onDismiss = { confirmClear = false },
+        )
+    }
+}
+
+@Composable
+private fun DiagnosticsSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        label = { Text("بحث في السجل / Search logs") },
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        singleLine = true,
+    )
+}
+
+@Composable
+private fun DiagnosticsCategoryFilters(
+    selected: DiagCategory?,
+    onSelected: (DiagCategory?) -> Unit,
+) {
+    LazyRow(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+        item {
+            FilterChip(
+                selected = selected == null,
+                onClick = { onSelected(null) },
+                label = { Text("كل الأنواع / All") },
+            )
         }
-        LazyRow(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-            item {
-                FilterChip(
-                    selected = level == null,
-                    onClick = { viewModel.levelFilter.value = null },
-                    label = { Text("كل المستويات / All") },
-                )
-            }
-            items(DiagLevel.entries.toList(), key = { it.name }) { item ->
-                FilterChip(
-                    selected = level == item,
-                    onClick = { viewModel.levelFilter.value = item },
-                    label = { Text(item.name) },
-                    modifier = Modifier.padding(start = 4.dp),
-                )
-            }
+        items(DiagCategory.entries.toList(), key = { it.name }) { category ->
+            FilterChip(
+                selected = selected == category,
+                onClick = { onSelected(category) },
+                label = { Text(category.name) },
+                modifier = Modifier.padding(start = 4.dp),
+            )
         }
-        Row(modifier = Modifier.padding(horizontal = 8.dp)) {
-            TextButton(onClick = { scope.launch { onCopy(viewModel.exportVisibleLogs()) } }) {
-                Text("نسخ / Copy")
-            }
-            TextButton(onClick = { scope.launch { onExport(viewModel.exportVisibleLogs()) } }) {
-                Text("تصدير النتائج / Export")
-            }
-            TextButton(onClick = { confirmClear = true }) {
-                Text("مسح الكل / Clear all")
-            }
+    }
+}
+
+@Composable
+private fun DiagnosticsLevelFilters(
+    selected: DiagLevel?,
+    onSelected: (DiagLevel?) -> Unit,
+) {
+    LazyRow(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+        item {
+            FilterChip(
+                selected = selected == null,
+                onClick = { onSelected(null) },
+                label = { Text("كل المستويات / All") },
+            )
         }
+        items(DiagLevel.entries.toList(), key = { it.name }) { level ->
+            FilterChip(
+                selected = selected == level,
+                onClick = { onSelected(level) },
+                label = { Text(level.name) },
+                modifier = Modifier.padding(start = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticsActions(
+    onCopy: () -> Unit,
+    onExport: () -> Unit,
+    onClear: () -> Unit,
+) {
+    Row(modifier = Modifier.padding(horizontal = 8.dp)) {
+        TextButton(onClick = onCopy) { Text("نسخ / Copy") }
+        TextButton(onClick = onExport) { Text("تصدير النتائج / Export") }
+        TextButton(onClick = onClear) { Text("مسح الكل / Clear all") }
+    }
+}
+
+@Composable
+private fun DiagnosticsLogList(
+    logs: List<com.alraad.core.common.contracts.DiagEntry>,
+) {
+    Column {
         Text(
             text = "السجلات المطابقة: ${logs.size}",
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -146,40 +196,50 @@ fun DiagnosticsScreen(
         HorizontalDivider()
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             if (logs.isEmpty()) {
-                item { Text("لا توجد سجلات مطابقة", modifier = Modifier.padding(16.dp)) }
+                item {
+                    Text("لا توجد سجلات مطابقة", modifier = Modifier.padding(16.dp))
+                }
             }
             items(logs, key = { it.id }) { entry ->
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-                    Text(formatTimestamp(entry.timestamp), style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        "${entry.level} [${entry.category}] ${entry.message}",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (entry.details.isNotEmpty()) {
-                        Text(
-                            entry.details.entries.joinToString("\n") { "${it.key}=${it.value}" },
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
+                DiagnosticsLogEntry(entry)
             }
         }
     }
+}
 
-    if (confirmClear) {
-        AlertDialog(
-            onDismissRequest = { confirmClear = false },
-            title = { Text("مسح سجل التشخيص؟") },
-            text = { Text("سيتم حذف جميع السجلات المحفوظة.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.clearLogs()
-                        confirmClear = false
-                    },
-                ) { Text("مسح الكل") }
-            },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("إلغاء") } },
+@Composable
+private fun DiagnosticsLogEntry(
+    entry: com.alraad.core.common.contracts.DiagEntry,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+        Text(formatTimestamp(entry.timestamp), style = MaterialTheme.typography.labelSmall)
+        Text(
+            "${entry.level} [${entry.category}] ${entry.message}",
+            style = MaterialTheme.typography.bodyMedium,
         )
+        if (entry.details.isNotEmpty()) {
+            Text(
+                entry.details.entries.joinToString("\\n") { "${it.key}=${it.value}" },
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
     }
+}
+
+@Composable
+private fun ClearDiagnosticsDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("مسح سجل التشخيص؟") },
+        text = { Text("سيتم حذف جميع السجلات المحفوظة.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text("مسح الكل") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("إلغاء") }
+        },
+    )
 }
