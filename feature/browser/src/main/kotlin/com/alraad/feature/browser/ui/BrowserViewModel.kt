@@ -10,7 +10,6 @@ import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.HistoryEntry
 import com.alraad.core.common.contracts.HistoryRepository
 import com.alraad.core.common.contracts.SettingsRepository
-import com.alraad.core.common.contracts.StreamListener
 import com.alraad.core.common.contracts.StreamUrl
 import com.alraad.feature.browser.actions.StreamActions
 import com.alraad.feature.browser.tabs.TabManager
@@ -53,15 +52,13 @@ class BrowserViewModel
                 activeId?.let { byTab[it] }.orEmpty().filter { activeUrl == null || it.sourcePageUrl == activeUrl }
             }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-        private val streamListener =
-            object : StreamListener {
-                override fun onStreamDetected(stream: StreamUrl) = Unit
-
-                override fun onStreamUpdated(stream: StreamUrl) = Unit
-            }
-
         private val streamObservationListener =
-            StreamObservationListener { stream, pageUrl, tabId ->
+            object : StreamObservationListener {
+                override fun onStreamObserved(
+                    stream: StreamUrl,
+                    pageUrl: String?,
+                    tabId: String?,
+                ) {
                     val tabState = tabManager.state.value
                     val sourcePage = pageUrl ?: return
                     val resolvedTabId =
@@ -79,16 +76,15 @@ class BrowserViewModel
                             if (index >= 0) existing.toMutableList().apply { set(index, item) } else existing + item
                         retained + (resolvedTabId to updated.takeLast(MAX_STREAMS_PER_TAB))
                     }
+                }
             }
 
         init {
-            sniffer.registerListener(streamListener)
             sniffer.registerObservationListener(streamObservationListener)
         }
 
         // public override so lifecycle coverage can invoke it directly from tests
         public override fun onCleared() {
-            sniffer.unregisterListener(streamListener)
             sniffer.unregisterObservationListener(streamObservationListener)
             super.onCleared()
         }
