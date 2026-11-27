@@ -34,15 +34,33 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+      - name: Cache Robolectric android-all jars
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-4.14.1-android-all
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
+
+      - name: Prefetch Robolectric android-all artifacts
+        run: |
+          set -e
+          dir="$HOME/.m2/repository/org/robolectric/android-all-instrumented/15-robolectric-12650502-i7"
+          base="https://repo1.maven.org/maven2/org/robolectric/android-all-instrumented/15-robolectric-12650502-i7"
+          mkdir -p "$dir"
+          for f in pom jar; do
+            name="android-all-instrumented-15-robolectric-12650502-i7.$f"
+            if [ ! -s "$dir/$name" ]; then
+              curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 -o "$dir/$name" "$base/$name"
+            fi
+          done
 
       - name: Run quality gates and build debug APK
         run: ./gradlew --no-daemon ktlintCheck detekt test assembleDebug
 
       - name: Upload Wave 3 debug APK artifact
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
         with:
           name: al-raad-debug-apk-${{ github.sha }}
@@ -52,7 +70,7 @@ jobs:
 
   emulator-android-test:
     name: emulator androidTest (main)
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') || github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -71,6 +89,11 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+      - name: Cache Robolectric android-all jars
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-4.14.1-android-all
 
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
