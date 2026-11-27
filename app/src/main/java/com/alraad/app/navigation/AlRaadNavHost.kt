@@ -25,6 +25,7 @@ fun AlRaadNavHost(navController: NavHostController) {
             BrowserScreen(
                 tabManager = viewModel.tabManager,
                 webViewIntegration = viewModel.webViewIntegration,
+                diagnosticsLogger = viewModel.diagnosticsLogger,
                 settings = settings,
             )
         }

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alraad.core.adblocker.impl.WebViewIntegrationHelper
 import com.alraad.core.common.contracts.AppSettings
+import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.SettingsRepository
 import com.alraad.feature.browser.tabs.TabManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,6 +19,7 @@ class BrowserViewModel
     constructor(
         val tabManager: TabManager,
         val webViewIntegration: WebViewIntegrationHelper,
+        val diagnosticsLogger: DiagnosticsLogger,
         settingsRepository: SettingsRepository,
     ) : ViewModel() {
         val settings: StateFlow<AppSettings> =
