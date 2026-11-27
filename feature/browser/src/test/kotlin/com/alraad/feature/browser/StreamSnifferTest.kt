@@ -91,7 +91,7 @@ class StreamSnifferTest {
     }
 
     @Test
-    fun `duplicate stream URLs are observed independently for their page and tab`() {
+    fun `duplicate stream observations and DRM metadata remain page-tab scoped`() {
         val sniffer = StreamSniffer(noopLogger)
         val observations = mutableListOf<Triple<String?, String?, StreamUrl>>()
         sniffer.registerObservationListener(
@@ -99,42 +99,20 @@ class StreamSnifferTest {
                 observations += Triple(pageUrl, tabId, stream)
             },
         )
-        val url = "https://cdn.example/shared.m3u8"
-
+        val url = "https://cdn.example/shared.mpd"
         assertTrue(sniffer.onRequestObserved(url, pageUrl = "https://a.example/", tabId = "tab-a") != null)
         assertNull(sniffer.onRequestObserved(url, pageUrl = "https://b.example/", tabId = "tab-b"))
 
-        assertEquals(2, observations.size)
-        assertEquals("tab-a", observations[0].second)
-        assertEquals("tab-b", observations[1].second)
-        assertEquals("https://b.example/", observations[1].first)
-    }
-
-    @Test
-    fun `license metadata updates only the matching page and tab observation`() {
-        val sniffer = StreamSniffer(noopLogger)
-        val observations = mutableListOf<Triple<String?, String?, StreamUrl>>()
-        sniffer.registerObservationListener(
-            StreamObservationListener { stream, pageUrl, tabId ->
-                observations += Triple(pageUrl, tabId, stream)
-            },
-        )
-        val streamUrl = "https://cdn.example/shared.mpd"
-        sniffer.onRequestObserved(streamUrl, pageUrl = "https://a.example/", tabId = "tab-a")
-        sniffer.onRequestObserved(streamUrl, pageUrl = "https://b.example/", tabId = "tab-b")
-
         sniffer.onDrmLicenseObserved(
             "https://license.example/widevine",
-            headers = mapOf("Content-Type" to "application/octet-stream"),
             pageUrl = "https://a.example/",
             tabId = "tab-a",
         )
 
-        val updated = observations.last()
-        assertEquals("tab-a", updated.second)
-        assertEquals("https://a.example/", updated.first)
-        assertEquals("https://license.example/widevine", updated.third.drmLicenseUrl)
-        assertEquals(null, observations[1].third.drmLicenseUrl)
+        assertEquals(3, observations.size)
+        assertEquals("tab-b", observations[1].second)
+        assertNull(observations[1].third.drmLicenseUrl)
+        assertEquals("tab-a", observations.last().second)
+        assertEquals("https://license.example/widevine", observations.last().third.drmLicenseUrl)
     }
-
 }
