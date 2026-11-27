@@ -3,7 +3,9 @@ package com.alraad.feature.browser
 import com.alraad.core.adblocker.impl.WebViewIntegrationHelper
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.core.common.fakes.FakeAdBlocker
+import com.alraad.core.common.fakes.FakeBookmarksRepository
 import com.alraad.core.common.fakes.FakeDiagnosticsLogger
+import com.alraad.core.common.fakes.FakeHistoryRepository
 import com.alraad.core.common.fakes.FakePlayerController
 import com.alraad.core.common.fakes.FakeSavedStreamsRepository
 import com.alraad.core.common.fakes.FakeSettingsRepository
@@ -56,6 +58,8 @@ class BrowserViewModelLifecycleTest {
                         logger,
                     ),
                 settingsRepository = FakeSettingsRepository(),
+                historyRepository = FakeHistoryRepository(),
+                bookmarksRepository = FakeBookmarksRepository(),
             )
         viewModel.onCleared()
         sniffer.onRequestObserved(

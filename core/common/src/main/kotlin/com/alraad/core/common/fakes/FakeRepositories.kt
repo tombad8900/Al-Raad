@@ -19,6 +19,9 @@ class FakeHistoryRepository : HistoryRepository {
 
     override fun observeHistory(): Flow<List<HistoryEntry>> = items
 
+    /** Snapshot for assertions in tests. */
+    fun currentEntries(): List<HistoryEntry> = items.value
+
     override suspend fun add(entry: HistoryEntry): Long {
         val id = nextId++
         items.update { listOf(entry.copy(id = id)) + it }
@@ -40,6 +43,9 @@ class FakeBookmarksRepository : BookmarksRepository {
     private var nextId = 1L
 
     override fun observeBookmarks(): Flow<List<Bookmark>> = items
+
+    /** Snapshot for assertions in tests. */
+    fun currentBookmarks(): List<Bookmark> = items.value
 
     override suspend fun add(bookmark: Bookmark): Long {
         val id = nextId++

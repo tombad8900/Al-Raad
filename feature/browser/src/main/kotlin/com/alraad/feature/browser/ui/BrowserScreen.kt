@@ -36,7 +36,7 @@ fun BrowserScreen(
     sniffer: StreamSniffer,
     settings: AppSettings,
     modifier: Modifier = Modifier,
-    detectedStreams: DetectedStreamsUi = DetectedStreamsUi(),
+    handlers: BrowserHandlers = BrowserHandlers(),
 ) {
     val tabState by tabManager.state.collectAsState()
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
@@ -56,11 +56,12 @@ fun BrowserScreen(
                 val id = tabState.activeTabId ?: tabManager.openTab(url).id
                 tabManager.updateTab(id, url = url)
             },
+            onBookmarkClick = handlers.actions.onBookmark,
         )
         // Minimal selected-stream handoff into the PLAYER route (richer picker is
         // queued post-MVP): plays the most recent detected stream with its headers.
-        detectedStreams.streams.firstOrNull()?.let { stream ->
-            androidx.compose.material3.TextButton(onClick = { detectedStreams.onPlay(stream) }) {
+        handlers.detectedStreams.streams.firstOrNull()?.let { stream ->
+            androidx.compose.material3.TextButton(onClick = { handlers.detectedStreams.onPlay(stream) }) {
                 androidx.compose.material3.Text(text = "▶ " + (android.net.Uri.parse(stream.url).host ?: stream.url))
             }
         }
@@ -74,7 +75,10 @@ fun BrowserScreen(
                     webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
                     webViewClient =
                         webViewIntegration.webViewClient(
-                            onPageFinished = { isLoading = false },
+                            onPageFinished = { webView ->
+                                isLoading = false
+                                webView.url?.let { loaded -> handlers.actions.onPageVisited(loaded, webView.title ?: "") }
+                            },
                             onRequestObserved = { url, headers, pageUrl ->
                                 sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl)
                             },

@@ -100,13 +100,21 @@ private fun NavGraphBuilder.browserDestination(navController: NavHostController)
             diagnosticsLogger = viewModel.diagnosticsLogger,
             sniffer = viewModel.sniffer,
             settings = settings,
-            detectedStreams =
-                com.alraad.feature.browser.ui.DetectedStreamsUi(
-                    streams = detectedStreams,
-                    onPlay = { stream ->
-                        viewModel.playStream(stream)
-                        navController.navigate(Routes.PLAYER)
-                    },
+            handlers =
+                com.alraad.feature.browser.ui.BrowserHandlers(
+                    detectedStreams =
+                        com.alraad.feature.browser.ui.DetectedStreamsUi(
+                            streams = detectedStreams,
+                            onPlay = { stream ->
+                                viewModel.playStream(stream)
+                                navController.navigate(Routes.PLAYER)
+                            },
+                        ),
+                    actions =
+                        com.alraad.feature.browser.ui.BrowserActions(
+                            onPageVisited = viewModel::recordVisit,
+                            onBookmark = viewModel::bookmarkLastVisited,
+                        ),
                 ),
         )
     }
