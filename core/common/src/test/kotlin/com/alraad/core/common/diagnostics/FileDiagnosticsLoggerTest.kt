@@ -122,8 +122,8 @@ class FileDiagnosticsLoggerTest {
         runTest {
             val file = tmp.newFile("diag-legacy-secrets.log")
             file.writeText(
-                "1700000000000\\tWEBVIEW\\tERROR\\trequest https://a.example/p?access_token=old-token" +
-                    "\\tCookie=session=old-cookie;Authorization=Bearer old-auth\\n",
+                "1700000000000\tWEBVIEW\tERROR\trequest https://a.example/p?access_token=old-token" +
+                    "\tCookie=session=old-cookie;Authorization=Bearer old-auth\n",
             )
 
             val logger = logger(file)
