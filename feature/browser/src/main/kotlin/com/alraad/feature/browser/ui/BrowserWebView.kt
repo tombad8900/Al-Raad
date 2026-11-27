@@ -11,7 +11,6 @@ import com.alraad.core.common.contracts.StreamSource
 import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
 import com.alraad.feature.browser.web.SafeWebViewConfig
 
-/** The browser's WebView surface: hardened config, ad-block/sniffer client, tab-bound loads. */
 @Composable
 fun BrowserWebView(
     activeTab: com.alraad.feature.browser.tabs.BrowserTab?,
@@ -22,48 +21,41 @@ fun BrowserWebView(
     onLoadingChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val tabManager = environment.tabManager
-    val settings = environment.settings
+    val tabs = environment.tabManager
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
             WebView(context).apply {
                 setBackgroundColor(backgroundColor.toArgb())
-                SafeWebViewConfig.apply(this, settings)
+                SafeWebViewConfig.apply(this, environment.settings)
                 webChromeClient = PopupBlockingWebChromeClient(environment.diagnosticsLogger)
                 webViewClient =
                     environment.webViewIntegration.webViewClient(
                         onNavigationRequested = { _, url ->
-                            tabManager.state.value.activeTabId?.let { tabId ->
-                                pageTabAssociator.recordRequest(tabId, url)
-                            }
+                            tabs.state.value.activeTabId?.let { pageTabAssociator.recordRequest(it, url) }
                         },
                         onPageStart = { _, url ->
-                            val association =
-                                pageTabAssociator.onPageStartedWithContext(url, tabManager.state.value.activeTabId)
-                            association.tabId?.let { ownerTabId ->
-                                handlers.actions.onPageStarted(ownerTabId, url, association.startsNewNavigation)
-                                if (ownerTabId == tabManager.state.value.activeTabId) onLoadingChange(true)
+                            val page = pageTabAssociator.onPageStartedWithContext(url, tabs.state.value.activeTabId)
+                            page.tabId?.let { id ->
+                                handlers.actions.onPageStarted(id, url, page.startsNewNavigation)
+                                if (id == tabs.state.value.activeTabId) onLoadingChange(true)
                             }
                         },
                         onPageFinished = { webView ->
-                            webView.url?.let { loadedUrl ->
-                                val ownerTabId = pageTabAssociator.onPageFinished(loadedUrl)
-                                if (ownerTabId == tabManager.state.value.activeTabId) onLoadingChange(false)
-                                ownerTabId?.let {
-                                    handlers.actions.onPageFinished(it, loadedUrl, webView.title ?: "")
-                                }
+                            webView.url?.let { url ->
+                                val owner = pageTabAssociator.onPageFinished(url)
+                                if (owner == tabs.state.value.activeTabId) onLoadingChange(false)
+                                owner?.let { handlers.actions.onPageFinished(it, url, webView.title ?: "") }
                             }
                         },
                         onRequestObserved = { url, headers, pageUrl ->
-                            val tabId = pageTabAssociator.tabIdForPage(pageUrl)
                             environment.sniffer.onRequestObserved(
                                 url,
                                 headers,
                                 null,
                                 StreamSource.NETWORK,
                                 pageUrl,
-                                tabId,
+                                pageTabAssociator.tabIdForPage(pageUrl),
                             )
                         },
                     )
