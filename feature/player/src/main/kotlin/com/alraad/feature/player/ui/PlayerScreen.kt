@@ -36,7 +36,6 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.media3.common.Player
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
@@ -50,7 +49,11 @@ private const val SEEK_STEP_MS = 10_000L
  * Double-tap seek target. Media3 reports C.TIME_UNSET for unknown duration, so the
  * upper clamp applies only when the duration is known; the lower bound always holds.
  */
-internal fun seekTarget(positionMs: Long, deltaMs: Long, durationMs: Long): Long {
+internal fun seekTarget(
+    positionMs: Long,
+    deltaMs: Long,
+    durationMs: Long,
+): Long {
     val raw = positionMs + deltaMs
     return if (durationMs == C.TIME_UNSET) raw.coerceAtLeast(0L) else raw.coerceIn(0L, durationMs)
 }

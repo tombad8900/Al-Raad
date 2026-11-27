@@ -71,17 +71,15 @@ class PlayerGestureController(
     }
 
     /**
-     * Enters PiP on API 26+. Returns false when there is no host Activity, when the
-     * platform is too old, or when the Activity throws (e.g. PiP unsupported). The
-     * SDK API returns void, so a completed call without exception is the platform's
-     * only success signal.
+     * Enters PiP on API 26+. Returns the platform result: false when there is no
+     * host Activity, the platform is too old, Android rejects the request, or the
+     * call throws (e.g. PiP unsupported on the device).
      */
     fun enterPictureInPicture(): Boolean {
         val host = activity?.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.O }
         return host?.let {
             try {
                 it.enterPictureInPictureMode(PictureInPictureParams.Builder().build())
-                true
             } catch (e: IllegalStateException) {
                 android.util.Log.w("PlayerGestureController", "PiP unavailable", e)
                 false
