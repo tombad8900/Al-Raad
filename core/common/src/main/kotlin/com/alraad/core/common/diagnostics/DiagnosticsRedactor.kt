@@ -49,7 +49,7 @@ object DiagnosticsRedactor {
     private val queryAssignment = Regex("""([?&;])([^=&#;\s]+)=([^&#;\s]*)""")
 
     private val encodedQueryAssignment =
-        Regex("""(?i)(%3f|%26)((?:[^%&=\s]|%[0-9a-f]{2})+)(%3d)([^%&#\s]*)""")
+        Regex("""(?i)(%3f|%26)((?:[^%&=\s]|%[0-9a-f]{2})+)(%3d)((?:[^%&#\s]|%[0-9a-f]{2})*)""")
 
     fun redact(entry: DiagEntry): DiagEntry =
         entry.copy(
@@ -96,6 +96,7 @@ object DiagnosticsRedactor {
             normalized.endsWith("password") ||
             normalized.endsWith("signature") ||
             normalized.endsWith("credential") ||
-            normalized.endsWith("apikey") || normalized.endsWith("privatekey")
+            normalized.endsWith("apikey") ||
+            normalized.endsWith("privatekey")
     }
 }
