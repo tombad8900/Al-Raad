@@ -84,7 +84,6 @@ fun PlayerScreen(
     controller: Media3PlayerController,
     playbackRequest: PlaybackRequest,
     modifier: Modifier = Modifier,
-    drmLicenseUrl: String? = null,
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val gestures = rememberPlayerGestureController()
