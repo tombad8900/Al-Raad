@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
+        android:name=".AlRaadApp"
         android:allowBackup="true"
         android:label="الرعد"
         android:supportsRtl="true"
