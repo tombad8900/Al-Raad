@@ -6,4 +6,7 @@ object Routes {
     const val LIBRARY = "library"
     const val PLAYER = "player"
     const val SETTINGS = "settings"
+    const val HISTORY = "history"
+    const val BOOKMARKS = "bookmarks"
+    const val DIAGNOSTICS = "diagnostics"
 }
