@@ -101,7 +101,7 @@ class BrowserViewModel
             if (tabManager.state.value.tabs.none { it.id == tabId }) return
             currentPageUrlsByTab.update { current ->
                 val urls = if (startsNewNavigation) emptySet() else current[tabId].orEmpty()
-                current + (tabId to (urls + url).takeLast(MAX_PAGE_URLS_PER_TAB).toSet())
+                current + (tabId to (urls + url).toList().takeLast(MAX_PAGE_URLS_PER_TAB).toSet())
             }
             if (startsNewNavigation) {
                 streamsByTab.update { current -> current + (tabId to emptyList()) }
