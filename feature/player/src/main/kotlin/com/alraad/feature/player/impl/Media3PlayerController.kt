@@ -108,6 +108,19 @@ class Media3PlayerController
                 }
         }
 
+        /** Live quality change: applies (or clears) the rendition cap on the active player. */
+        fun setQuality(quality: QualityLimit?) {
+            val current = player ?: return
+            current.trackSelectionParameters =
+                if (quality == null) {
+                    TrackSelectionParameters.Builder(context).build()
+                } else {
+                    TrackSelectionParameters.Builder(context)
+                        .setMaxVideoSize(Int.MAX_VALUE, quality.maxHeight)
+                        .build()
+                }
+        }
+
         override fun pause() {
             player?.pause()
         }
