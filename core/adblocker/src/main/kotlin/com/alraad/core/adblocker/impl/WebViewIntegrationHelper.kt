@@ -27,6 +27,29 @@ class WebViewIntegrationHelper
         private val logger: DiagnosticsLogger,
         private val scope: CoroutineScope,
     ) {
+        /**
+         * Full diagnostics record (AGENTS.md): every failed request is logged -
+         * main-frame failures at ERROR, subresource failures at WARN.
+         */
+        internal fun logLoadError(
+            url: String,
+            errorCode: Int,
+            description: String,
+            isMainFrame: Boolean,
+        ) {
+            logger.log(
+                DiagCategory.WEBVIEW,
+                if (isMainFrame) DiagLevel.ERROR else DiagLevel.WARN,
+                "Load failed",
+                mapOf(
+                    "url" to url,
+                    "errorCode" to errorCode.toString(),
+                    "description" to description,
+                    "mainFrame" to isMainFrame.toString(),
+                ),
+            )
+        }
+
         fun webViewClient(onPageFinished: (WebView) -> Unit = {}): WebViewClient =
             object : WebViewClient() {
                 override fun shouldInterceptRequest(
@@ -54,18 +77,12 @@ class WebViewIntegrationHelper
                     request: android.webkit.WebResourceRequest,
                     error: android.webkit.WebResourceError,
                 ) {
-                    if (request.isForMainFrame) {
-                        logger.log(
-                            DiagCategory.WEBVIEW,
-                            DiagLevel.ERROR,
-                            "Load failed",
-                            mapOf(
-                                "url" to request.url.toString(),
-                                "errorCode" to error.errorCode.toString(),
-                                "description" to (error.description?.toString() ?: ""),
-                            ),
-                        )
-                    }
+                    logLoadError(
+                        url = request.url.toString(),
+                        errorCode = error.errorCode,
+                        description = error.description?.toString() ?: "",
+                        isMainFrame = request.isForMainFrame,
+                    )
                 }
 
                 override fun onReceivedHttpError(
