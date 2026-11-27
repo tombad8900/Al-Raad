@@ -67,7 +67,10 @@ fun DetectedStreamPicker(
     saveItem?.let { item ->
         SaveStreamDialog(
             initialTitle = android.net.Uri.parse(item.stream.url).host ?: item.stream.url,
-            onConfirm = { title -> onSave(item, title); saveItem = null },
+            onConfirm = { title ->
+                onSave(item, title)
+                saveItem = null
+            },
             onDismiss = { saveItem = null },
         )
     }
