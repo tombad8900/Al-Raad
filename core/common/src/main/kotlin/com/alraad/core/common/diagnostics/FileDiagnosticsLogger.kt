@@ -155,6 +155,6 @@ class FileDiagnosticsLogger(
             bytes.write(value[i].code)
             i++
         }
-        return bytes.toString(Charsets.UTF_8)
+        return String(bytes.toByteArray(), Charsets.UTF_8)
     }
 }
