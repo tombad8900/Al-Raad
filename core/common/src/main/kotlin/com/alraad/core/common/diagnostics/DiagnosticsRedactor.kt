@@ -42,11 +42,11 @@ object DiagnosticsRedactor {
         )
 
     private val cookieHeaderAssignment =
-        Regex("""(?im)(["']?(?:set-cookie|cookie)["']?\\s*[:=]\\s*)[^\\r\\n]*""")
+        Regex("""(?im)(["']?(?:set-cookie|cookie)["']?\s*[:=]\s*)[^\r\n]*""")
 
     private val headerAssignment =
         Regex(
-            """(?i)(["']?[A-Za-z0-9_-]*(?:proxy-authorization|authorization|x-api-key|api-key|access-token|refresh-token|id-token|token|session(?:-id)?|jwt|client-secret|secret|password|passwd|signature|credential|private-key)["']?\\s*[:=]\\s*)(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\\s+[^ \\t,;]+|[^\\s,;]+)""",
+            """(?i)(["']?[A-Za-z0-9_-]*(?:proxy-authorization|authorization|x-api-key|api-key|access-token|refresh-token|id-token|token|session(?:-id)?|jwt|client-secret|secret|password|passwd|signature|credential|private-key)["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^ \t,;]+|[^\s,;]+)""",
         )
 
     private val queryAssignment = Regex("""([?&;])([^=&#;\s]+)=([^&#;\s]*)""")
