@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.alraad.core.common.contracts.StreamUrl
 import com.alraad.feature.player.impl.Media3PlayerController
@@ -52,10 +53,18 @@ fun PlayerScreen(
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     var speed by remember { mutableFloatStateOf(1.0f) }
+    // Compose-observable handle: currentPlayer() is a plain field, so the player
+    // created (or replaced) by play() is captured into state here, which schedules
+    // the recomposition that rebinds PlayerView in AndroidView.update.
+    var player by remember { mutableStateOf<Player?>(null) }
 
     DisposableEffect(stream) {
         controller.play(stream)
-        onDispose { controller.release() }
+        player = controller.currentPlayer()
+        onDispose {
+            controller.release()
+            player = null
+        }
     }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
@@ -67,7 +76,7 @@ fun PlayerScreen(
                         detectTapGestures(
                             onDoubleTap = { offset ->
                                 val forward = if (isRtl) offset.x < size.width / 2f else offset.x >= size.width / 2f
-                                val current = controller.currentPlayer() ?: return@detectTapGestures
+                                val current = player ?: return@detectTapGestures
                                 val delta = if (forward) SEEK_STEP_MS else -SEEK_STEP_MS
                                 val target = (current.currentPosition + delta).coerceIn(0L, current.duration.coerceAtLeast(0L))
                                 current.seekTo(target)
@@ -77,13 +86,12 @@ fun PlayerScreen(
             factory = { context ->
                 PlayerView(context).apply {
                     useController = true
-                    controller.currentPlayer()?.let { player = it }
+                    this.player = player
                 }
             },
             update = { view ->
-                val current = controller.currentPlayer()
-                if (view.player !== current) view.player = current
-                current?.setPlaybackSpeed(speed)
+                if (view.player !== player) view.player = player
+                player?.setPlaybackSpeed(speed)
             },
         )
         Row(
@@ -94,7 +102,7 @@ fun PlayerScreen(
                 speed = speed,
                 onSelect = { option ->
                     speed = option
-                    controller.currentPlayer()?.setPlaybackSpeed(option)
+                    player?.setPlaybackSpeed(option)
                 },
             )
         }

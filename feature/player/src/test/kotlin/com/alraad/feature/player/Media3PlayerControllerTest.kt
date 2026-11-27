@@ -54,4 +54,18 @@ class Media3PlayerControllerTest {
         controller.release()
         assertNull(controller.currentPlayer())
     }
+
+    @Test fun `switching streams replaces the player so UI state rebinding sees the new instance`() {
+        val first =
+            StreamUrl(url = "https://cdn.example.com/a.mp4", format = StreamFormat.MP4, source = StreamSource.NETWORK)
+        val second =
+            StreamUrl(url = "https://cdn.example.com/b.mp4", format = StreamFormat.MP4, source = StreamSource.NETWORK)
+        controller.play(first)
+        val firstPlayer = controller.currentPlayer()
+        assertNotNull(firstPlayer)
+        controller.play(second)
+        val secondPlayer = controller.currentPlayer()
+        assertNotNull(secondPlayer)
+        assert(secondPlayer !== firstPlayer) { "play() must replace the player so recomposition rebinding observes a change" }
+    }
 }
