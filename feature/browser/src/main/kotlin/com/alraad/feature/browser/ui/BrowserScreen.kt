@@ -3,13 +3,16 @@ package com.alraad.feature.browser.ui
 import android.webkit.WebView
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import com.alraad.core.adblocker.impl.WebViewIntegrationHelper
 import com.alraad.core.common.contracts.AppSettings
@@ -34,6 +37,12 @@ fun BrowserScreen(
     val tabState by tabManager.state.collectAsState()
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
     var isLoading by remember { mutableStateOf(false) }
+    val backgroundColor = MaterialTheme.colorScheme.background
+
+    // Open the homepage tab on first launch so the WebView is never left blank.
+    LaunchedEffect(Unit) {
+        if (tabState.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         AddressBar(
@@ -48,6 +57,8 @@ fun BrowserScreen(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
                 WebView(context).apply {
+                    // Match the app background so an empty WebView is never a white screen.
+                    setBackgroundColor(backgroundColor.toArgb())
                     SafeWebViewConfig.apply(this, settings)
                     webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
                     webViewClient =
@@ -57,8 +68,10 @@ fun BrowserScreen(
                 }
             },
             update = { webView ->
-                isLoading = true
-                activeTab?.url?.takeIf { it.isNotBlank() && it != webView.url }?.let(webView::loadUrl)
+                activeTab?.url?.takeIf { it.isNotBlank() && it != webView.url }?.let {
+                    isLoading = true
+                    webView.loadUrl(it)
+                }
             },
         )
     }
