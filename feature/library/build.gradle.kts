@@ -36,6 +36,7 @@ android {
 
 dependencies {
     api(projects.core.common)
+    implementation(projects.core.adblocker)
     implementation(projects.core.designsystem)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.android)

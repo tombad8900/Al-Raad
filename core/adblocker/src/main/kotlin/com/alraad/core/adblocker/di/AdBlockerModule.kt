@@ -13,3 +13,11 @@ abstract class AdBlockerModule {
     @Binds
     abstract fun bindAdBlocker(impl: OfflineAdBlocker): AdBlocker
 }
+
+@dagger.hilt.EntryPoint
+@InstallIn(SingletonComponent::class)
+interface AdblockEntryPoint {
+    fun blocklistUpdater(): com.alraad.core.adblocker.impl.BlocklistUpdater
+
+    fun offlineAdBlocker(): OfflineAdBlocker
+}

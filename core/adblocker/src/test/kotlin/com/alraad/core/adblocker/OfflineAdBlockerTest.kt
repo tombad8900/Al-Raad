@@ -1,10 +1,13 @@
 package com.alraad.core.adblocker
 
 import androidx.test.core.app.ApplicationProvider
+import com.alraad.core.adblocker.impl.BlocklistStore
 import com.alraad.core.adblocker.impl.OfflineAdBlocker
+import com.alraad.core.common.contracts.AppSettings
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
+import com.alraad.core.common.contracts.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -14,6 +17,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+
+private fun settingsRepo(enabled: Boolean) =
+    object : SettingsRepository {
+        override fun observeSettings(): Flow<AppSettings> = flowOf(AppSettings(adBlockEnabled = enabled))
+
+        override suspend fun update(settings: AppSettings) = Unit
+    }
 
 @RunWith(RobolectricTestRunner::class)
 class OfflineAdBlockerTest {
@@ -33,7 +43,13 @@ class OfflineAdBlockerTest {
             override suspend fun clear() = Unit
         }
 
-    private val blocker = OfflineAdBlocker(ApplicationProvider.getApplicationContext(), noopLogger)
+    private val blocker =
+        OfflineAdBlocker(
+            ApplicationProvider.getApplicationContext(),
+            noopLogger,
+            settingsRepo(enabled = true),
+            BlocklistStore(ApplicationProvider.getApplicationContext()),
+        )
 
     @Test fun `blocks listed ad domains and subdomains`() =
         runTest {
@@ -53,6 +69,18 @@ class OfflineAdBlockerTest {
             assertFalse(blocker.shouldBlock("https://criteo.com/x.js"))
             blocker.removeFromWhitelist("criteo.com")
             assertTrue(blocker.shouldBlock("https://criteo.com/x.js"))
+        }
+
+    @Test fun `disabled ad blocking stops all blocking`() =
+        runTest {
+            val off =
+                OfflineAdBlocker(
+                    ApplicationProvider.getApplicationContext(),
+                    noopLogger,
+                    settingsRepo(enabled = false),
+                    BlocklistStore(ApplicationProvider.getApplicationContext()),
+                )
+            assertFalse(off.shouldBlock("https://ad.doubleclick.net/track"))
         }
 
     @Test fun `cosmetic css hides generic ad selectors`() {
@@ -81,6 +109,8 @@ class OfflineAdBlockerConcurrencyTest {
 
                         override suspend fun clear() = Unit
                     },
+                    settingsRepo(enabled = true),
+                    BlocklistStore(ApplicationProvider.getApplicationContext()),
                 )
             val failures = java.util.concurrent.ConcurrentLinkedQueue<Throwable>()
 

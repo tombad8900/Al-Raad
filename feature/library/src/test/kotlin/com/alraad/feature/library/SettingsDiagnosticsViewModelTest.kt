@@ -21,8 +21,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
 @OptIn(ExperimentalCoroutinesApi::class)
+@RunWith(RobolectricTestRunner::class)
 class SettingsDiagnosticsViewModelTest {
     private val entries =
         DiagCategory.entries.mapIndexed { i, cat ->
@@ -91,7 +94,10 @@ class SettingsDiagnosticsViewModelTest {
 
                 override suspend fun clear() = Unit
             }
-        val vm = SettingsDiagnosticsViewModel(fakeSettings, rawLogger)
+        val vm =
+            testBlocklistDeps(fakeSettings, rawLogger).let { (store, updater, adBlocker) ->
+                SettingsDiagnosticsViewModel(fakeSettings, rawLogger, store, updater, adBlocker)
+            }
         val rendered = vm.logs.value.single().let { it.message + it.details.toString() }
 
         listOf("display-secret", "header-secret", "url-secret").forEach {
@@ -112,7 +118,10 @@ class SettingsDiagnosticsViewModelTest {
 
     @Test
     fun `severity and text filters narrow visible logs and export`() {
-        val vm = SettingsDiagnosticsViewModel(fakeSettings, fakeLogger)
+        val vm =
+            testBlocklistDeps(fakeSettings, fakeLogger).let { (store, updater, adBlocker) ->
+                SettingsDiagnosticsViewModel(fakeSettings, fakeLogger, store, updater, adBlocker)
+            }
         vm.levelFilter.value = DiagLevel.ERROR
         assertTrue(vm.logs.value.all { it.level == DiagLevel.ERROR })
 
@@ -126,7 +135,10 @@ class SettingsDiagnosticsViewModelTest {
     }
 
     @Test fun `every DiagCategory is filterable and narrows the log list`() {
-        val vm = SettingsDiagnosticsViewModel(fakeSettings, fakeLogger)
+        val vm =
+            testBlocklistDeps(fakeSettings, fakeLogger).let { (store, updater, adBlocker) ->
+                SettingsDiagnosticsViewModel(fakeSettings, fakeLogger, store, updater, adBlocker)
+            }
         assertEquals(DiagCategory.entries.size, vm.logs.value.size)
         DiagCategory.entries.forEach { cat ->
             vm.categoryFilter.value = cat

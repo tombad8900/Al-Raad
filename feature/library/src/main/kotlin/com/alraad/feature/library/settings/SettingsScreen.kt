@@ -40,6 +40,8 @@ fun SettingsScreen(
     onOpenDiagnostics: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsState()
+    val blocklists by viewModel.blocklists.collectAsState()
+    val listsUpdating by viewModel.listsUpdating.collectAsState()
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
         TextButton(onClick = onOpenDiagnostics, modifier = Modifier.fillMaxWidth()) {
             Text("سجل التشخيص / Diagnostics log")
@@ -52,6 +54,22 @@ fun SettingsScreen(
         }
         SettingToggle("المحتوى المختلط / Mixed content", settings.mixedContentAllowed) { on ->
             viewModel.update { it.copy(mixedContentAllowed = on) }
+        }
+        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+        Text("قوائم الحجب / Block lists", style = MaterialTheme.typography.titleSmall)
+        blocklists.forEach { item ->
+            val status =
+                if (item.lastUpdated > 0) "آخر تحديث ${formatTimestamp(item.lastUpdated)}" else "النسخة المدمجة فقط"
+            SettingToggle("${item.name} — $status", item.enabled) { on ->
+                viewModel.setListEnabled(item.id, on)
+            }
+        }
+        TextButton(
+            onClick = { viewModel.updateListsNow() },
+            enabled = !listsUpdating,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(if (listsUpdating) "جارٍ التحديث…" else "تحديث القوائم الآن / Update lists now")
         }
     }
 }
