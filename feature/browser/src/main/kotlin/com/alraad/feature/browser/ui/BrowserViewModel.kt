@@ -23,10 +23,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-@Suppress("LongParameterList") // Hilt-injected collaborators; grouping would obscure the graph
-@HiltViewModel
 private const val MAX_STREAMS_PER_TAB = 100
 
+@Suppress("LongParameterList") // Hilt-injected collaborators; grouping would obscure the graph
+@HiltViewModel
 class BrowserViewModel
     @Inject
     constructor(
@@ -50,7 +50,7 @@ class BrowserViewModel
             combine(tabManager.state, streamsByTab) { tabState, byTab ->
                 val activeId = tabState.activeTabId
                 val activeUrl = tabState.tabs.firstOrNull { it.id == activeId }?.url
-                byTab[activeId].orEmpty().filter { activeUrl == null || it.sourcePageUrl == activeUrl }
+                activeId?.let { byTab[it] }.orEmpty().filter { activeUrl == null || it.sourcePageUrl == activeUrl }
             }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
         private val streamListener =
