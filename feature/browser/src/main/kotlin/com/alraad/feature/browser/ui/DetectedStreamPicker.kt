@@ -20,7 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/** Arabic controls for distinct links detected on the current page. */
+/** Arabic actions for distinct links detected on the current page. */
 @Composable
 fun DetectedStreamPicker(
     items: List<DetectedStreamItem>,
@@ -30,69 +30,42 @@ fun DetectedStreamPicker(
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
-    val sortedItems = remember(items) { sortDetectedStreamItems(items) }
-    val tabId = sortedItems.first().sourceTabId
-    val pageUrl = sortedItems.first().sourcePageUrl
-    var selectedUrl by remember(tabId, pageUrl) { mutableStateOf(sortedItems.firstOrNull()?.stream?.url) }
-    val selected = sortedItems.firstOrNull { it.stream.url == selectedUrl } ?: sortedItems.first()
+    val options = remember(items) { sortDetectedStreamItems(items) }
+    var selectedUrl by remember(options.first().sourceTabId, options.first().sourcePageUrl) {
+        mutableStateOf(options.first().stream.url)
+    }
+    val selected = options.firstOrNull { it.stream.url == selectedUrl } ?: options.first()
     var menuExpanded by remember { mutableStateOf(false) }
-    var saveDialogItem by remember { mutableStateOf<DetectedStreamItem?>(null) }
+    var saveItem by remember { mutableStateOf<DetectedStreamItem?>(null) }
 
-    Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Text(
-            text = "روابط البث المكتشفة: ${sortedItems.size}",
-            style = MaterialTheme.typography.labelLarge,
-        )
-        if (sortedItems.size > 1) {
+    Column(modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Text("روابط البث المكتشفة: ${options.size}", style = MaterialTheme.typography.labelLarge)
+        if (options.size > 1) {
             androidx.compose.foundation.layout.Box {
-                OutlinedButton(onClick = { menuExpanded = true }) {
-                    Text("اختيار رابط البث")
-                }
-                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                    sortedItems.forEach { item ->
+                OutlinedButton(onClick = { menuExpanded = true }) { Text("اختيار رابط البث") }
+                DropdownMenu(menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    options.forEach { item ->
                         DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text(item.stream.format.name)
-                                    Text(item.stream.url, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-                                }
-                            },
-                            onClick = {
-                                selectedUrl = item.stream.url
-                                menuExpanded = false
-                            },
+                            text = { Text("${item.stream.format.name} — ${item.stream.url}", maxLines = 1) },
+                            onClick = { selectedUrl = item.stream.url; menuExpanded = false },
                         )
                     }
                 }
             }
         }
         Text(selected.stream.url, style = MaterialTheme.typography.bodySmall, maxLines = 1)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Button(onClick = { onPlay(selected) }) {
-                Text("تشغيل")
-            }
-            TextButton(onClick = { onCopy(selected) }) {
-                Text("نسخ الرابط")
-            }
-            TextButton(onClick = { saveDialogItem = selected }) {
-                Text("حفظ في المكتبة")
-            }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = { onPlay(selected) }) { Text("تشغيل") }
+            TextButton(onClick = { onCopy(selected) }) { Text("نسخ الرابط") }
+            TextButton(onClick = { saveItem = selected }) { Text("حفظ في المكتبة") }
         }
     }
 
-    saveDialogItem?.let { item ->
+    saveItem?.let { item ->
         SaveStreamDialog(
             initialTitle = android.net.Uri.parse(item.stream.url).host ?: item.stream.url,
-            onConfirm = { title ->
-                onSave(item, title)
-                saveDialogItem = null
-            },
-            onDismiss = { saveDialogItem = null },
+            onConfirm = { title -> onSave(item, title); saveItem = null },
+            onDismiss = { saveItem = null },
         )
     }
 }
