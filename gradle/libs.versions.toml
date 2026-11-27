@@ -17,9 +17,11 @@ kotlinxSerialization = "1.7.3"
 coil = "2.7.0"
 junit = "4.13.2"
 androidxTestJunit = "1.2.1"
+androidxTestCore = "1.6.1"
 espresso = "3.6.1"
 turbine = "1.2.0"
 mockwebserver = "4.12.0"
+robolectric = "4.14.1"
 ktlintPlugin = "12.1.2"
 detekt = "1.23.7"
 
@@ -56,9 +58,11 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-test-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCore" }
 espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
 mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "mockwebserver" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
