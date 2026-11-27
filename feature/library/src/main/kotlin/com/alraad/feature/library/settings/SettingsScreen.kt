@@ -81,7 +81,11 @@ fun DiagnosticsScreen(
     Column(modifier = modifier.fillMaxSize()) {
         LazyRow(modifier = Modifier.padding(8.dp)) {
             item {
-                FilterChip(selected = filter == null, onClick = { viewModel.categoryFilter.value = null }, label = { Text("All") })
+                FilterChip(
+                    selected = filter == null,
+                    onClick = { viewModel.categoryFilter.value = null },
+                    label = { Text("All") },
+                )
             }
             items(DiagCategory.entries.toList(), key = { it.name }) { cat ->
                 FilterChip(
