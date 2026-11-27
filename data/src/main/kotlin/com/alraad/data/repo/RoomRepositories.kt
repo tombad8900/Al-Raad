@@ -54,7 +54,10 @@ class RoomSavedStreamsRepository
 
         override suspend fun save(stream: SavedStream): Long = dao.upsert(stream.toEntity())
 
-        override suspend fun rename(id: Long, title: String) = dao.rename(id, title)
+        override suspend fun rename(
+            id: Long,
+            title: String,
+        ) = dao.rename(id, title)
 
         override suspend fun delete(id: Long) = dao.deleteById(id)
     }

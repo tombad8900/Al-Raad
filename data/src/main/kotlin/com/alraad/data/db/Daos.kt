@@ -45,7 +45,10 @@ interface SavedStreamDao {
     suspend fun upsert(stream: SavedStreamEntity): Long
 
     @Query("UPDATE saved_streams SET title = :title WHERE id = :id")
-    suspend fun rename(id: Long, title: String)
+    suspend fun rename(
+        id: Long,
+        title: String,
+    )
 
     @Query("DELETE FROM saved_streams WHERE id = :id")
     suspend fun deleteById(id: Long)

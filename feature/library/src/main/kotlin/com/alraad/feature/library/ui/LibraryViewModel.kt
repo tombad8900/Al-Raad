@@ -22,7 +22,10 @@ class LibraryViewModel
             savedStreams.observeStreams()
                 .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-        fun rename(id: Long, title: String) {
+        fun rename(
+            id: Long,
+            title: String,
+        ) {
             viewModelScope.launch { savedStreams.rename(id, title) }
         }
 

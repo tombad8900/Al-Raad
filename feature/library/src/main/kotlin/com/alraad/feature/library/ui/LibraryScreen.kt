@@ -60,7 +60,6 @@ fun LibraryScreen(
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val context = LocalContext.current
     var streamToRename by remember { mutableStateOf<SavedStream?>(null) }
-    var editedTitle by remember { mutableStateOf("") }
     if (streams.isEmpty()) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
@@ -90,43 +89,20 @@ fun LibraryScreen(
                 },
                 onCopyUrl = { onCopyUrl(stream) },
                 onOpenSource = { onOpenSource(stream) },
-                onRename = {
-                    streamToRename = stream
-                    editedTitle = stream.title
-                },
+                onRename = { streamToRename = stream },
                 onDelete = { viewModel.delete(stream.id) },
             )
         }
     }
 
     streamToRename?.let { stream ->
-        AlertDialog(
-            onDismissRequest = { streamToRename = null },
-            title = { Text(if (isRtl) "تعديل اسم البث" else "Rename saved stream") },
-            text = {
-                OutlinedTextField(
-                    value = editedTitle,
-                    onValueChange = { editedTitle = it },
-                    label = { Text(if (isRtl) "الاسم" else "Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.rename(stream.id, editedTitle.trim())
-                        streamToRename = null
-                    },
-                    enabled = editedTitle.isNotBlank(),
-                ) {
-                    Text(if (isRtl) "حفظ" else "Save")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { streamToRename = null }) {
-                    Text(if (isRtl) "إلغاء" else "Cancel")
-                }
+        RenameStreamDialog(
+            stream = stream,
+            isRtl = isRtl,
+            onDismiss = { streamToRename = null },
+            onConfirm = { title ->
+                viewModel.rename(stream.id, title)
+                streamToRename = null
             },
         )
     }
@@ -178,4 +154,40 @@ private fun SavedStreamCard(
             }
         }
     }
+}
+
+@Composable
+private fun RenameStreamDialog(
+    stream: SavedStream,
+    isRtl: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    var editedTitle by remember(stream.id) { mutableStateOf(stream.title) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isRtl) "تعديل اسم البث" else "Rename saved stream") },
+        text = {
+            OutlinedTextField(
+                value = editedTitle,
+                onValueChange = { editedTitle = it },
+                label = { Text(if (isRtl) "الاسم" else "Name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(editedTitle.trim()) },
+                enabled = editedTitle.isNotBlank(),
+            ) {
+                Text(if (isRtl) "حفظ" else "Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(if (isRtl) "إلغاء" else "Cancel")
+            }
+        },
+    )
 }
