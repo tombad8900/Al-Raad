@@ -33,6 +33,14 @@ interface StreamListener {
 
     fun onStreamUpdated(stream: StreamUrl) {
     }
+
+    /** Every observation, including a deduplicated URL, with its originating page and tab. */
+    fun onStreamObserved(
+        stream: StreamUrl,
+        pageUrl: String?,
+        tabId: String?,
+    ) {
+    }
 }
 
 interface AdBlocker {
