@@ -31,7 +31,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
-/** The stream bar's Save action must persist headers and the active tab as source page. */
+/** Stream actions preserve request headers, the chosen title, and the source page. */
 @RunWith(RobolectricTestRunner::class)
 class BrowserViewModelStreamActionsTest {
     private lateinit var savedStreams: FakeSavedStreamsRepository
@@ -124,6 +124,7 @@ class BrowserViewModelStreamActionsTest {
         assertEquals(listOf("https://cdn.example/a.m3u8"), viewModel.detectedStreams.value.map { it.stream.url })
         assertEquals(pageA, viewModel.detectedStreams.value.single().sourcePageUrl)
     }
+
     @Test
     fun `stream picker sorts formats and removes duplicate URLs`() {
         val tab = tabManager.openTab("https://page.example/watch")
@@ -145,5 +146,4 @@ class BrowserViewModelStreamActionsTest {
         assertEquals(listOf(StreamFormat.DASH, StreamFormat.HLS), sorted.map { it.stream.format })
         assertEquals(2, sorted.size)
     }
-
 }
