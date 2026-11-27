@@ -18,12 +18,13 @@ class HistoryBookmarkNavigationViewModel
             onNavigateToBrowser: () -> Unit,
         ): Boolean {
             val target = url.trim()
-            val uri = runCatching { URI(target) }.getOrNull() ?: return false
-            val scheme = uri.scheme?.lowercase()
-            if ((scheme != "http" && scheme != "https") || uri.host.isNullOrBlank()) return false
-
-            tabManager.openTab(target)
-            onNavigateToBrowser()
-            return true
+            val uri = runCatching { URI(target) }.getOrNull()
+            val scheme = uri?.scheme?.lowercase()
+            val valid = uri != null && (scheme == "http" || scheme == "https") && !uri.host.isNullOrBlank()
+            if (valid) {
+                tabManager.openTab(target)
+                onNavigateToBrowser()
+            }
+            return valid
         }
     }
