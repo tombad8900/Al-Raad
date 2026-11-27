@@ -27,12 +27,21 @@ fun AlRaadNavHost(navController: NavHostController) {
         composable(Routes.BROWSER) {
             val viewModel: BrowserViewModel = hiltViewModel()
             val settings by viewModel.settings.collectAsState()
+            val detectedStreams by viewModel.detectedStreams.collectAsState()
             BrowserScreen(
                 tabManager = viewModel.tabManager,
                 webViewIntegration = viewModel.webViewIntegration,
                 diagnosticsLogger = viewModel.diagnosticsLogger,
                 sniffer = viewModel.sniffer,
                 settings = settings,
+                detectedStreams =
+                    com.alraad.feature.browser.ui.DetectedStreamsUi(
+                        streams = detectedStreams,
+                        onPlay = { stream ->
+                            viewModel.playStream(stream)
+                            navController.navigate(Routes.PLAYER)
+                        },
+                    ),
             )
         }
         composable(Routes.LIBRARY) {

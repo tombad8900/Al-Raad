@@ -36,6 +36,7 @@ fun BrowserScreen(
     sniffer: StreamSniffer,
     settings: AppSettings,
     modifier: Modifier = Modifier,
+    detectedStreams: DetectedStreamsUi = DetectedStreamsUi(),
 ) {
     val tabState by tabManager.state.collectAsState()
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
@@ -56,6 +57,13 @@ fun BrowserScreen(
                 tabManager.updateTab(id, url = url)
             },
         )
+        // Minimal selected-stream handoff into the PLAYER route (richer picker is
+        // queued post-MVP): plays the most recent detected stream with its headers.
+        detectedStreams.streams.firstOrNull()?.let { stream ->
+            androidx.compose.material3.TextButton(onClick = { detectedStreams.onPlay(stream) }) {
+                androidx.compose.material3.Text(text = "▶ " + (android.net.Uri.parse(stream.url).host ?: stream.url))
+            }
+        }
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
