@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.alraad.core.common.contracts.DiagCategory
+import com.alraad.core.common.contracts.DiagEntry
 import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.feature.library.ui.formatTimestamp
 import kotlinx.coroutines.launch
@@ -94,7 +95,7 @@ fun DiagnosticsScreen(
             onExport = { scope.launch { onExport(viewModel.exportVisibleLogs()) } },
             onClear = { confirmClear = true },
         )
-        DiagnosticsLogList(logs)
+        DiagnosticsLogList(logs, modifier = Modifier.weight(1f))
     }
 
     if (confirmClear) {
@@ -185,16 +186,17 @@ private fun DiagnosticsActions(
 
 @Composable
 private fun DiagnosticsLogList(
-    logs: List<com.alraad.core.common.contracts.DiagEntry>,
+    logs: List<DiagEntry>,
+    modifier: Modifier = Modifier,
 ) {
-    Column {
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = "السجلات المطابقة: ${logs.size}",
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelSmall,
         )
         HorizontalDivider()
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
             if (logs.isEmpty()) {
                 item {
                     Text("لا توجد سجلات مطابقة", modifier = Modifier.padding(16.dp))
@@ -209,7 +211,7 @@ private fun DiagnosticsLogList(
 
 @Composable
 private fun DiagnosticsLogEntry(
-    entry: com.alraad.core.common.contracts.DiagEntry,
+    entry: DiagEntry,
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         Text(formatTimestamp(entry.timestamp), style = MaterialTheme.typography.labelSmall)
