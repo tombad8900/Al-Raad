@@ -48,7 +48,7 @@ object DiagnosticsRedactor {
     private val queryAssignment = Regex("""([?&;])([^=&#;\s]+)=([^&#;\s]*)""")
 
     private val encodedQueryAssignment =
-        Regex("""(?i)(%3f|%26)([^%&=\s]+)(%3d)([^%&#\s]*)""")
+        Regex("""(?i)(%3f|%26)((?:[^%&=\s]|%[0-9a-f]{2})+)(%3d)([^%&#\s]*)""")
 
     fun redact(entry: DiagEntry): DiagEntry =
         entry.copy(
