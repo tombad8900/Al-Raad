@@ -13,7 +13,7 @@ class AdblockPlusDomainParserTest {
             ! Title: EasyList
             [Adblock Plus 2.0]
             ||ads.example.com^
-            ||track.example.net^\$third-party
+            ||track.example.net^${'$'}third-party
             @@||allowed.example.com^
             example.com##.ad-banner
             example.com#@#.ad-banner
