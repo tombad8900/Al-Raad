@@ -30,6 +30,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.alraad.feature.browser.ui.BrowserScreen
 import com.alraad.feature.browser.ui.BrowserViewModel
+import com.alraad.feature.library.settings.DiagnosticsScreen
 import com.alraad.feature.library.settings.SettingsDiagnosticsViewModel
 import com.alraad.feature.library.settings.SettingsScreen
 import com.alraad.feature.library.ui.BookmarksScreen
@@ -84,7 +85,7 @@ fun AlRaadNavHost(navController: NavHostController) {
             libraryDestination(navController)
             historyBookmarksDestinations(navController)
             playerDestination()
-            settingsDestination()
+            settingsDestination(navController)
         }
     }
 }
@@ -109,6 +110,8 @@ private fun NavGraphBuilder.browserDestination(navController: NavHostController)
                                 viewModel.playStream(stream)
                                 navController.navigate(Routes.PLAYER)
                             },
+                            onCopy = viewModel::copyStream,
+                            onSave = viewModel::saveStream,
                         ),
                     actions =
                         com.alraad.feature.browser.ui.BrowserActions(
@@ -170,14 +173,50 @@ private fun NavGraphBuilder.playerDestination() {
         if (current != null) {
             PlayerScreen(controller = playerViewModel.controller, stream = current)
         } else {
-            PlaceholderScreen("المشغل — القضية #8")
+            PlaceholderScreen("لم يتم اختيار بث بعد")
         }
     }
 }
 
-private fun NavGraphBuilder.settingsDestination() {
+private fun NavGraphBuilder.settingsDestination(navController: NavHostController) {
     composable(Routes.SETTINGS) {
-        SettingsScreen(viewModel = hiltViewModel<SettingsDiagnosticsViewModel>())
+        SettingsScreen(
+            viewModel = hiltViewModel<SettingsDiagnosticsViewModel>(),
+            onOpenDiagnostics = { navController.navigate(Routes.DIAGNOSTICS) },
+        )
+    }
+    composable(Routes.DIAGNOSTICS) {
+        val context = LocalContext.current
+        DiagnosticsScreen(
+            viewModel = hiltViewModel<SettingsDiagnosticsViewModel>(),
+            onExport = { text ->
+                // User-initiated file export: write the log to app cache and hand it
+                // to the share sheet as a .txt via FileProvider. Falls back to the
+                // clipboard if the file cannot be written or no share target exists.
+                runCatching {
+                    val dir = java.io.File(context.cacheDir, "diagnostics").apply { mkdirs() }
+                    val file = java.io.File(dir, "alraad-diagnostics-" + System.currentTimeMillis() + ".txt")
+                    file.writeText(text)
+                    val uri =
+                        androidx.core.content.FileProvider.getUriForFile(
+                            context,
+                            context.packageName + ".fileprovider",
+                            file,
+                        )
+                    val send =
+                        android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                    context.startActivity(android.content.Intent.createChooser(send, null))
+                }.onFailure {
+                    val clipboard =
+                        context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("diagnostics log", text))
+                }
+            },
+        )
     }
 }
 

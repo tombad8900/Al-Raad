@@ -102,4 +102,16 @@ class BrowserViewModel
                 )
             }
         }
+
+        /** Copies the detected stream URL to the clipboard. */
+        fun copyStream(stream: StreamUrl) = streamActions.copyUrl(stream)
+
+        /** Saves the detected stream with its full headers and the active tab as source page. */
+        fun saveStream(stream: StreamUrl) {
+            val sourcePage = tabManager.state.value.tabs.firstOrNull { it.id == tabManager.state.value.activeTabId }?.url
+            val title = android.net.Uri.parse(stream.url).host ?: stream.url
+            viewModelScope.launch {
+                streamActions.saveToLibrary(stream, title = title, sourcePageUrl = sourcePage)
+            }
+        }
     }

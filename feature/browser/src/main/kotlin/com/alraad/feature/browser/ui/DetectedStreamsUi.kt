@@ -6,4 +6,6 @@ import com.alraad.core.common.contracts.StreamUrl
 data class DetectedStreamsUi(
     val streams: List<StreamUrl> = emptyList(),
     val onPlay: (StreamUrl) -> Unit = {},
+    val onCopy: (StreamUrl) -> Unit = {},
+    val onSave: (StreamUrl) -> Unit = {},
 )

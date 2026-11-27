@@ -1,5 +1,7 @@
 package com.alraad.feature.player.ui
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -23,6 +25,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -32,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -79,6 +84,23 @@ fun PlayerScreen(
     // created (or replaced) by play() is captured into state here, which schedules
     // the recomposition that rebinds PlayerView in AndroidView.update.
     var player by remember { mutableStateOf<Player?>(null) }
+    val playbackError by controller.playbackError.collectAsState()
+
+    // Fullscreen means real landscape rotation; leaving the screen restores the default.
+    val activity = LocalContext.current as? Activity
+    LaunchedEffect(fullscreen) {
+        activity?.requestedOrientation =
+            if (fullscreen) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
     DisposableEffect(stream) {
         controller.play(stream, drmLicenseUrl = drmLicenseUrl)
@@ -110,6 +132,25 @@ fun PlayerScreen(
                 },
             )
         }
+        playbackError?.let { PlaybackErrorOverlay(message = it, isRtl = isRtl) }
+    }
+}
+
+@Composable
+private fun PlaybackErrorOverlay(
+    message: String,
+    isRtl: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.fillMaxSize().background(Color.Black).padding(24.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = (if (isRtl) "تعذر تشغيل البث\n" else "Playback failed\n") + message,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyLarge,
+        )
     }
 }
 

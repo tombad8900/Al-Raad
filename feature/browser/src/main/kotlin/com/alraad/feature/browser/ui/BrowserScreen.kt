@@ -2,7 +2,9 @@ package com.alraad.feature.browser.ui
 
 import android.webkit.WebView
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,8 +63,20 @@ fun BrowserScreen(
         // Minimal selected-stream handoff into the PLAYER route (richer picker is
         // queued post-MVP): plays the most recent detected stream with its headers.
         handlers.detectedStreams.streams.firstOrNull()?.let { stream ->
-            androidx.compose.material3.TextButton(onClick = { handlers.detectedStreams.onPlay(stream) }) {
-                androidx.compose.material3.Text(text = "▶ " + (android.net.Uri.parse(stream.url).host ?: stream.url))
+            val host = android.net.Uri.parse(stream.url).host ?: stream.url
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                androidx.compose.material3.TextButton(onClick = { handlers.detectedStreams.onPlay(stream) }) {
+                    androidx.compose.material3.Text(text = "▶ $host")
+                }
+                androidx.compose.material3.TextButton(onClick = { handlers.detectedStreams.onCopy(stream) }) {
+                    androidx.compose.material3.Text(text = "نسخ")
+                }
+                androidx.compose.material3.TextButton(onClick = { handlers.detectedStreams.onSave(stream) }) {
+                    androidx.compose.material3.Text(text = "حفظ")
+                }
             }
         }
         AndroidView(
