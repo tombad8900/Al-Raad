@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
  * Line format v2: `V2<TAB>timestamp<TAB>CATEGORY<TAB>LEVEL<TAB>enc(message)<TAB>enc(key)=enc(value);...`
  * where enc() is UTF-8 percent-encoding, so details containing ';', '=', tabs or
  * newlines round-trip losslessly. Legacy v1 lines (no V2 marker, raw values) stay
- * readable. Export decodes entries so exported text preserves the original payload.
+ * readable. Export decodes entries while preserving only sanitized diagnostic content.
  */
 class FileDiagnosticsLogger(
     private val logFile: File,
