@@ -25,6 +25,8 @@ class BlocklistStore
         private val dir = File(context.filesDir, "blocklists")
         private val prefs = context.getSharedPreferences("adblock_lists", Context.MODE_PRIVATE)
 
+        private fun effectiveMin(id: String): Int = BlocklistCatalog.byId(id)?.minDomains ?: minDomains
+
         fun isEnabled(id: String): Boolean = prefs.getBoolean("enabled_$id", BlocklistCatalog.byId(id)?.enabledByDefault ?: true)
 
         fun setEnabled(
@@ -50,7 +52,7 @@ class BlocklistStore
             text: String,
         ): Boolean {
             val domains = AdblockPlusDomainParser.parse(text)
-            if (domains.size < minDomains) return false
+            if (domains.size < effectiveMin(id)) return false
             val target = File(dir, "$id.domains")
             val tmp = File(dir, "$id.tmp")
             dir.mkdirs()
