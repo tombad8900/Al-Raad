@@ -25,6 +25,36 @@ class StreamSniffer
     ) {
         private val listeners = java.util.concurrent.CopyOnWriteArrayList<StreamListener>()
 
+        @Volatile
+        private var lastDetected: StreamUrl? = null
+
+        // Detectable standard EME/Widevine license endpoint hints (case-insensitive).
+        // Deliberately excludes a bare "drm" substring: media URLs like /drm/manifest.mpd
+        // must classify as streams via StreamFormatDetector, never as license requests.
+        private val licenseUrlHints = listOf("widevine", "playready", "clearkey", "/license", "licensekey", "acquirelicense")
+
+        fun isLicenseRequest(url: String): Boolean {
+            val lower = url.lowercase()
+            return licenseUrlHints.any { lower.contains(it) }
+        }
+
+        /** Records a detected license request and attaches it to the most recent stream. */
+        fun onDrmLicenseObserved(
+            url: String,
+            headers: Map<String, String> = emptyMap(),
+        ) {
+            if (!isLicenseRequest(url)) return
+            logger.log(
+                DiagCategory.SNIFFER,
+                DiagLevel.INFO,
+                "DRM license request detected",
+                mapOf("url" to url, "headers" to headers.toString()),
+            )
+            val updated = lastDetected?.copy(drmLicenseUrl = url, drmLicenseRequestHeaders = headers) ?: return
+            lastDetected = updated
+            listeners.forEach { it.onStreamUpdated(updated) }
+        }
+
         // Access-order LRU, bounded: long sessions evict the oldest unique keys.
         private val seen =
             java.util.Collections.synchronizedMap(
@@ -61,7 +91,19 @@ class StreamSniffer
             contentType: String? = null,
             source: StreamSource = StreamSource.NETWORK,
         ): StreamUrl? {
-            if (!StreamFormatDetector.isStream(url, contentType)) return null
+            if (StreamFormatDetector.isStream(url, contentType)) return detectStream(url, headers, contentType, source)
+            if (isLicenseRequest(url)) {
+                onDrmLicenseObserved(url, headers)
+            }
+            return null
+        }
+
+        private fun detectStream(
+            url: String,
+            headers: Map<String, String>,
+            contentType: String?,
+            source: StreamSource,
+        ): StreamUrl? {
             val isDuplicate = seen.put(dedupKey(url, headers), System.currentTimeMillis()) != null
             val stream =
                 if (isDuplicate) {
@@ -80,6 +122,7 @@ class StreamSniffer
                     )
                 }
             stream?.let { detected ->
+                lastDetected = detected
                 logger.log(
                     DiagCategory.SNIFFER,
                     DiagLevel.INFO,
