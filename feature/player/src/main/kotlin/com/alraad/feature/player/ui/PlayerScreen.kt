@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.PictureInPictureAlt
@@ -31,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,8 +49,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.alraad.core.common.contracts.StreamUrl
+import androidx.media3.ui.TrackSelectionDialogBuilder
+import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.feature.player.impl.Media3PlayerController
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
@@ -72,10 +78,11 @@ internal fun seekTarget(
  * direction-aware under RTL) and a 0.5x-2x playback-speed menu. Releases the
  * player when the screen leaves composition.
  */
+@OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
     controller: Media3PlayerController,
-    stream: StreamUrl,
+    playbackRequest: PlaybackRequest,
     modifier: Modifier = Modifier,
     drmLicenseUrl: String? = null,
 ) {
@@ -89,26 +96,12 @@ fun PlayerScreen(
     var player by remember { mutableStateOf<Player?>(null) }
     val playbackError by controller.playbackError.collectAsState()
 
-    // Fullscreen means real landscape rotation; leaving the screen restores the default.
-    val activity = LocalContext.current as? Activity
-    LaunchedEffect(fullscreen) {
-        activity?.requestedOrientation =
-            if (fullscreen) {
-                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            } else {
-                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-            }
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
-
+    FullscreenOrientationEffect(fullscreen)
     PauseOnStopEffect(controller)
+    var fillScreen by rememberFillScreenState()
 
-    DisposableEffect(stream) {
-        controller.play(stream, drmLicenseUrl = drmLicenseUrl)
+    DisposableEffect(playbackRequest) {
+        controller.play(playbackRequest)
         player = controller.currentPlayer()
         onDispose {
             // release() frees resources but preserves the selection, so a recreate
@@ -120,19 +113,32 @@ fun PlayerScreen(
     }
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
-        PlayerSurface(player = player, gestures = gestures, isRtl = isRtl, speed = speed)
+        PlayerSurface(player = player, gestures = gestures, isRtl = isRtl, speed = speed, fillScreen = fillScreen)
         Row(
             modifier = Modifier.fillMaxWidth().padding(8.dp).align(Alignment.TopEnd),
             horizontalArrangement = Arrangement.End,
         ) {
             PlayerControlsRow(
                 controller = controller,
-                fullscreen = fullscreen,
-                onToggleFullscreen = {
-                    fullscreen = !fullscreen
-                    gestures.setFullscreen(fullscreen)
-                },
+                display =
+                    DisplayControls(
+                        fullscreen = fullscreen,
+                        onToggleFullscreen = {
+                            fullscreen = !fullscreen
+                            gestures.setFullscreen(fullscreen)
+                        },
+                        fillScreen = fillScreen,
+                        onToggleFill = { fillScreen = !fillScreen },
+                    ),
                 onEnterPip = { gestures.enterPictureInPicture() },
+                player = player,
+                onSelectSubtitles = {
+                    player?.let { current ->
+                        TrackSelectionDialogBuilder(LocalContext.current, "الترجمة", current, C.TRACK_TYPE_TEXT)
+                            .build()
+                            .show()
+                    }
+                },
                 speed = speed,
                 onSelectSpeed = { option ->
                     speed = option
@@ -191,25 +197,43 @@ private fun SpeedMenu(
 
 private val QUALITY_OPTIONS = listOf<Int?>(null, 1080, 720, 480)
 
+private data class DisplayControls(
+    val fullscreen: Boolean,
+    val onToggleFullscreen: () -> Unit,
+    val fillScreen: Boolean,
+    val onToggleFill: () -> Unit,
+)
+
 @Composable
 private fun PlayerControlsRow(
     controller: Media3PlayerController,
-    fullscreen: Boolean,
-    onToggleFullscreen: () -> Unit,
+    display: DisplayControls,
     onEnterPip: () -> Unit,
+    player: Player?,
+    onSelectSubtitles: () -> Unit,
     speed: Float,
     onSelectSpeed: (Float) -> Unit,
 ) {
     var qualityMenuOpen by remember { mutableStateOf(false) }
-    IconButton(onClick = onToggleFullscreen) {
+    IconButton(onClick = display.onToggleFullscreen) {
         Icon(
-            if (fullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-            contentDescription = if (fullscreen) "Exit fullscreen" else "Fullscreen",
+            if (display.fullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+            contentDescription = if (display.fullscreen) "Exit fullscreen" else "Fullscreen",
             tint = Color.White,
         )
     }
     IconButton(onClick = onEnterPip) {
         Icon(Icons.Default.PictureInPictureAlt, contentDescription = "Picture in picture", tint = Color.White)
+    }
+    TextButton(onClick = onSelectSubtitles, enabled = player != null) {
+        Text("الترجمة", color = Color.White, style = MaterialTheme.typography.labelLarge)
+    }
+    IconButton(onClick = display.onToggleFill) {
+        Icon(
+            if (display.fillScreen) Icons.Default.FitScreen else Icons.Default.AspectRatio,
+            contentDescription = if (display.fillScreen) "Fit video inside screen" else "Fill screen",
+            tint = Color.White,
+        )
     }
     Box {
         TextButton(onClick = { qualityMenuOpen = true }) {
@@ -236,6 +260,7 @@ private fun PlayerSurface(
     gestures: PlayerGestureController,
     isRtl: Boolean,
     speed: Float,
+    fillScreen: Boolean,
 ) {
     AndroidView(
         modifier =
@@ -262,11 +287,16 @@ private fun PlayerSurface(
         factory = { context ->
             PlayerView(context).apply {
                 useController = true
+                // Deterministic initial scale: Fit from the first layout, so the
+                // first frames never render zoomed/cropped while dimensions settle.
+                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 this.player = player
             }
         },
         update = { view ->
             if (view.player !== player) view.player = player
+            view.resizeMode =
+                if (fillScreen) AspectRatioFrameLayout.RESIZE_MODE_ZOOM else AspectRatioFrameLayout.RESIZE_MODE_FIT
             player?.setPlaybackSpeed(speed)
         },
     )
@@ -283,5 +313,31 @@ private fun PauseOnStopEffect(controller: Media3PlayerController) {
             }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+}
+
+/**
+ * Display mode state: Fit keeps the whole frame inside the screen (default, prevents the
+ * zoomed/cropped first frames); Fill fills the screen and may crop (owner items 1b/1c).
+ */
+@Composable
+private fun rememberFillScreenState() = rememberSaveable { mutableStateOf(false) }
+
+/** Fullscreen means real landscape rotation; leaving the screen restores the default orientation. */
+@Composable
+private fun FullscreenOrientationEffect(fullscreen: Boolean) {
+    val activity = LocalContext.current as? Activity
+    LaunchedEffect(fullscreen) {
+        activity?.requestedOrientation =
+            if (fullscreen) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
     }
 }
