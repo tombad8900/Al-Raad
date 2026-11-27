@@ -40,9 +40,8 @@ import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
 import com.alraad.feature.browser.web.SafeWebViewConfig
 
 /**
- * Browser shell: RTL AddressBar on top of a hardened WebView. Navigation from the
- * address bar updates the active tab in TabManager; the WebView loads the active
- * tab's URL. Ad blocking and sniffing come from WebViewIntegrationHelper.
+ * Browser shell: each tab owns a WebView so in-flight requests retain their true
+ * originating tab while the user switches between tabs.
  */
 @Composable
 fun BrowserScreen(
@@ -57,13 +56,12 @@ fun BrowserScreen(
     val tabState by tabManager.state.collectAsState()
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
     val loadingByTab = remember { mutableStateMapOf<String, Boolean>() }
-    val isLoading = loadingByTab[activeTab?.id] ?: false
-    val backgroundColor = MaterialTheme.colorScheme.background
     val webViews = remember { mutableMapOf<String, WebView>() }
+    val backgroundColor = MaterialTheme.colorScheme.background.toArgb()
 
     LaunchedEffect(tabState.tabs.map { it.id }) {
-        val liveTabIds = tabState.tabs.mapTo(mutableSetOf()) { it.id }
-        webViews.keys.filterNot { it in liveTabIds }.forEach { id ->
+        val liveIds = tabState.tabs.mapTo(mutableSetOf()) { it.id }
+        webViews.keys.filterNot { it in liveIds }.forEach { id ->
             loadingByTab.remove(id)
             webViews.remove(id)?.apply {
                 stopLoading()
@@ -81,7 +79,6 @@ fun BrowserScreen(
         }
     }
 
-    // Open the homepage tab on first launch so the WebView is never left blank.
     LaunchedEffect(Unit) {
         if (tabState.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
     }
@@ -89,14 +86,13 @@ fun BrowserScreen(
     Column(modifier = modifier.fillMaxSize()) {
         AddressBar(
             currentUrl = activeTab?.url ?: "",
-            isLoading = isLoading,
+            isLoading = activeTab?.let { loadingByTab[it.id] } ?: false,
             onNavigate = { url ->
                 val id = tabState.activeTabId ?: tabManager.openTab(url).id
                 tabManager.updateTab(id, url = url)
             },
             onBookmarkClick = handlers.actions.onBookmark,
         )
-        // Show only links associated with the active tab's current page.
         handlers.detectedStreams.streams.takeIf { it.isNotEmpty() }?.let { items ->
             DetectedStreamBar(items = items, actions = handlers.detectedStreams)
         }
@@ -107,7 +103,7 @@ fun BrowserScreen(
                     factory = { context ->
                         webViews.getOrPut(tab.id) {
                             WebView(context).apply {
-                                setBackgroundColor(backgroundColor.toArgb())
+                                setBackgroundColor(backgroundColor)
                                 SafeWebViewConfig.apply(this, settings)
                                 webChromeClient = PopupBlockingWebChromeClient(diagnosticsLogger)
                                 webViewClient =
@@ -134,9 +130,9 @@ fun BrowserScreen(
                         }
                     },
                     update = { webView ->
-                        tab.url.takeIf { it.isNotBlank() && it != webView.url }?.let {
+                        tab.url.takeIf { it.isNotBlank() && it != webView.url }?.let { url ->
                             loadingByTab[tab.id] = true
-                            webView.loadUrl(it)
+                            webView.loadUrl(url)
                         }
                     },
                 )
@@ -145,7 +141,7 @@ fun BrowserScreen(
     }
 }
 
-/** Current-page stream picker with a direct path when only one URL was detected. */
+/** Current-page stream picker. A single result needs no selector. */
 @Composable
 private fun DetectedStreamBar(
     items: List<DetectedStreamItem>,
@@ -188,11 +184,7 @@ private fun DetectedStreamBar(
             }
         }
         selected?.let { item ->
-            Text(
-                item.stream.url,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-            )
+            Text(item.stream.url, style = MaterialTheme.typography.bodySmall, maxLines = 1)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -234,14 +226,15 @@ private fun DetectedStreamBar(
                         actions.onSave(selected, saveTitle.trim())
                         saveDialogOpen = false
                     },
-                ) { Text("حفظ") }
+                ) {
+                    Text("حفظ")
+                }
             },
             dismissButton = {
-                TextButton(onClick = { saveDialogOpen = false }) { Text("إلغاء") }
+                TextButton(onClick = { saveDialogOpen = false }) {
+                    Text("إلغاء")
+                }
             },
         )
     }
 }
-
-internal fun sortDetectedStreamItems(items: List<DetectedStreamItem>): List<DetectedStreamItem> =
-    items.distinctBy { it.stream.url }.sortedWith(compareBy({ it.stream.format.name }, { it.stream.url }))
