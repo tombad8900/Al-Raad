@@ -46,20 +46,22 @@ class WebViewSnifferDeliveryTest {
             override fun cosmeticCss(host: String) = ""
         }
 
-    private fun request(url: String) =
-        object : WebResourceRequest {
-            override fun getUrl() = android.net.Uri.parse(url)
+    private fun request(
+        url: String,
+        mainFrame: Boolean = false,
+    ) = object : WebResourceRequest {
+        override fun getUrl() = android.net.Uri.parse(url)
 
-            override fun isForMainFrame() = false
+        override fun isForMainFrame() = mainFrame
 
-            override fun isRedirect() = false
+        override fun isRedirect() = false
 
-            override fun hasGesture() = false
+        override fun hasGesture() = false
 
-            override fun getMethod() = "GET"
+        override fun getMethod() = "GET"
 
-            override fun getRequestHeaders() = mapOf("Referer" to "https://page.example")
-        }
+        override fun getRequestHeaders() = mapOf("Referer" to "https://page.example")
+    }
 
     @Test fun `webview requests reach the sniffer and license attaches to the page stream`() {
         val sniffer = StreamSniffer(logger)
@@ -75,16 +77,30 @@ class WebViewSnifferDeliveryTest {
         )
         val helper = WebViewIntegrationHelper(allowAll, logger, CoroutineScope(Dispatchers.Main))
         val view = WebView(org.robolectric.RuntimeEnvironment.getApplication())
-        view.loadUrl("https://page-a.example/watch")
         val client =
             helper.webViewClient(
                 onRequestObserved = { url, headers, pageUrl ->
                     sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl)
                 },
             )
+        // Drive the UI-thread navigation callback explicitly: correlation must use the
+        // cached page URL, not view.url (unreadable off the WebView UI thread; it is
+        // null here precisely so a view.url read would fail the correlation).
+        client.onPageStarted(view, "https://page-a.example/watch", null)
         client.shouldInterceptRequest(view, request("https://cdn-a.example/movie.m3u8"))
         client.shouldInterceptRequest(view, request("https://lic.example/widevine"))
         assertEquals(1, updates.size)
         assertEquals("https://lic.example/widevine", updates[0].drmLicenseUrl)
+    }
+
+    @Test fun `main-frame interception updates the cached page URL without reading view state`() {
+        val observed = mutableListOf<String?>()
+        val helper = WebViewIntegrationHelper(allowAll, logger, CoroutineScope(Dispatchers.Main))
+        val view = WebView(org.robolectric.RuntimeEnvironment.getApplication())
+        val client = helper.webViewClient(onRequestObserved = { _, _, pageUrl -> observed += pageUrl })
+        client.onPageStarted(view, "https://first.example/", null)
+        client.shouldInterceptRequest(view, request("https://second.example/nav", mainFrame = true))
+        client.shouldInterceptRequest(view, request("https://cdn-b.example/movie.m3u8"))
+        assertEquals(listOf("https://second.example/nav", "https://second.example/nav"), observed)
     }
 }
