@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.view.View
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
@@ -19,6 +20,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import androidx.media3.common.AnalyticsListener
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
@@ -28,6 +31,7 @@ import com.alraad.feature.browser.tabs.TabManagerTestEntryPoint
 import dagger.hilt.android.EntryPointAccessors
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -36,6 +40,9 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
+import org.hamcrest.Description
+import org.hamcrest.TypeSafeMatcher
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -170,18 +177,50 @@ class AppScenarioTest {
     }
 
     private fun waitForRenderedVideoFrames() {
-        composeRule.waitUntil(timeoutMillis = 90_000) {
+        var attachedPlayer: ExoPlayer? = null
+        composeRule.waitUntil(timeoutMillis = 15_000) {
             runCatching {
                 onView(isAssignableFrom(PlayerView::class.java)).check(
-                    matches { view ->
-                        val player = (view as PlayerView).player
-                        player != null &&
-                            player.isPlaying &&
-                            player.videoSize.width > 0 &&
-                            player.videoSize.height > 0
-                    },
+                    matches(
+                        object : TypeSafeMatcher<View>() {
+                            override fun matchesSafely(view: View): Boolean {
+                                val player = (view as PlayerView).player as? ExoPlayer ?: return false
+                                attachedPlayer = player
+                                return true
+                            }
+
+                            override fun describeTo(description: Description) {
+                                description.appendText("PlayerView with an attached ExoPlayer")
+                            }
+                        },
+                    ),
                 )
             }.isSuccess
+        }
+
+        val player = checkNotNull(attachedPlayer) { "PlayerView did not attach an ExoPlayer" }
+        val firstFrameRendered = CountDownLatch(1)
+        val listener =
+            object : AnalyticsListener {
+                override fun onRenderedFirstFrame(
+                    eventTime: AnalyticsListener.EventTime,
+                    output: Any,
+                    renderTimeMs: Long,
+                ) {
+                    firstFrameRendered.countDown()
+                }
+            }
+        player.addAnalyticsListener(listener)
+        try {
+            assertTrue(
+                "Media3 did not report a rendered video frame within 90 seconds",
+                firstFrameRendered.await(90, TimeUnit.SECONDS),
+            )
+            assertTrue("Player stopped before the frame assertion", player.isPlaying)
+            assertTrue("Decoded video width is missing", player.videoSize.width > 0)
+            assertTrue("Decoded video height is missing", player.videoSize.height > 0)
+        } finally {
+            player.removeAnalyticsListener(listener)
         }
     }
 
