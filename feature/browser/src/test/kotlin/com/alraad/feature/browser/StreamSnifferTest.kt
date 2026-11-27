@@ -69,4 +69,23 @@ class StreamSnifferTest {
         assertNull(sniffer.onRequestObserved("https://example.com/page.html"))
         assertNull(sniffer.onRequestObserved("https://example.com/api", contentType = "application/json"))
     }
+
+    @Test fun `delimiter-containing header values do not collide in dedup key`() {
+        val sniffer = StreamSniffer(noopLogger)
+        val url = "https://cdn.example.com/v.mp4"
+        val combined = mapOf("Cookie" to "session=abc; x=y")
+        val split = mapOf("Cookie" to "session=abc", "x" to "y")
+        assertTrue(sniffer.onRequestObserved(url, combined) != null)
+        assertTrue(sniffer.onRequestObserved(url, split) != null)
+        assertNull(sniffer.onRequestObserved(url, combined))
+    }
+
+    @Test fun `dedup state is bounded - oldest entries evicted, recent duplicates still suppressed`() {
+        val sniffer = StreamSniffer(noopLogger)
+        sniffer.onRequestObserved("https://cdn.example.com/oldest.m3u8")
+        repeat(1200) { sniffer.onRequestObserved("https://cdn.example.com/filler$it.m3u8") }
+        sniffer.onRequestObserved("https://cdn.example.com/recent.m3u8")
+        assertNull(sniffer.onRequestObserved("https://cdn.example.com/recent.m3u8"))
+        assertTrue(sniffer.onRequestObserved("https://cdn.example.com/oldest.m3u8") != null)
+    }
 }

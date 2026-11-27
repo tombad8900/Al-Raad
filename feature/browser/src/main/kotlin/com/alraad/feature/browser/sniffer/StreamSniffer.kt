@@ -6,7 +6,6 @@ import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.StreamListener
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.core.common.contracts.StreamUrl
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,6 +15,8 @@ import javax.inject.Singleton
  * Content-Length size when present, and dedups repeated observations of the same
  * URL+headers pair. Every detection is logged raw and unredacted.
  */
+private const val MAX_SEEN_KEYS = 1000
+
 @Singleton
 class StreamSniffer
     @Inject
@@ -23,7 +24,28 @@ class StreamSniffer
         private val logger: DiagnosticsLogger,
     ) {
         private val listeners = java.util.concurrent.CopyOnWriteArrayList<StreamListener>()
-        private val seen = ConcurrentHashMap<String, Long>()
+
+        // Access-order LRU, bounded: long sessions evict the oldest unique keys.
+        private val seen =
+            java.util.Collections.synchronizedMap(
+                object : LinkedHashMap<String, Long>(16, 0.75f, true) {
+                    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean = size > MAX_SEEN_KEYS
+                },
+            )
+
+        // Length-prefixed canonical encoding: unambiguous even when header values
+        // contain separators like '=' or ';'.
+        private fun dedupKey(
+            url: String,
+            headers: Map<String, String>,
+        ): String =
+            buildString {
+                append(url)
+                for (entry in headers.entries.sortedBy { it.key }) {
+                    append('|').append(entry.key.length).append(':').append(entry.key)
+                    append('=').append(entry.value.length).append(':').append(entry.value)
+                }
+            }
 
         fun registerListener(listener: StreamListener) {
             listeners += listener
@@ -40,8 +62,7 @@ class StreamSniffer
             source: StreamSource = StreamSource.NETWORK,
         ): StreamUrl? {
             if (!StreamFormatDetector.isStream(url, contentType)) return null
-            val key = url + "|" + headers.entries.sortedBy { it.key }.joinToString(";") { "${it.key}=${it.value}" }
-            val isDuplicate = seen.put(key, System.currentTimeMillis()) != null
+            val isDuplicate = seen.put(dedupKey(url, headers), System.currentTimeMillis()) != null
             val stream =
                 if (isDuplicate) {
                     null
