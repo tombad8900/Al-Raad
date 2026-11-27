@@ -41,6 +41,9 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
@@ -101,6 +104,8 @@ fun PlayerScreen(
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
+
+    PauseOnStopEffect(controller)
 
     DisposableEffect(stream) {
         controller.play(stream, drmLicenseUrl = drmLicenseUrl)
@@ -265,4 +270,18 @@ private fun PlayerSurface(
             player?.setPlaybackSpeed(speed)
         },
     )
+}
+
+/** Pauses playback when the app is backgrounded so audio never keeps playing off-screen (owner directive item 3). Resume stays manual. */
+@Composable
+private fun PauseOnStopEffect(controller: Media3PlayerController) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_STOP) controller.pause()
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 }
