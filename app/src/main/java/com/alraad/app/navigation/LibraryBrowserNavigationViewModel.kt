@@ -1,6 +1,6 @@
 package com.alraad.app.navigation
 
-import android.net.Uri
+import java.net.URI
 import androidx.lifecycle.ViewModel
 import com.alraad.feature.browser.tabs.TabManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,8 +27,9 @@ class LibraryBrowserNavigationViewModel
             onNavigateToBrowser: () -> Unit,
         ): Boolean {
             val url = sourcePageUrl?.trim()?.takeIf { it.isNotEmpty() } ?: return false
-            val uri = Uri.parse(url)
-            if (uri.scheme?.lowercase() !in setOf("http", "https") || uri.host.isNullOrBlank()) {
+            val uri = runCatching { URI(url) }.getOrNull() ?: return false
+            val scheme = uri.scheme?.lowercase()
+            if ((scheme != "http" && scheme != "https") || uri.host.isNullOrBlank()) {
                 return false
             }
 
