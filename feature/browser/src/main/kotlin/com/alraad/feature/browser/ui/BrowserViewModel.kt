@@ -58,12 +58,10 @@ class BrowserViewModel
                 override fun onStreamDetected(stream: StreamUrl) = Unit
 
                 override fun onStreamUpdated(stream: StreamUrl) = Unit
+            }
 
-                override fun onStreamObserved(
-                    stream: StreamUrl,
-                    pageUrl: String?,
-                    tabId: String?,
-                ) {
+        private val streamObservationListener =
+            StreamObservationListener { stream, pageUrl, tabId ->
                     val tabState = tabManager.state.value
                     val sourcePage = pageUrl ?: return
                     val resolvedTabId =
@@ -81,16 +79,17 @@ class BrowserViewModel
                             if (index >= 0) existing.toMutableList().apply { set(index, item) } else existing + item
                         retained + (resolvedTabId to updated.takeLast(MAX_STREAMS_PER_TAB))
                     }
-                }
             }
 
         init {
             sniffer.registerListener(streamListener)
+            sniffer.registerObservationListener(streamObservationListener)
         }
 
         // public override so lifecycle coverage can invoke it directly from tests
         public override fun onCleared() {
             sniffer.unregisterListener(streamListener)
+            sniffer.unregisterObservationListener(streamObservationListener)
             super.onCleared()
         }
 
