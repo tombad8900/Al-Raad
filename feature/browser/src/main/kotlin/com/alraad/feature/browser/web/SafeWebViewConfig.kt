@@ -26,7 +26,11 @@ object SafeWebViewConfig {
             allowUniversalAccessFromFileURLs = false
             domStorageEnabled = true
             databaseEnabled = false
-            setSupportMultipleWindows(false)
+            // Multiple windows stay technically supported so popup requests route
+            // through WebChromeClient.onCreateWindow, which rejects them (see
+            // PopupBlockingWebChromeClient). With support disabled, window.open()
+            // would instead replace the current page as a top-level navigation.
+            setSupportMultipleWindows(true)
             javaScriptCanOpenWindowsAutomatically = false
             mediaPlaybackRequiresUserGesture = false
             loadWithOverviewMode = true
