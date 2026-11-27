@@ -9,8 +9,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.test.platform.app.InstrumentationRegistry
+import com.alraad.core.common.contracts.DiagCategory
+import com.alraad.core.common.contracts.DiagLevel
 import java.io.File
 import java.io.FileOutputStream
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -52,5 +55,27 @@ class AppLaunchSmokeTest {
                 out.absolutePath
             }
         println("RUNTIME-SCREENSHOT: $path")
+
+        // Exercise the raw diagnostics export path on-device: log one marker through the
+        // real FileDiagnosticsLogger, export, and publish the text next to the screenshot
+        // so CI can upload it for inspection.
+        val logger = (context.applicationContext as AlRaadApp).diagnosticsLogger
+        val marker = "smoke-export-marker"
+        logger.log(DiagCategory.APP, DiagLevel.INFO, marker, mapOf("source" to "AppLaunchSmokeTest"))
+        val export = runBlocking { logger.exportAsText() }
+        assertTrue("diagnostics export missing marker entry", export.contains(marker))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values =
+                ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, "diagnostics-export.txt")
+                    put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+                    put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                }
+            val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)!!
+            context.contentResolver.openOutputStream(uri)!!.use { it.write(export.toByteArray()) }
+        } else {
+            File(context.getExternalFilesDir(null), "diagnostics-export.txt").writeText(export)
+        }
+        println("RUNTIME-DIAGNOSTICS: exported ${export.length} chars")
     }
 }

@@ -93,10 +93,12 @@ jobs:
           # 45987678975 showed the package lookup failing at pull time). Clear any
           # stale file first, then require a non-empty PNG from this run.
           script: |
-            adb shell rm -f /sdcard/Download/app-launch.png || true
+            adb shell rm -f /sdcard/Download/app-launch.png /sdcard/Download/diagnostics-export.txt || true
             ./gradlew --no-daemon :app:connectedDebugAndroidTest
             adb pull /sdcard/Download/app-launch.png app-launch.png
+            adb pull /sdcard/Download/diagnostics-export.txt diagnostics-export.txt
             test -s app-launch.png
+            test -s diagnostics-export.txt
             [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d ' \n')" = "89504e470d0a1a0a" ]
 
       - name: Upload app-launch screenshot
@@ -104,4 +106,11 @@ jobs:
         with:
           name: app-launch-screenshot
           path: app-launch.png
+          if-no-files-found: error
+
+      - name: Upload diagnostics export
+        uses: actions/upload-artifact@v7
+        with:
+          name: diagnostics-export
+          path: diagnostics-export.txt
           if-no-files-found: error
