@@ -47,7 +47,7 @@ class SubtitleSnifferTest {
             mapOf(
                 "Accept" to "text/vtt",
                 "User-Agent" to "Browser/1",
-                "Referer" to "https://site.example/watch?session=secret",
+                "Referer" to "https://user:password@site.example/watch?session=secret",
                 "Origin" to "https://site.example/path?token=secret",
                 "Cookie" to "session=secret",
                 "Authorization" to "Bearer secret",
