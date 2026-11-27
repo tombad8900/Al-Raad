@@ -75,7 +75,7 @@ class SettingsDiagnosticsViewModelTest {
                 override fun log(category: DiagCategory, level: DiagLevel, message: String, details: Map<String, String>) = Unit
                 override fun observeLogs(): Flow<List<DiagEntry>> = flowOf(listOf(rawEntry))
                 override suspend fun exportAsText(): String =
-                    "Authorization=Bearer export-secret; url=https://cdn.example/a.m3u8?access_token=export-token"
+                    "Authorization=Bearer export-secret\\nurl=https://cdn.example/a.m3u8?access_token=export-token"
                 override suspend fun clear() = Unit
             }
         val vm = SettingsDiagnosticsViewModel(fakeSettings, rawLogger)
