@@ -55,8 +55,10 @@ class AppLaunchSmokeTest {
         composeRule.onNodeWithText("الإشارات").performClick()
         waitForNode(hasText("No bookmarks yet", substring = true))
 
+        // Settings on main shows the three toggles; the Export action lives on the
+        // Diagnostics screen, which has no route until the diagnostics entry lands.
         composeRule.onNodeWithText("الإعدادات").performClick()
-        waitForNode(hasText("نسخ / Export", substring = true))
+        waitForNode(hasText("Ad blocking", substring = true))
 
         composeRule.onNodeWithText("المتصفح").performClick()
         waitForNode(hasSetTextAction())
