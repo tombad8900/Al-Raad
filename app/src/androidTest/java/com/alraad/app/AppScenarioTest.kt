@@ -85,11 +85,16 @@ class AppScenarioTest {
         waitForNode(hasSetTextAction(), 20_000)
 
         // Load a CONTROLLED local wrapper page (test-only MockWebServer fixture,
-        // no production scheme handling broadened) embedding the media as a <video>:
-        // direct navigation to a media file is handed to the downloader and never
-        // reaches the sniffer, while a page's subresource request is observed through
-        // the WebView client. Media is ExoPlayer's own public test asset (authorized).
-        // mediaPlaybackRequiresUserGesture=false in SafeWebViewConfig allows muted autoplay.
+        // no production scheme handling broadened) whose script issues the media
+        // request as a subresource fetch: direct navigation to a media file is
+        // handed to the downloader and never reaches the sniffer, while ANY page
+        // subresource request for the .mp4 URL is observed through the WebView
+        // client and classified by URL extension, exactly like a <video> tag's
+        // own request. A fetch is used instead of an autoplaying <video> because
+        // software-rendered emulator WebViews crash their renderer decoding real
+        // media (run 46035966507 logcat: aw_browser_terminator); the bar asserts
+        // DETECTION + routing, which the request alone exercises. Media URL is
+        // ExoPlayer's own public test asset (authorized).
         val server = okhttp3.mockwebserver.MockWebServer()
         server.start()
         server.enqueue(
@@ -97,10 +102,10 @@ class AppScenarioTest {
                 .setResponseCode(200)
                 .setHeader("Content-Type", "text/html")
                 .setBody(
-                    "<html><body>" +
-                        "<video muted autoplay playsinline preload=\"auto\" " +
-                        "src=\"https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4\">" +
-                        "</video></body></html>",
+                    "<html><body><script>" +
+                        "fetch('https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4'," +
+                        " {mode: 'no-cors'}).catch(function(){});" +
+                        "</script></body></html>",
                 ),
         )
         try {
@@ -120,17 +125,22 @@ class AppScenarioTest {
         } finally {
             server.shutdown()
         }
-        capture("scenario-07-player-route.png")
     }
 
     private fun waitForNode(
         matcher: SemanticsMatcher,
         timeoutMillis: Long,
     ) {
-        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
-            runCatching {
-                composeRule.onNode(matcher).assertIsDisplayed()
-            }.isSuccess
+        runCatching {
+            composeRule.waitUntil(timeoutMillis = timeoutMillis) {
+                runCatching {
+                    composeRule.onNode(matcher).assertIsDisplayed()
+                }.isSuccess
+            }
+        }.onFailure {
+            // A red run must still show what the screen actually looked like.
+            capture("scenario-timeout-" + System.currentTimeMillis() + ".png")
+            throw it
         }
         composeRule.waitForIdle()
     }
@@ -142,8 +152,13 @@ class AppScenarioTest {
         matcher: SemanticsMatcher,
         timeoutMillis: Long,
     ) {
-        composeRule.waitUntil(timeoutMillis = timeoutMillis) {
-            runCatching { composeRule.onNode(matcher).assertIsDisplayed() }.isSuccess.not()
+        runCatching {
+            composeRule.waitUntil(timeoutMillis = timeoutMillis) {
+                runCatching { composeRule.onNode(matcher).assertIsDisplayed() }.isSuccess.not()
+            }
+        }.onFailure {
+            capture("scenario-timeout-" + System.currentTimeMillis() + ".png")
+            throw it
         }
         composeRule.waitForIdle()
     }
