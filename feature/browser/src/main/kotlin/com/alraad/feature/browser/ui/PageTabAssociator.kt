@@ -11,6 +11,13 @@ class PageTabAssociator {
     private val pageTabIds = mutableMapOf<String, String>()
     private var lastRequestedNavigation: Pair<String, String>? = null
 
+    // Owner of the most recently bound page. A late start event that matches no
+    // pending request (e.g. a redirect of the previous chain arriving after the
+    // user already requested a different tab's page) belongs to that chain, not
+    // to the unrelated pending request - stealing that entry would bind the
+    // previous page's finish to the WRONG tab.
+    private var lastBoundTabId: String? = null
+
     /** Returns true when this tab's URL must be (re)loaded into the WebView. */
     fun shouldLoad(
         tabId: String,
@@ -36,10 +43,13 @@ class PageTabAssociator {
         val ownerTabId =
             when {
                 matchIndex >= 0 -> pendingNavigationTabs.removeAt(matchIndex).second
-                pendingNavigationTabs.isNotEmpty() -> pendingNavigationTabs.removeAt(0).second
+                pendingNavigationTabs.isNotEmpty() -> lastBoundTabId
                 else -> activeTabId
             }
-        if (ownerTabId != null) pageTabIds[url] = ownerTabId
+        if (ownerTabId != null) {
+            pageTabIds[url] = ownerTabId
+            lastBoundTabId = ownerTabId
+        }
         return ownerTabId
     }
 
