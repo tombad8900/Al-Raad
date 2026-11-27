@@ -51,6 +51,7 @@ class PageTabAssociatorTest {
         assertNull(associator.tabIdForPage("https://page0.example/"))
         assertEquals("tab299", associator.tabIdForPage("https://page299.example/"))
     }
+
     @Test
     fun `closed tab state is removed before a new tab navigation`() {
         val associator = PageTabAssociator()
@@ -66,5 +67,4 @@ class PageTabAssociatorTest {
         assertNull(associator.tabIdForPage("https://closed.example/"))
         assertNull(associator.tabIdForPage("https://closed.example/next"))
     }
-
 }
