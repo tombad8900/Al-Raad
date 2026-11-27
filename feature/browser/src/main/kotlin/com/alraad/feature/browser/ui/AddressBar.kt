@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -71,7 +72,7 @@ fun AddressBar(
             keyboardActions = KeyboardActions(onGo = { onNavigate(normalizeAddress(text)) }),
         )
         if (onBookmarkClick != null) {
-            IconButton(onClick = onBookmarkClick) {
+            IconButton(onClick = onBookmarkClick, modifier = Modifier.testTag("bookmark_action")) {
                 Icon(
                     imageVector = Icons.Filled.Star,
                     contentDescription = if (isRtl) "إضافة إلى الإشارات" else "Bookmark this page",

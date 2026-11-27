@@ -7,10 +7,10 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
@@ -49,9 +49,7 @@ class AppScenarioTest {
         // 3. Bookmark the loaded page from the browser, then verify it in Bookmarks.
         composeRule.onNodeWithText("المتصفح").performClick()
         waitForNode(hasSetTextAction(), 10_000)
-        composeRule
-            .onNode(hasContentDescription("Bookmark", substring = true))
-            .performClick()
+        composeRule.onNodeWithTag("bookmark_action").performClick()
         composeRule.onNodeWithText("الإشارات").performClick()
         waitForNode(hasText("example.com", substring = true), 15_000)
         capture("scenario-04-bookmarks.png")
