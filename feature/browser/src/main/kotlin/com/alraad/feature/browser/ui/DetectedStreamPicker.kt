@@ -47,7 +47,10 @@ fun DetectedStreamPicker(
                     options.forEach { item ->
                         DropdownMenuItem(
                             text = { Text("${item.stream.format.name} — ${item.stream.url}", maxLines = 1) },
-                            onClick = { selectedUrl = item.stream.url; menuExpanded = false },
+                            onClick = {
+                                selectedUrl = item.stream.url
+                                menuExpanded = false
+                            },
                         )
                     }
                 }
