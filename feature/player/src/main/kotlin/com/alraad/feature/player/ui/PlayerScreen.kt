@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import com.alraad.core.common.contracts.StreamUrl
@@ -38,6 +39,19 @@ import com.alraad.feature.player.impl.Media3PlayerController
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 private const val SEEK_STEP_MS = 10_000L
+
+/**
+ * Double-tap seek target. Media3 reports C.TIME_UNSET for unknown duration, so the
+ * upper clamp applies only when the duration is known; the lower bound always holds.
+ */
+internal fun seekTarget(
+    positionMs: Long,
+    deltaMs: Long,
+    durationMs: Long,
+): Long {
+    val raw = positionMs + deltaMs
+    return if (durationMs == C.TIME_UNSET) raw.coerceAtLeast(0L) else raw.coerceIn(0L, durationMs)
+}
 
 /**
  * RTL player screen (Issue #8, part B). Renders the controller's ExoPlayer via
@@ -78,8 +92,7 @@ fun PlayerScreen(
                                 val forward = if (isRtl) offset.x < size.width / 2f else offset.x >= size.width / 2f
                                 val current = player ?: return@detectTapGestures
                                 val delta = if (forward) SEEK_STEP_MS else -SEEK_STEP_MS
-                                val target = (current.currentPosition + delta).coerceIn(0L, current.duration.coerceAtLeast(0L))
-                                current.seekTo(target)
+                                current.seekTo(seekTarget(current.currentPosition, delta, current.duration))
                             },
                         )
                     },
