@@ -26,9 +26,11 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
 /** Normalizes user input into a browsable URL (adds https:// when no scheme). */
+private val SCHEME_PREFIX = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
+
 fun normalizeAddress(input: String): String {
     val trimmed = input.trim()
-    return if (trimmed.contains("://")) trimmed else "https://$trimmed"
+    return if (SCHEME_PREFIX.containsMatchIn(trimmed)) trimmed else "https://$trimmed"
 }
 
 @Composable
