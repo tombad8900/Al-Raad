@@ -93,6 +93,11 @@ private fun SavedStreamCard(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = stream.title, style = MaterialTheme.typography.titleMedium, maxLines = 2)
+                Text(
+                    text = stream.stream.format.name,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 Spacer(Modifier.height(4.dp))
                 Row {
                     IconButton(onClick = onPlay) { Icon(Icons.Default.PlayArrow, contentDescription = "Play") }
