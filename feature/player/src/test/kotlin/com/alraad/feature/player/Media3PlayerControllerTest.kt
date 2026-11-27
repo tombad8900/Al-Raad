@@ -1,5 +1,6 @@
 package com.alraad.feature.player
 
+import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
@@ -7,11 +8,14 @@ import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.StreamFormat
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.core.common.contracts.StreamUrl
+import com.alraad.core.common.contracts.PlaybackRequest
+import com.alraad.core.common.contracts.SubtitleTrack
 import com.alraad.feature.player.impl.Media3PlayerController
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -114,6 +118,82 @@ class Media3PlayerControllerTest {
         assertNotNull(drm)
         assertEquals("https://lic.example/widevine", drm?.licenseUri?.toString())
         assertEquals(mapOf("Authorization" to "Bearer t"), drm?.licenseRequestHeaders)
+    }
+
+    @Test
+    fun `subtitle request headers never inherit video credentials`() {
+        val streamHeaders =
+            mapOf(
+                "Cookie" to "video-session=secret",
+                "Authorization" to "Bearer video-secret",
+                "Referer" to "https://video.example/watch",
+                "User-Agent" to "VideoBrowser/1",
+            )
+        val subtitle =
+            SubtitleTrack(
+                id = "tab:page:subtitle",
+                url = "https://subtitle.example/ar.vtt",
+                mimeType = "text/vtt",
+                language = "ar",
+                label = "Arabic",
+                sourcePageUrl = "https://page.example/watch",
+                sourceTabId = "tab-1",
+                requestHeaders =
+                    mapOf(
+                        "Accept" to "text/vtt",
+                        "User-Agent" to "SubtitleBrowser/2",
+                        "Cookie" to "must-not-be-sent",
+                        "Authorization" to "must-not-be-sent",
+                    ),
+            )
+
+        val subtitleHeaders =
+            controller.headersForRequest(Uri.parse(subtitle.url), streamHeaders, listOf(subtitle))
+        val videoHeaders =
+            controller.headersForRequest(Uri.parse("https://video.example/manifest.m3u8"), streamHeaders, listOf(subtitle))
+
+        assertEquals("text/vtt", subtitleHeaders["Accept"])
+        assertEquals("SubtitleBrowser/2", subtitleHeaders["User-Agent"])
+        assertFalse(subtitleHeaders.containsKey("Cookie"))
+        assertFalse(subtitleHeaders.containsKey("Authorization"))
+        assertEquals("video-session=secret", videoHeaders["Cookie"])
+        assertEquals("Bearer video-secret", videoHeaders["Authorization"])
+    }
+
+    @Test
+    fun `playback request attaches external subtitle configurations to Media3 item`() {
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example.com/movie.mp4",
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+            )
+        val subtitle =
+            SubtitleTrack(
+                id = "tab:page:ar",
+                url = "https://cdn.example.com/movie.ar.vtt",
+                mimeType = "text/vtt",
+                language = "ar",
+                label = "Arabic",
+                sourcePageUrl = "https://page.example/watch",
+                sourceTabId = "tab-1",
+            )
+        val request =
+            PlaybackRequest(
+                sources = listOf(stream),
+                subtitles = listOf(subtitle),
+                sourcePageUrl = subtitle.sourcePageUrl,
+                sourceTabId = subtitle.sourceTabId,
+            )
+
+        controller.play(request)
+
+        assertEquals(request, controller.currentPlaybackRequest.value)
+        val configurations =
+            controller.currentPlayer()?.currentMediaItem?.localConfiguration?.subtitleConfigurations
+        assertEquals(1, configurations?.size)
+        assertEquals("text/vtt", configurations?.single()?.mimeType)
+        assertEquals("ar", configurations?.single()?.language)
     }
 
     @Test fun `switching streams replaces the player so UI state rebinding sees the new instance`() {
