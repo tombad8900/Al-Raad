@@ -88,6 +88,7 @@ class StreamSnifferTest {
         assertNull(sniffer.onRequestObserved("https://cdn.example.com/recent.m3u8"))
         assertTrue(sniffer.onRequestObserved("https://cdn.example.com/oldest.m3u8") != null)
     }
+
     @Test
     fun `reports duplicate observations with their originating page and tab`() {
         val sniffer = StreamSniffer(noopLogger)
@@ -125,5 +126,3 @@ class StreamSnifferTest {
             observations,
         )
     }
-
-}
