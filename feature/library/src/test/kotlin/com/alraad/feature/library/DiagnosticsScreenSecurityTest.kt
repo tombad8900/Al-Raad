@@ -73,9 +73,10 @@ class DiagnosticsScreenSecurityTest {
 
                 override suspend fun update(settings: AppSettings) = Unit
             }
-        val viewModel = testBlocklistDeps(settings, logger).let { (store, updater, adBlocker) ->
-            SettingsDiagnosticsViewModel(settings, logger, store, updater, adBlocker)
-        }
+        val viewModel =
+            testBlocklistDeps(settings, logger).let { (store, updater, adBlocker) ->
+                SettingsDiagnosticsViewModel(settings, logger, store, updater, adBlocker)
+            }
         var copied = ""
         var exported = ""
 
