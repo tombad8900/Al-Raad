@@ -42,12 +42,12 @@ object DiagnosticsRedactor {
         )
 
     private val cookieHeaderAssignment =
-        Regex("""(?im)(["']?(?:set-cookie|cookie)["']?\s*[:=]\s*)[^\r\n]*""")
+        Regex("""(?im)(^|[\r\n{,;\s])(["']?(?:set-cookie|cookie)["']?\s*[:=]\s*)[^\r\n]*""")
 
     private val headerAssignment =
         Regex(
             listOf(
-                """(?i)(["']?[A-Za-z0-9_-]*(?:proxy-authorization|authorization|x-api-key|api-key|access-token|""",
+                """(?i)(^|[\r\n{,;\s])(["']?[A-Za-z0-9_-]*(?:proxy-authorization|authorization|x-api-key|api-key|access-token|""",
                 """refresh-token|id-token|token|session(?:-id)?|jwt|client-secret|secret|password|passwd|""",
                 """signature|credential|private-key)["']?\s*[:=]\s*)""",
                 """(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^ \t,;]+|[^\s,;]+)""",
@@ -71,11 +71,11 @@ object DiagnosticsRedactor {
     fun redactText(value: String): String {
         var safe =
             cookieHeaderAssignment.replace(value) { match ->
-                match.groupValues[1] + REDACTED
+                match.groupValues[1] + match.groupValues[2] + REDACTED
             }
         safe =
             headerAssignment.replace(safe) { match ->
-                match.groupValues[1] + REDACTED
+                match.groupValues[1] + match.groupValues[2] + REDACTED
             }
         safe =
             queryAssignment.replace(safe) { match ->
