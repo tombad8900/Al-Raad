@@ -132,12 +132,14 @@ class BrowserViewModelStreamActionsTest {
     @Test
     fun `stream picker sorts formats and removes duplicate URLs`() {
         val tab = tabManager.openTab("https://page.example/watch")
-        val dash = DetectedStreamItem(
+        val dash =
+            DetectedStreamItem(
             StreamUrl("https://cdn.example/z.mpd", StreamFormat.DASH, StreamSource.NETWORK),
             tab.url,
             tab.id,
         )
-        val hls = DetectedStreamItem(
+        val hls =
+            DetectedStreamItem(
             StreamUrl("https://cdn.example/a.m3u8", StreamFormat.HLS, StreamSource.NETWORK),
             tab.url,
             tab.id,
