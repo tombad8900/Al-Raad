@@ -20,7 +20,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
-import androidx.media3.common.AnalyticsListener
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.test.espresso.Espresso.onView
@@ -176,6 +177,7 @@ class AppScenarioTest {
         return server
     }
 
+    @OptIn(UnstableApi::class)
     private fun waitForRenderedVideoFrames() {
         var attachedPlayer: ExoPlayer? = null
         composeRule.waitUntil(timeoutMillis = 15_000) {
