@@ -79,11 +79,17 @@ class BrowserViewModel
                     val onCurrentPage = track.sourcePageUrl in currentPageUrlsByTab.value[track.sourceTabId].orEmpty()
                     if (onCurrentPage) {
                         subtitlesByTab.update { current ->
-                            current + (track.sourceTabId to mergeSubtitleTracks(current[track.sourceTabId].orEmpty(), listOf(track)))
+                            current +
+                                (track.sourceTabId to
+                                    mergeSubtitleTracks(current[track.sourceTabId].orEmpty(), listOf(track)))
                         }
                         pendingSubtitlesByTab.update { current ->
                             val remaining = current[track.sourceTabId].orEmpty().filterNot { it.id == track.id }
-                            if (remaining.isEmpty()) current - track.sourceTabId else current + (track.sourceTabId to remaining)
+                            if (remaining.isEmpty()) {
+                                current - track.sourceTabId
+                            } else {
+                                current + (track.sourceTabId to remaining)
+                            }
                         }
                     } else {
                         // WebView's shouldInterceptRequest can race the UI-thread page-start
@@ -160,7 +166,8 @@ class BrowserViewModel
 
                 val pending = pendingSubtitlesByTab.value[tabId].orEmpty()
                 val ready = pending.filter { it.sourcePageUrl in updatedUrls }
-                val remaining = if (startsNewNavigation) emptyList() else pending.filterNot { it.sourcePageUrl in updatedUrls }
+                val remaining =
+                    if (startsNewNavigation) emptyList() else pending.filterNot { it.sourcePageUrl in updatedUrls }
                 if (ready.isNotEmpty()) {
                     subtitlesByTab.update { current ->
                         current + (tabId to mergeSubtitleTracks(current[tabId].orEmpty(), ready))
