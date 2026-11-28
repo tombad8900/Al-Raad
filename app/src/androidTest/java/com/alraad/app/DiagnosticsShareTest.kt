@@ -1,5 +1,6 @@
 package com.alraad.app
 
+import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
@@ -35,8 +36,15 @@ class DiagnosticsShareTest {
 
     @Test fun copyOfAnEmptyLogReportsNothingAndLeavesClipboardAlone() {
         var copied = CopyResult.COPIED
-        instrumentation.runOnMainSync { copied = copyDiagnostics(context, "  ") }
+        var clipboardText: String? = null
+        instrumentation.runOnMainSync {
+            val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            manager.setPrimaryClip(ClipData.newPlainText("sentinel", "keep-existing-clip"))
+            copied = copyDiagnostics(context, "  ")
+            clipboardText = manager.primaryClip?.getItemAt(0)?.text?.toString()
+        }
         assertEquals(CopyResult.EMPTY, copied)
+        assertEquals("keep-existing-clip", clipboardText)
     }
 
     @Test fun clipboardFailureIsReportedWithoutThrowing() {
