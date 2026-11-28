@@ -101,6 +101,14 @@ class RuntimeBrowserBackTest {
         )
     }
 
+    private fun waitForBrowserAddressBar(timeoutMs: Long = 15_000) {
+        composeRule.waitUntil(timeoutMillis = timeoutMs) {
+            runCatching {
+                composeRule.onAllNodes(hasSetTextAction()).onFirst().assertIsDisplayed()
+            }.isSuccess
+        }
+    }
+
     private fun waitForText(
         text: String,
         timeoutMs: Long = 20_000,
@@ -253,6 +261,7 @@ class RuntimeBrowserBackTest {
             val view2 = checkNotNull(onMain { activeWebViewOnMain() })
             assertNotSame("History tab owns a distinct WebView", view1, view2)
             assertEquals("new tab opens the selected History URL", a, onMain { view2.url })
+            assertEquals("History navigation loads the fixture document", aTitle, onMain { view2.title })
             assertFalse("new tab starts with independent one-page history", onMain { view2.canGoBack() })
 
             // The original tab remains in TabManager with the exact same WebView and history.
