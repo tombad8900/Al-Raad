@@ -154,8 +154,7 @@ class PageTabAssociator {
         }?.also { pageDocuments[url] = it }
 
     @Synchronized
-    fun associationForDocument(documentId: String?): PageDocumentAssociation? =
-        documentId?.let(documentOwners::get)
+    fun associationForDocument(documentId: String?): PageDocumentAssociation? = documentId?.let(documentOwners::get)
 
     @Synchronized
     fun associationForPage(url: String?): PageDocumentAssociation? =
