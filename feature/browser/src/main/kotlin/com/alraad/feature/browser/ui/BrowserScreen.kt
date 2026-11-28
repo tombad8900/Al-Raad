@@ -44,6 +44,16 @@ fun BrowserScreen(
     val pageTabAssociator =
         activeTab?.let { pageTabAssociators.getOrPut(it.id) { PageTabAssociator() } } ?: PageTabAssociator()
     val liveTabIds = tabState.tabs.map { it.id }.toSet()
+    val browserWebViewEnvironment =
+        BrowserWebViewEnvironment(
+            tabManager = tabManager,
+            webViewIntegration = webViewIntegration,
+            diagnosticsLogger = diagnosticsLogger,
+            sniffer = sniffer,
+            subtitleSniffer = subtitleSniffer,
+            settings = settings,
+            webViewPool = webViewPool,
+        )
 
     DisposableEffect(webViewPool) {
         onDispose { webViewPool.clear() }
@@ -76,25 +86,35 @@ fun BrowserScreen(
             },
             onExit = onExit,
         )
-        key(activeTab?.id) {
-            BrowserWebView(
-                activeTab = activeTab,
-                environment =
-                    BrowserWebViewEnvironment(
-                        tabManager = tabManager,
-                        webViewIntegration = webViewIntegration,
-                        diagnosticsLogger = diagnosticsLogger,
-                        sniffer = sniffer,
-                        subtitleSniffer = subtitleSniffer,
-                        settings = settings,
-                        webViewPool = webViewPool,
-                    ),
-                backgroundColor = backgroundColor,
-                handlers = handlers,
-                pageTabAssociator = pageTabAssociator,
-                onLoadingChange = { isLoading = it },
-            )
-        }
+        BrowserWebViewHost(
+            activeTab = activeTab,
+            environment = browserWebViewEnvironment,
+            backgroundColor = backgroundColor,
+            handlers = handlers,
+            pageTabAssociator = pageTabAssociator,
+            onLoadingChange = { isLoading = it },
+        )
+    }
+}
+
+@Composable
+private fun BrowserWebViewHost(
+    activeTab: BrowserTab?,
+    environment: BrowserWebViewEnvironment,
+    backgroundColor: androidx.compose.ui.graphics.Color,
+    handlers: BrowserHandlers,
+    pageTabAssociator: PageTabAssociator,
+    onLoadingChange: (Boolean) -> Unit,
+) {
+    key(activeTab?.id) {
+        BrowserWebView(
+            activeTab = activeTab,
+            environment = environment,
+            backgroundColor = backgroundColor,
+            handlers = handlers,
+            pageTabAssociator = pageTabAssociator,
+            onLoadingChange = onLoadingChange,
+        )
     }
 }
 
