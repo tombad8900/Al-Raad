@@ -180,7 +180,10 @@ jobs:
         # (?second=1) was actually fetched during the run.
         run: |
           grep -q '^/fixture.mp4 cookie=present:session-secret$' /tmp/fixture-serve/requests.log
-          grep -q '^/fixture.mp4?second=1 cookie=' /tmp/fixture-serve/requests.log
+          # The source-switch transition only occurs in the unfiltered suite.
+          if [ -z '${{ inputs.testClass }}' ]; then
+            grep -q '^/fixture.mp4?second=1 cookie=' /tmp/fixture-serve/requests.log
+          fi
 
       - name: Upload app-launch screenshot
         if: always()
