@@ -60,14 +60,15 @@ class WebViewIntegrationHelper
                 // Cached from UI-thread navigation callbacks: shouldInterceptRequest runs
                 // off the WebView UI thread, so reading view.url here would touch WebView
                 // state on the wrong thread.
-                @Volatile private var currentPageUrl: String? = null
+                @Volatile private var currentPageContext = CachedPageContext(null, null)
 
                 override fun onPageStarted(
                     view: WebView,
                     url: String,
                     favicon: android.graphics.Bitmap?,
                 ) {
-                    currentPageUrl = url
+                    val documentId = onPageDocumentStarted(view, url)
+                    currentPageContext = CachedPageContext(url, documentId)
                     onPageStart(view, url)
                     super.onPageStarted(view, url, favicon)
                 }
@@ -77,7 +78,10 @@ class WebViewIntegrationHelper
                     url: String,
                     isReload: Boolean,
                 ) {
-                    currentPageUrl = url
+                    val previousContext = currentPageContext
+                    val previousUrl = previousContext.url
+                    val documentId = onPageUrlChanged(view, previousUrl, previousContext.documentId, url, isReload)
+                    currentPageContext = CachedPageContext(url, documentId)
                     super.doUpdateVisitedHistory(view, url, isReload)
                 }
 
@@ -100,10 +104,16 @@ class WebViewIntegrationHelper
                 ): WebResourceResponse? {
                     val url = request.url.toString()
                     if (request.isForMainFrame) {
-                        currentPageUrl = url
+                        // A new main-frame request must not inherit the previous document token.
+                        // BrowserWebView can resolve the exact pending navigation by this URL.
+                        currentPageContext = CachedPageContext(url, null)
                     }
-                    onRequestObserved(url, request.requestHeaders ?: emptyMap(), currentPageUrl)
+                    // Snapshot the owning document before any asynchronous work or navigation
+                    // can replace the WebView's current page context.
+                    val pageContext = currentPageContext
                     val headers = request.requestHeaders.orEmpty()
+                    onRequestObserved(url, headers, pageContext.url)
+                    onRequestObservedWithContext(url, headers, pageContext.url, pageContext.documentId)
                     val type =
                         RequestTypeMapper.from(
                             url,
@@ -111,7 +121,7 @@ class WebViewIntegrationHelper
                             headers.entries.firstOrNull { it.key.equals("Accept", true) }?.value,
                             headers.entries.firstOrNull { it.key.equals("X-Requested-With", true) }?.value,
                         )
-                    val blocked = runBlocking(Dispatchers.IO) { adBlocker.shouldBlock(url, currentPageUrl.orEmpty(), type) }
+                    val blocked = runBlocking(Dispatchers.IO) { adBlocker.shouldBlock(url, pageContext.url.orEmpty(), type) }
                     if (blocked) {
                         return WebResourceResponse(
                             "text/plain",
@@ -192,3 +202,9 @@ class WebViewIntegrationHelper
 
         private fun jsQuote(value: String): String = value.replace("\\", "\\\\").replace("'", "\\'").let { "'$it'" }
     }
+
+
+private data class CachedPageContext(
+    val url: String?,
+    val documentId: String?,
+)
