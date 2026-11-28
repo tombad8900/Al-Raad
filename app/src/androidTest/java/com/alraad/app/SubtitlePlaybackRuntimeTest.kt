@@ -2,6 +2,7 @@ package com.alraad.app
 
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.text.CueGroup
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -132,22 +133,35 @@ class SubtitlePlaybackRuntimeTest {
                     .build()
         }
         instrumentation.runOnMainSync {
-            val player = checkNotNull(controller.currentPlayer())
             assertTrue("Text track should be enabled before the toggle", textTracksEnabled)
-            assertTrue(
-                "Text track still enabled after disabling",
-                !hasEnabledTextTrack(player),
-            )
+        }
+        // Selection changes apply asynchronously on the playback thread; await them.
+        awaitTextTrackEnabled(false, "Text track still enabled after disabling")
+        instrumentation.runOnMainSync {
+            val player = checkNotNull(controller.currentPlayer())
             player.trackSelectionParameters =
                 player.trackSelectionParameters
                     .buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
                     .build()
-            assertTrue(
-                "Text track not re-enabled",
-                hasEnabledTextTrack(player),
-            )
         }
+        awaitTextTrackEnabled(true, "Text track not re-enabled")
+    }
+
+    private fun awaitTextTrackEnabled(
+        enabled: Boolean,
+        message: String,
+    ) {
+        var state = !enabled
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (System.nanoTime() < deadline) {
+            instrumentation.runOnMainSync {
+                state = hasEnabledTextTrack(checkNotNull(controller.currentPlayer()))
+            }
+            if (state == enabled) return
+            Thread.sleep(250)
+        }
+        assertTrue(message, state == enabled)
     }
 
     @Test
@@ -165,10 +179,12 @@ class SubtitlePlaybackRuntimeTest {
             )
         instrumentation.runOnMainSync {
             controller.addExternalSubtitle(track)
-            val rebuilt = checkNotNull(controller.currentPlayer())
-            selectTextTrack(rebuilt)
-            positionAfter = rebuilt.currentPosition
+            positionAfter = checkNotNull(controller.currentPlayer()).currentPosition
         }
+        // Attached local files carry no language, so a preferred-language selection
+        // cannot match them; select via an explicit override, mirroring a tap on the
+        // track row in the shipped dialog.
+        selectFirstTextTrack()
         // The attach rebuilt the player, so the cue listener from playWithSubtitle
         // went away with the old instance; watch again on the rebuilt player.
         watchCues("Hello from VTT", cues)
@@ -326,6 +342,35 @@ class SubtitlePlaybackRuntimeTest {
                 .buildUpon()
                 .setPreferredTextLanguage("ar")
                 .build()
+    }
+
+    /**
+     * Selects the first text track via an explicit TrackSelectionOverride, waiting for
+     * the group to appear. Mirrors the shipped dialog's row tap; works for tracks
+     * without a language tag.
+     */
+    private fun selectFirstTextTrack() {
+        var applied = false
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+        while (System.nanoTime() < deadline && !applied) {
+            instrumentation.runOnMainSync {
+                val group =
+                    controller.currentPlayer()?.currentTracks?.groups?.firstOrNull {
+                        it.type == C.TRACK_TYPE_TEXT
+                    }
+                val player = controller.currentPlayer()
+                if (group != null && player != null) {
+                    player.trackSelectionParameters =
+                        player.trackSelectionParameters
+                            .buildUpon()
+                            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+                            .build()
+                    applied = true
+                }
+            }
+            if (!applied) Thread.sleep(250)
+        }
+        assertTrue("No text track group appeared to select", applied)
     }
 
     /** Attaches a cue listener to the CURRENT player and re-seeks into the cue window. */
