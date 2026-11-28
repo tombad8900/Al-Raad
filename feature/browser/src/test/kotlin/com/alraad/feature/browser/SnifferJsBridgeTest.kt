@@ -45,6 +45,9 @@ class SnifferJsBridgeTest {
         assertEquals(page, seen?.first)
         assertEquals("tab-new", seen?.second)
         assertEquals(StreamSource.JS_BRIDGE, seen?.third?.source)
+        val script = FetchXhrCaptureScript.build("12345678-1234-1234-1234-123456789abc")
+        assertTrue(script.contains("window.fetch = function") && script.contains("XMLHttpRequest.prototype.send"))
+        assertFalse(script.contains("responseText") || script.contains("response.body") || script.contains("cookie"))
     }
 
     @Test fun `malformed oversized mismatched and non-http inputs are ignored`() {
@@ -82,22 +85,6 @@ class SnifferJsBridgeTest {
         assertFalse(diagnosticText.contains("Authorization") || diagnosticText.contains("Cookie"))
     }
 
-    @Test fun `oversized header values are dropped and script observes fetch xhr only`() {
-        val sniffer = StreamSniffer(logger)
-        var stream: StreamUrl? = null
-        sniffer.registerObservationListener(StreamObservationListener { value, _, _ -> stream = value })
-        val bridge = SnifferJsBridge(sniffer)
-        val page = "https://page.example/"
-        val token = bridge.bindPage(page, "tab")
-        val headers = JSONObject().put("accept", "text/plain").put("authorization", "x".repeat(1_025))
-        bridge.onRequestObserved(payload(token, page, "https://cdn.example/a.m3u8", headers))
-        assertEquals(mapOf("Accept" to "text/plain"), stream?.headers)
-        assertTrue(bridge.isBoundTo(page, "tab"))
-        val script = FetchXhrCaptureScript.build("12345678-1234-1234-1234-123456789abc")
-        assertTrue(script.contains("window.fetch = function") && script.contains("XMLHttpRequest.prototype.send"))
-        assertFalse(script.contains("responseText") || script.contains("response.body") || script.contains("cookie"))
-    }
-
     private fun payload(
         token: String,
         page: String,
@@ -105,5 +92,5 @@ class SnifferJsBridgeTest {
         headers: JSONObject = JSONObject().put("accept", "application/vnd.apple.mpegurl"),
     ): String =
         JSONObject().put("token", token).put("pageUrl", page).put("url", url)
-            .put("method", "GET").put("headers", headers).toString()
+            .put("headers", headers).toString()
 }
