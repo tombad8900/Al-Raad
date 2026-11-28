@@ -125,21 +125,33 @@ class RuntimeBrowserBackTest {
                 "viewExists=${onMain { activeWebViewOnMain() != null }} ${uiDiagnostics()} " +
                 "serverRequests=${activeServer?.requestCount} ${serverProbe(expected)} "
         val port = activeServer?.port
+        val timers = resumeTimersControl()
         val controls =
-            "directLocalhost=${webViewControl(expected)} " +
+            "resumeTimers=$timers " +
+                "directLocalhost=${webViewControl(expected)} " +
                 "ipv4=${webViewControl("http://127.0.0.1:$port/ctl-v4")} " +
                 "webviewLogs=${webViewLogs()})"
         assertEquals(failure + controls, expected, actual)
     }
 
-    /** Control: load [target] straight into the active WebView (bypassing the app's tab sync) and report what happened. */
+    /** Control 1: unpause the process-wide WebView timers, then see whether the already-issued app load reaches the server. */
+    private fun resumeTimersControl(): String {
+        val before = activeServer?.requestCount ?: 0
+        onMain { activeWebViewOnMain()?.resumeTimers() }
+        val end = System.currentTimeMillis() + 8_000
+        while (System.currentTimeMillis() < end && (activeServer?.requestCount ?: 0) == before) Thread.sleep(250)
+        return "[serverHit=${(activeServer?.requestCount ?: 0) > before} url=${url()}]"
+    }
+
+    /** Control: load [target] straight into the active WebView and wait for a real server hit and a finished page, not a url flip. */
     private fun webViewControl(target: String): String {
         val before = activeServer?.requestCount ?: 0
         onMain { activeWebViewOnMain()?.loadUrl(target) }
         val end = System.currentTimeMillis() + 8_000
-        while (System.currentTimeMillis() < end && url() != target) Thread.sleep(250)
-        val reached = url()
-        return "[url=${reached == target} now=$reached requestsDelta=${(activeServer?.requestCount ?: 0) - before}]"
+        while (System.currentTimeMillis() < end && (activeServer?.requestCount ?: 0) == before) Thread.sleep(250)
+        val hits = (activeServer?.requestCount ?: 0) - before
+        val title = onMain { activeWebViewOnMain()?.title }
+        return "[serverHits=$hits now=${url()} title=$title]"
     }
 
     /** Wait for the initial tab and its actual attached WebView, not merely the address field. */
