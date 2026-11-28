@@ -18,7 +18,6 @@ fun BrowserWebView(
     backgroundColor: Color,
     handlers: BrowserHandlers,
     pageTabAssociator: PageTabAssociator,
-    webViewPool: BrowserWebViewPool,
     onLoadingChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -27,7 +26,7 @@ fun BrowserWebView(
         AndroidView(
             modifier = modifier.fillMaxSize(),
             factory = { context ->
-                webViewPool.obtain(activeTab.id) {
+                environment.webViewPool.obtain(activeTab.id) {
                     WebView(context).apply {
                         setBackgroundColor(backgroundColor.toArgb())
                         SafeWebViewConfig.apply(this, environment.settings)
