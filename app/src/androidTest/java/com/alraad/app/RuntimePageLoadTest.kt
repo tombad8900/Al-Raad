@@ -34,7 +34,7 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Bounded real-page evidence on an emulator: loads https://rotana.net/ar in a real WebView through
+ * Bounded real-page evidence on an emulator: loads rotana.net and mycima.health in a real WebView through
  * WebViewIntegrationHelper, once with the real lists and engine and once with blocking off, and writes
  * request counts and a screenshot of each. Emulator only; asserts nothing about phone behavior.
  */
@@ -79,6 +79,7 @@ class RuntimePageLoadTest {
     @SuppressLint("SetJavaScriptEnabled")
     private fun load(
         label: String,
+        pageUrl: String,
         blocker: AdBlocker,
     ) {
         val requests = AtomicInteger()
@@ -110,7 +111,7 @@ class RuntimePageLoadTest {
             val base = helper.webViewClient(onPageFinished = { finished.countDown() })
             web.webViewClient = base
             composeRule.activity.setContentView(web)
-            web.loadUrl("https://rotana.net/ar")
+            web.loadUrl(pageUrl)
         }
         val done = finished.await(60, TimeUnit.SECONDS)
         Thread.sleep(SETTLE_MS)
@@ -163,12 +164,15 @@ class RuntimePageLoadTest {
                     resourceType: String,
                 ): Boolean = false
             }
-        load("control-off", allow)
-        load("engine-on", blocker)
+        SITES.forEach { (name, url) ->
+            load("$name-control-off", url, allow)
+            load("$name-engine-on", url, blocker)
+        }
         note("DONE")
     }
 
     private companion object {
+        val SITES = listOf("rotana" to "https://rotana.net/ar", "mycima" to "https://mycima.health/")
         const val TAG = "RUNTIME-PAGE"
         const val SETTLE_MS = 6_000L
     }
