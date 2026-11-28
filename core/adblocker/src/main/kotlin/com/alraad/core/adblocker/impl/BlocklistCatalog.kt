@@ -1,5 +1,8 @@
 package com.alraad.core.adblocker.impl
 
+/** How a list is written. Only [HOSTS] lists are fully expressible by the domain engine. */
+enum class BlocklistFormat { HOSTS, ABP }
+
 /** One downloadable blocklist: identity, source, license and on/off state key. */
 data class BlocklistSource(
     val id: String,
@@ -7,6 +10,8 @@ data class BlocklistSource(
     val url: String,
     val license: String,
     val enabledByDefault: Boolean,
+    /** [BlocklistFormat.ABP] lists need a real rule matcher; the domain engine keeps them inactive. */
+    val format: BlocklistFormat = BlocklistFormat.ABP,
     /** A download below this many parsed domains never promotes (last-known-good kept). */
     val minDomains: Int = 100,
 )
@@ -14,8 +19,10 @@ data class BlocklistSource(
 /**
  * Brave's official lists: the upstream EasyList family Brave builds on, plus
  * Brave's own lists from brave/adblock-lists (MPL-2.0), and the bundled asset as
- * the always-available baseline. Only the `||domain^` subset is consumed today;
- * Brave lists carry many @@ / cosmetic / scriptlet rules this engine ignores.
+ * the always-available baseline. Only [BlocklistFormat.HOSTS] lists are active today.
+ * ABP-syntax lists stay in the catalog with their toggles but are inactive until a matcher
+ * that honors path, option, exception and cosmetic rules exists; a domain-only parser cannot
+ * represent them faithfully (it widened path rules into whole-site blocks).
  * See docs/adblock-lists.md for exact scope and licenses.
  */
 object BlocklistCatalog {
@@ -29,6 +36,7 @@ object BlocklistCatalog {
                 url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
                 license = "MIT",
                 enabledByDefault = true,
+                format = BlocklistFormat.HOSTS,
             ),
             BlocklistSource(
                 id = "easylist",
@@ -88,6 +96,9 @@ object BlocklistCatalog {
             // exception rules, which this domain-subset engine never applies, so a
             // toggle for it would promise protection it cannot deliver.
         )
+
+    /** True when the list contributes blocks today. */
+    fun isActiveFormat(source: BlocklistSource): Boolean = source.format == BlocklistFormat.HOSTS
 
     fun byId(id: String): BlocklistSource? = sources.firstOrNull { it.id == id }
 }

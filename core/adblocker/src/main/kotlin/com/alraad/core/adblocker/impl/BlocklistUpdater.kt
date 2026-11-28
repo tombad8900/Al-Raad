@@ -22,12 +22,20 @@ class BlocklistUpdater
             withContext(Dispatchers.IO) {
                 val updated = mutableListOf<String>()
                 val kept = mutableListOf<String>()
-                for (source in BlocklistCatalog.sources) {
-                    if (!store.isEnabled(source.id)) continue
-                    val ok = runCatching { download(source.url) }.getOrNull()?.let { store.promote(source.id, it) } ?: false
-                    (if (ok) updated else kept) += source.id
-                    if (!ok) {
-                        logger.log(DiagCategory.ADBLOCK, DiagLevel.WARN, "List update kept last-known-good", mapOf("list" to source.id))
+                for (source in BlocklistCatalog.sources.filter { store.isEnabled(it.id) }) {
+                    if (!BlocklistCatalog.isActiveFormat(source)) {
+                        logger.log(
+                            DiagCategory.ADBLOCK,
+                            DiagLevel.INFO,
+                            "List inactive: ABP syntax needs a rule matcher",
+                            mapOf("list" to source.id),
+                        )
+                    } else {
+                        val ok = runCatching { download(source.url) }.getOrNull()?.let { store.promote(source.id, it) } ?: false
+                        (if (ok) updated else kept) += source.id
+                        if (!ok) {
+                            logger.log(DiagCategory.ADBLOCK, DiagLevel.WARN, "List update kept last-known-good", mapOf("list" to source.id))
+                        }
                     }
                 }
                 Result(updated, kept)
