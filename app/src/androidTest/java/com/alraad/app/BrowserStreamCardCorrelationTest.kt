@@ -35,6 +35,13 @@ class BrowserStreamCardCorrelationTest {
     @Test
     fun crossOriginIframeHlsAppearsAfterTopLevelPushState() {
         composeRule.waitForIdle()
+        val tabManager =
+            EntryPointAccessors.fromApplication(
+                InstrumentationRegistry.getInstrumentation().targetContext.applicationContext,
+                TabManagerTestEntryPoint::class.java,
+            ).tabManager()
+        tabManager.openTab("about:blank")
+        composeRule.waitForIdle()
         composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
 
         var browserWebView: WebView? = null
