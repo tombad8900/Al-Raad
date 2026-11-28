@@ -8,7 +8,16 @@
       otherwise refuses (ERR_CLEARTEXT_NOT_PERMITTED). The androidTest manifest
       cannot do this: it merges into the test apk, not the app under test.
       Release builds keep cleartext disabled.
+
+      largeHeap: the debug app process under instrumentation hosts the WebView
+      engine, ExoPlayer buffers, the blocklist index AND the in-process
+      MockWebServer fixture; the aggregate legitimately exceeds the 192MB
+      standard heap on the CI emulator (OOM in run 46100573832 and again after
+      bounding fixture copies in 46102894650). Release builds keep the standard
+      heap; the shipped app alone does not carry the test server.
     -->
-    <application android:usesCleartextTraffic="true" />
+    <application
+        android:usesCleartextTraffic="true"
+        android:largeHeap="true" />
 
 </manifest>
