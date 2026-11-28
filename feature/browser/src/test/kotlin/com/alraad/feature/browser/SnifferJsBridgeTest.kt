@@ -74,6 +74,30 @@ class SnifferJsBridgeTest {
         )
     }
 
+    @Test fun `early observations flush only to the page that is bound and the buffer is capped`() {
+        val sniffer = StreamSniffer(logger)
+        val seen = mutableListOf<Pair<String?, String>>()
+        sniffer.registerObservationListener(StreamObservationListener { stream, page, _ -> seen += page to stream.url })
+        val bridge = SnifferJsBridge(sniffer)
+        val page = "https://new.example/"
+        val previous = "https://old.example/"
+        bridge.onRequestObserved(payload("", previous, "https://cdn.example/old.m3u8"))
+        repeat(40) { bridge.onRequestObserved(payload("", page, "https://cdn.example/early$it.m3u8")) }
+        assertTrue(seen.isEmpty())
+        bridge.bindPage(page, "tab")
+        assertEquals(32, seen.size)
+        assertTrue(seen.all { it.first == page && it.second.contains("early") })
+        assertFalse(seen.any { it.second.endsWith("early0.m3u8") })
+        bridge.onRequestObserved(payload("", previous, "https://cdn.example/late-old.m3u8"))
+        assertEquals(32, seen.size)
+    }
+
+    @Test fun `static document-start script carries no token`() {
+        val script = FetchXhrCaptureScript.buildStatic()
+        assertTrue(script.contains("})(\"\");"))
+        assertFalse(Regex("[0-9a-f]{8}-[0-9a-f]{4}-").containsMatchIn(script))
+    }
+
     private fun payload(
         token: String,
         page: String,

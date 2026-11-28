@@ -11,6 +11,7 @@ class SnifferJsBridge(
     private val sniffer: StreamSniffer,
 ) {
     private val pageContext = AtomicReference<PageContext?>(null)
+    private val early = ArrayDeque<String>()
 
     fun bindPage(
         pageUrl: String,
@@ -22,6 +23,8 @@ class SnifferJsBridge(
         }
         val token = UUID.randomUUID().toString()
         pageContext.set(PageContext(pageUrl, tabId, token))
+        val pending = synchronized(early) { early.toList().also { early.clear() } }
+        pending.forEach(::onRequestObserved)
         return token
     }
 
@@ -31,9 +34,20 @@ class SnifferJsBridge(
     @JavascriptInterface
     fun onRequestObserved(payload: String) {
         if (payload.isEmpty() || payload.length > MAX_PAYLOAD_LENGTH) return
-        val context = pageContext.get() ?: return
         val json = runCatching { JSONObject(payload) }.getOrNull() ?: return
-        if (json.optString("token") != context.token || json.optString("pageUrl") != context.pageUrl) return
+        val context = pageContext.get()
+        if (context == null || json.optString("pageUrl") != context.pageUrl) {
+            // A document-start script can report before onPageStarted binds its page: hold a few for that page only.
+            if (context == null && isHttpUrl(json.optString("pageUrl"))) {
+                synchronized(early) {
+                    if (early.size >= MAX_EARLY) early.removeFirst()
+                    early.addLast(payload)
+                }
+            }
+            return
+        }
+        val token = json.optString("token")
+        if (token.isNotEmpty() && token != context.token) return
         val url = json.optString("url").takeIf(::isHttpUrl) ?: return
         val headers = safeHeaders(json.optJSONObject("headers") ?: return)
         sniffer.onRequestObserved(
@@ -76,6 +90,7 @@ class SnifferJsBridge(
 
     private companion object {
         const val MAX_PAYLOAD_LENGTH = 16_384
+        const val MAX_EARLY = 32
         const val MAX_URL_LENGTH = 8_192
         const val MAX_HEADERS = 12
         const val MAX_HEADER_VALUE_LENGTH = 1_024
