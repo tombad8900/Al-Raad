@@ -29,9 +29,8 @@ class PageTabAssociator {
     private val pendingNavigationTabs = mutableListOf<PendingNavigation>()
     private val pageDocuments =
         object : LinkedHashMap<String, PageDocumentAssociation>(16, 0.75f, true) {
-            override fun removeEldestEntry(
-                eldest: MutableMap.MutableEntry<String, PageDocumentAssociation>?,
-            ): Boolean = size > MAX_PAGE_MAPPINGS
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PageDocumentAssociation>?): Boolean =
+                size > MAX_PAGE_MAPPINGS
         }
     private val documentOwners = mutableMapOf<String, PageDocumentAssociation>()
     private var lastRequestedNavigation: Pair<String, String>? = null
@@ -161,13 +160,13 @@ class PageTabAssociator {
         documentId?.let(documentOwners::get)
 
     @Synchronized
-    fun associationForPage(url: String?): PageDocumentAssociation? {
-        if (url == null) return null
-        return pageDocuments[url]
-            ?: pendingNavigationTabs.lastOrNull { it.url == url }?.let {
-                PageDocumentAssociation(it.tabId, it.documentId)
-            }
-    }
+    fun associationForPage(url: String?): PageDocumentAssociation? =
+        url?.let { pageUrl ->
+            pageDocuments[pageUrl]
+                ?: pendingNavigationTabs.lastOrNull { it.url == pageUrl }?.let {
+                    PageDocumentAssociation(it.tabId, it.documentId)
+                }
+        }
 
     @Synchronized
     fun onPageFinished(url: String): String? {
