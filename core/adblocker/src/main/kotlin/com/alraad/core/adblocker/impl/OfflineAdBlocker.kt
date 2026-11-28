@@ -20,12 +20,21 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** State of the rule engine behind the context-aware overload. */
-enum class EngineStatus { NOT_BUILT, READY, NATIVE_UNAVAILABLE, BUILD_FAILED }
+enum class EngineStatus {
+    NOT_BUILT,
+    READY,
+    NATIVE_UNAVAILABLE,
+
+    /** A rebuild failed; the last-known-good engine (if any) keeps serving, otherwise nothing is blocked by rules. */
+    BUILD_FAILED,
+}
 
 /** Owns the native engine handle; queries hold a read lock so a rebuild never destroys a handle in use. */
 internal class EngineHolder {
     private val lock = ReentrantReadWriteLock()
     private var handle = 0L
+
+    fun hasEngine(): Boolean = lock.read { handle != 0L }
 
     fun replace(newHandle: Long) =
         lock.write {
@@ -52,6 +61,7 @@ internal class EngineHolder {
  * only in [BlocklistUpdater]. Raw blocked URLs are logged unredacted.
  */
 
+@Suppress("TooManyFunctions") // contract overloads plus engine lifecycle (build, swap, status) share one lock and state
 @Singleton
 class OfflineAdBlocker
     @Inject
@@ -73,13 +83,19 @@ class OfflineAdBlocker
             store.setException(host, false)
         }
 
-        /** Drops the loaded index so the next lookup re-merges the store (after updates/toggles). */
+        /** Drops the loaded index and schedules an engine rebuild (after list updates or toggles). */
         fun reload() {
             index = null
-            engineStatus = EngineStatus.NOT_BUILT
+            rebuildNeeded = true
         }
 
         private val engine = EngineHolder()
+
+        @Volatile private var rebuildNeeded = true
+
+        /** Test seams: engine construction and native availability. */
+        internal var engineFactory: (String) -> Long = NativeAdblock::nativeCreate
+        internal var nativeAvailable: () -> Boolean = NativeAdblock::isAvailable
 
         /** Why the rule engine is or is not active; ABP rules are never applied without it. */
         @Volatile var engineStatus: EngineStatus = EngineStatus.NOT_BUILT
@@ -90,31 +106,41 @@ class OfflineAdBlocker
         private fun baselineText(): String = context.assets.open("blocklist.txt").bufferedReader().use { it.readText() }
 
         private suspend fun ensureEngine() {
-            if (engineStatus != EngineStatus.NOT_BUILT) return
-            loadMutex.withLock {
-                if (engineStatus != EngineStatus.NOT_BUILT) return
-                withContext(Dispatchers.IO) {
-                    if (!NativeAdblock.isAvailable()) {
-                        baselineIndex = DomainIndex(HostsParser.parse(baselineText()))
-                        engineStatus = EngineStatus.NATIVE_UNAVAILABLE
-                        logger.log(DiagCategory.ADBLOCK, DiagLevel.WARN, "Rule engine unavailable; applying bundled hosts only", emptyMap())
-                        return@withContext
-                    }
-                    val rules = StringBuilder()
-                    HostsParser.parse(baselineText()).forEach { rules.append("||").append(it).append("^\n") }
-                    rules.append(store.activeEngineRules())
-                    val started = System.currentTimeMillis()
-                    val handle = runCatching { NativeAdblock.nativeCreate(rules.toString()) }.getOrDefault(0L)
-                    engine.replace(handle)
-                    engineStatus = if (handle != 0L) EngineStatus.READY else EngineStatus.BUILD_FAILED
-                    logger.log(
-                        DiagCategory.ADBLOCK,
-                        if (handle != 0L) DiagLevel.INFO else DiagLevel.WARN,
-                        "Rule engine $engineStatus",
-                        mapOf("buildMs" to (System.currentTimeMillis() - started).toString()),
-                    )
+            // While a rebuild runs, keep answering from the last-known-good engine instead of waiting for it.
+            val servingOldEngine = engine.hasEngine() && loadMutex.isLocked
+            if (rebuildNeeded && !servingOldEngine) {
+                loadMutex.withLock {
+                    if (rebuildNeeded) withContext(Dispatchers.IO) { rebuildEngine() }
                 }
             }
+        }
+
+        private fun rebuildEngine() {
+            if (!nativeAvailable()) {
+                baselineIndex = DomainIndex(HostsParser.parse(baselineText()))
+                engineStatus = EngineStatus.NATIVE_UNAVAILABLE
+                rebuildNeeded = false
+                logger.log(DiagCategory.ADBLOCK, DiagLevel.WARN, "Rule engine unavailable; applying bundled hosts only", emptyMap())
+                return
+            }
+            // Cleared before reading the store so a reload() during the build schedules another rebuild.
+            rebuildNeeded = false
+            val rules = StringBuilder()
+            HostsParser.parse(baselineText()).forEach { rules.append("||").append(it).append("^\n") }
+            rules.append(store.activeEngineRules())
+            val started = System.currentTimeMillis()
+            val handle = runCatching { engineFactory(rules.toString()) }.getOrDefault(0L)
+            if (handle != 0L) engine.replace(handle)
+            engineStatus = if (handle != 0L) EngineStatus.READY else EngineStatus.BUILD_FAILED
+            logger.log(
+                DiagCategory.ADBLOCK,
+                if (handle != 0L) DiagLevel.INFO else DiagLevel.WARN,
+                "Rule engine $engineStatus",
+                mapOf(
+                    "buildMs" to (System.currentTimeMillis() - started).toString(),
+                    "keptLastGood" to (handle == 0L && engine.hasEngine()).toString(),
+                ),
+            )
         }
 
         @Volatile private var enabledCache: Pair<Long, Boolean>? = null
@@ -163,7 +189,7 @@ class OfflineAdBlocker
             ensureEngine()
             val blocked =
                 when (engineStatus) {
-                    EngineStatus.READY -> engine.query(url, sourceUrl, resourceType) ?: false
+                    EngineStatus.READY, EngineStatus.BUILD_FAILED -> engine.query(url, sourceUrl, resourceType) ?: false
                     EngineStatus.NATIVE_UNAVAILABLE -> baselineIndex?.contains(host.orEmpty()) ?: false
                     else -> false
                 }
