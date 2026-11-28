@@ -3,9 +3,9 @@ package com.alraad.feature.browser
 import com.alraad.feature.browser.ui.PageTabAssociator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -143,5 +143,4 @@ class PageTabAssociatorTest {
         assertNull(associator.associationForDocument(oldDocument))
         assertEquals(newDocument, associator.associationForPage(url)?.documentId)
     }
-
 }
