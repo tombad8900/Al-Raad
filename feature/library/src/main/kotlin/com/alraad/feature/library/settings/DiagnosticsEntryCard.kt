@@ -63,6 +63,7 @@ fun DiagnosticsEntryCard(
                     text = "عرض سجل الأخطاء والأحداث",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                 )
             }
             Icon(
