@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.app.navigation.CopyResult
 import com.alraad.app.navigation.ExportResult
@@ -14,15 +15,30 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 
 /** Real clipboard and FileProvider handoff for the diagnostics Copy and Export actions (emulator). */
 class DiagnosticsShareTest {
+    // Android only lets the focused app read the clipboard, so the clipboard tests run with an Activity in front.
+    @get:Rule val activityRule = ActivityScenarioRule(MainActivity::class.java)
+
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context = instrumentation.targetContext
     private val log = "2026-11-28\tWEBVIEW\tWARN\tLoad failed\turl=https://example.test/a.ico"
 
+    private fun awaitFocus() {
+        val end = System.currentTimeMillis() + 10_000
+        var focused = false
+        while (!focused && System.currentTimeMillis() < end) {
+            activityRule.scenario.onActivity { focused = it.hasWindowFocus() }
+            if (!focused) Thread.sleep(200)
+        }
+        assertTrue("MainActivity never gained window focus", focused)
+    }
+
     @Test fun copyPutsTheLogOnTheSystemClipboard() {
+        awaitFocus()
         var copied = CopyResult.FAILED
         var clip: String? = null
         instrumentation.runOnMainSync {
@@ -35,6 +51,7 @@ class DiagnosticsShareTest {
     }
 
     @Test fun copyOfAnEmptyLogReportsNothingAndLeavesClipboardAlone() {
+        awaitFocus()
         var copied = CopyResult.COPIED
         var clipboardText: String? = null
         instrumentation.runOnMainSync {
