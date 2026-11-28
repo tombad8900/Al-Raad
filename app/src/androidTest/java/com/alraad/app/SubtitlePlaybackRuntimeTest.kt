@@ -324,16 +324,10 @@ class SubtitlePlaybackRuntimeTest {
             }
         instrumentation.runOnMainSync {
             controller.play(PlaybackRequest(sources = listOf(stream), subtitles = subtitles))
-            val player = checkNotNull(controller.currentPlayer()) { "Player build failed" }
-            selectTextTrack(player)
-            // Deterministic cue emission: pause inside the cue window instead of racing
-            // the subtitle fetch against playback crossing 4s (the flaky "no cue"
-            // failure mode, runs 46112042274/46114354695). onCues fires on the paused
-            // seek position once the subtitle finishes loading.
-            player.playWhenReady = false
-            player.seekTo(CUE_WINDOW_MS)
+            selectTextTrack(checkNotNull(controller.currentPlayer()) { "Player build failed" })
         }
-        watchCues(expectedCue, cueLatch)
+        // Without a subtitle there is nothing to emit; attach-only for that caller.
+        watchCues(expectedCue, cueLatch, awaitCycles = subtitles.isNotEmpty())
         return cueLatch
     }
 
@@ -380,10 +374,18 @@ class SubtitlePlaybackRuntimeTest {
         assertTrue("No text track group appeared to select", applied)
     }
 
-    /** Attaches a cue listener to the CURRENT player and re-seeks into the cue window. */
+    /**
+     * Awaits [expectedCue] on the CURRENT player. Each cycle re-seeks into the 0-4s
+     * fixture cue window and briefly plays: while playing, onCues fires as soon as the
+     * subtitle load completes with the position inside the window. A pure paused seek
+     * misses cues that finish loading after the paused render pass, and a single
+     * play-through races the fetch against crossing the window end (the flaky
+     * failures in runs 46112042274/46114354695/46115550853) - the cycles remove both.
+     */
     private fun watchCues(
         expectedCue: String,
         cueLatch: CountDownLatch,
+        awaitCycles: Boolean = true,
     ) {
         instrumentation.runOnMainSync {
             val player = checkNotNull(controller.currentPlayer()) { "Player build failed" }
@@ -396,10 +398,18 @@ class SubtitlePlaybackRuntimeTest {
                     }
                 },
             )
-            // Re-seek into the paused cue window so cues that fired before listener
-            // attach re-emit.
-            player.seekTo(CUE_WINDOW_MS)
         }
+        if (!awaitCycles) return
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60)
+        while (System.nanoTime() < deadline && cueLatch.count > 0) {
+            instrumentation.runOnMainSync {
+                val player = controller.currentPlayer() ?: return@runOnMainSync
+                player.seekTo(CUE_WINDOW_MS)
+                player.playWhenReady = true
+            }
+            cueLatch.await(5, TimeUnit.SECONDS)
+        }
+        instrumentation.runOnMainSync { controller.currentPlayer()?.pause() }
     }
 
     private fun hasEnabledTextTrack(player: Player): Boolean =
