@@ -24,5 +24,6 @@ class BrowserWebViewPoolTest {
         assertNull(pool.get("first"))
         assertSame(second, pool.get("second"))
         pool.clear()
+        assertNull(pool.get("second"))
     }
 }
