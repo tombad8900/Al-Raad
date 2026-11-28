@@ -49,6 +49,12 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
+/** Recognizable bright fixture position for deterministic Fit/Fill captures. */
+private const val CAPTURE_POSITION_MS = 90_000L
+
+/** Acceptable undershoot when awaiting the deterministic capture position. */
+private const val SEEK_TOLERANCE_MS = 2_000L
+
 /**
  * End-to-end runtime scenario on the real app: browse a page, then prove the visit
  * is recorded in history, bookmarked, and survives an activity reopen. Each step
@@ -119,9 +125,13 @@ class AppScenarioTest {
     fun localVideoRendersInPlayerAndFitFillCaptures() {
         composeRule.waitForIdle()
         waitForNode(hasSetTextAction(), 20_000)
-        val server = localPlaybackServer(downloadPlaybackFixture())
+        // Prefer a host-served fixture (CI passes fixtureBaseUrl): keeps the ~20MB clip
+        // and its serving buffers OUT of the instrumented process. The in-process
+        // MockWebServer path remains as the local fallback, with bounded range copies.
+        val hostBase = InstrumentationRegistry.getArguments().getString("fixtureBaseUrl")
+        val server = if (hostBase == null) localPlaybackServer(downloadPlaybackFixture()) else null
         try {
-            val pageUrl = server.url("/player.html").toString()
+            val pageUrl = hostBase?.let { "$it/player.html" } ?: server!!.url("/player.html").toString()
             composeRule.onNode(hasSetTextAction()).performTextInput(pageUrl)
             composeRule.onNode(hasSetTextAction()).performImeAction()
             // T2 picker UI (post #73): a detected stream shows the picker section with
@@ -138,8 +148,7 @@ class AppScenarioTest {
             composeRule.onNodeWithText("\u062a\u0634\u063a\u064a\u0644").performClick()
             // The player route shows its controls; the no-stream placeholder must be absent.
             waitForNode(hasContentDescription("Fullscreen"), 15_000)
-            waitForRenderedVideoFrames()
-            Thread.sleep(1_000)
+            waitForRenderedVideoFrames().also { seekAndPauseForCapture(it) }
             capture("scenario-player-fit-frames.png")
 
             composeRule.onNode(hasContentDescription("Fill screen")).performClick()
@@ -148,7 +157,7 @@ class AppScenarioTest {
             Thread.sleep(500)
             capture("scenario-player-fill-frames.png")
         } finally {
-            server.shutdown()
+            server?.shutdown()
         }
     }
 
@@ -177,11 +186,7 @@ class AppScenarioTest {
                                 .setBody(
                                     "<html><body><video autoplay muted playsinline src='/fixture.mp4'></video></body></html>",
                                 )
-                        "/fixture.mp4" ->
-                            MockResponse()
-                                .setHeader("Content-Type", "video/mp4")
-                                .setHeader("Accept-Ranges", "bytes")
-                                .setBody(Buffer().write(fixture))
+                        "/fixture.mp4" -> fixtureResponse(request, fixture)
                         else -> MockResponse().setResponseCode(404)
                     }
             }
@@ -189,8 +194,32 @@ class AppScenarioTest {
         return server
     }
 
+    /**
+     * Serves the fixture with Range support: the ~20MB clip held in memory is copied per
+     * request body, and concurrent full-body copies OOM the shared app/test process (seen
+     * on main run 46100573832). Range replies copy only the requested window.
+     */
+    private fun fixtureResponse(
+        request: RecordedRequest,
+        fixture: ByteArray,
+    ): MockResponse {
+        val base =
+            MockResponse()
+                .setHeader("Content-Type", "video/mp4")
+                .setHeader("Accept-Ranges", "bytes")
+        val range = request.getHeader("Range")?.takeIf { it.startsWith("bytes=") } ?: return base.setBody(Buffer().write(fixture))
+        val parts = range.removePrefix("bytes=").split("-")
+        val start = (parts[0].toLongOrNull() ?: 0L).coerceIn(0L, (fixture.size - 1).toLong())
+        val requestedEnd = parts.getOrNull(1)?.takeIf { it.isNotEmpty() }?.toLongOrNull() ?: (fixture.size - 1).toLong()
+        val end = requestedEnd.coerceIn(start, (fixture.size - 1).toLong())
+        return base
+            .setResponseCode(206)
+            .setHeader("Content-Range", "bytes $start-$end/${fixture.size}")
+            .setBody(Buffer().write(fixture.copyOfRange(start.toInt(), end.toInt() + 1)))
+    }
+
     @OptIn(UnstableApi::class)
-    private fun waitForRenderedVideoFrames() {
+    private fun waitForRenderedVideoFrames(): ExoPlayer {
         var attachedPlayer: ExoPlayer? = null
         composeRule.waitUntil(timeoutMillis = 15_000) {
             runCatching {
@@ -260,6 +289,32 @@ class AppScenarioTest {
         } finally {
             instrumentation.runOnMainSync { player.removeAnalyticsListener(listener) }
         }
+        return player
+    }
+
+    /**
+     * Deterministic visual evidence: seek to a known recognizable (non-dark) fixture
+     * position, wait until the player reports that position in READY, then pause so the
+     * Fit and Fill captures show the same frame. Early-clip frames are near-black, which
+     * made prior captures ambiguous (run 46104292921 fit capture).
+     */
+    private fun seekAndPauseForCapture(player: ExoPlayer) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { player.seekTo(CAPTURE_POSITION_MS) }
+        var atPosition = false
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
+        while (System.nanoTime() < deadline) {
+            instrumentation.runOnMainSync {
+                atPosition =
+                    player.currentPosition >= CAPTURE_POSITION_MS - SEEK_TOLERANCE_MS &&
+                    player.playbackState == Player.STATE_READY
+            }
+            if (atPosition) break
+            Thread.sleep(250)
+        }
+        assertTrue("Player did not reach the deterministic capture position", atPosition)
+        instrumentation.runOnMainSync { player.pause() }
+        Thread.sleep(1_200)
     }
 
     private fun rowInList(listTag: String): SemanticsMatcher = hasText("?t=", substring = true) and hasAnyAncestor(hasTestTag(listTag))
