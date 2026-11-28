@@ -1,9 +1,14 @@
 package com.alraad.app
 
+import android.util.Log
 import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.common.text.CueGroup
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.util.EventLogger
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.core.common.contracts.DiagCategory
@@ -324,11 +329,51 @@ class SubtitlePlaybackRuntimeTest {
             }
         instrumentation.runOnMainSync {
             controller.play(PlaybackRequest(sources = listOf(stream), subtitles = subtitles))
-            selectTextTrack(checkNotNull(controller.currentPlayer()) { "Player build failed" })
+            val player = checkNotNull(controller.currentPlayer()) { "Player build failed" }
+            attachEvidenceListener(player)
+            selectTextTrack(player)
         }
         // Without a subtitle there is nothing to emit; attach-only for that caller.
         watchCues(expectedCue, cueLatch, awaitCycles = subtitles.isNotEmpty())
         return cueLatch
+    }
+
+    /**
+     * Evidence logging for the emulator lane: full EventLogger analytics plus explicit
+     * timestamps for text-track selection, cue emission (with playback position) and
+     * player errors. Lets a red run distinguish fixture/test faults (no/mistimed HTTP,
+     * wrong MIME) from player defects (request served, still no cues), instead of
+     * theorizing about cue timing.
+     */
+    private fun attachEvidenceListener(player: Player) {
+        if (player is ExoPlayer) {
+            player.addAnalyticsListener(EventLogger(TAG))
+        }
+        player.addListener(
+            object : Player.Listener {
+                override fun onTracksChanged(tracks: Tracks) {
+                    val textGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+                    Log.i(
+                        TAG,
+                        "tracks textGroups=" + textGroups.size +
+                            " selected=" + textGroups.count { it.isSelected } +
+                            " t=" + System.currentTimeMillis(),
+                    )
+                }
+
+                override fun onCues(cueGroup: CueGroup) {
+                    Log.i(
+                        TAG,
+                        "cues n=" + cueGroup.cues.size +
+                            " pos=" + player.currentPosition + "ms t=" + System.currentTimeMillis(),
+                    )
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.i(TAG, "playerError " + error.errorCodeName + " t=" + System.currentTimeMillis())
+                }
+            },
+        )
     }
 
     /**
@@ -419,7 +464,19 @@ class SubtitlePlaybackRuntimeTest {
 
     private fun subtitleDispatcher(): Dispatcher =
         object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse =
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val response = responseFor(request)
+                // Evidence log: exactly which subtitle/media requests arrived, when,
+                // and what they were served (distinguishes fixture/test vs player faults).
+                Log.i(
+                    TAG,
+                    "serve path=" + request.path + " status=" + response.status.split(' ')[1] +
+                        " bytes=" + (response.getBody()?.size ?: 0L) + " t=" + System.currentTimeMillis(),
+                )
+                return response
+            }
+
+            private fun responseFor(request: RecordedRequest): MockResponse =
                 when (request.path?.substringBefore('?')) {
                     "/video.mp4", "/video2.mp4" ->
                         MockResponse()
@@ -434,6 +491,8 @@ class SubtitlePlaybackRuntimeTest {
         }
 
     private companion object {
+        const val TAG: String = "SubtitleProof"
+
         const val VTT_FIXTURE = "WEBVTT\n\n00:00.000 --> 00:04.000\nHello from VTT\n"
 
         const val SRT_FIXTURE = "1\n00:00:00,000 --> 00:00:04,000\nHello from SRT\n"
