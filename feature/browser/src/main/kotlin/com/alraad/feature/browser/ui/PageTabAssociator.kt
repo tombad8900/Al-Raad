@@ -151,8 +151,7 @@ class PageTabAssociator {
         documentId: String?,
     ): PageDocumentAssociation? {
         val association = documentId?.let(documentOwners::get) ?: return null
-        if (lastBoundDocument?.documentId != documentId) return null
-        if (previousUrl == null || pageDocuments[previousUrl]?.documentId != documentId) return null
+        if (lastBoundDocument != association || previousUrl?.let(pageDocuments::get) != association) return null
         pageDocuments[url] = association
         return association
     }
