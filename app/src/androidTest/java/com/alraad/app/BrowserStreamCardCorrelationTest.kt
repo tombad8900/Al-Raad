@@ -55,7 +55,7 @@ class BrowserStreamCardCorrelationTest {
         composeRule.waitUntil(timeoutMillis = 10_000) {
             var ready = false
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
-                ready = webView.progress == 100
+                ready = webView.url == "about:blank" && webView.progress == 100
             }
             ready
         }
