@@ -30,8 +30,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.LayoutDirection
-import com.alraad.feature.browser.R
 import androidx.compose.ui.unit.dp
+import com.alraad.feature.browser.R
 
 /** Routes a search query (no TLD dot, or contains spaces) to the search engine. */
 private fun searchUrl(query: String): String = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query.trim(), "UTF-8")
