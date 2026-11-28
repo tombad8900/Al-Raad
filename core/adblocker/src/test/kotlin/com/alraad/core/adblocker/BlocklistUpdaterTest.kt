@@ -88,6 +88,29 @@ class BlocklistUpdaterTest {
             }
         }
 
+    @Test fun `a download cut short by the server is rejected and an update far smaller than last-good is kept out`() =
+        runTest {
+            onlyListEnabled()
+            val big = (1..100).joinToString("\n") { "||h$it.example^" } + "\n"
+            updater.fetcher = { big }
+            updater.updateAll()
+            updater.fetcher = { (1..40).joinToString("\n") { "||h$it.example^" } + "\n" }
+            assertEquals(listOf(LIST_ID), updater.updateAll().keptLastGood)
+            assertEquals(100, store.storedDomains(LIST_ID)?.size)
+            val server = java.net.ServerSocket(0)
+            val t =
+                Thread {
+                    server.accept().use { c ->
+                        c.getInputStream().read(ByteArray(1024))
+                        c.getOutputStream().write("HTTP/1.1 200 OK\r\nContent-Length: 5000\r\n\r\n||h1.example^\n".toByteArray())
+                    }
+                }.also { it.start() }
+            val failure = runCatching { updater.download("http://127.0.0.1:${server.localPort}/list") }.exceptionOrNull()
+            t.join()
+            server.close()
+            assertTrue("short body must throw, got $failure", failure != null)
+        }
+
     @Test fun `disabled lists are not fetched`() =
         runTest {
             com.alraad.core.adblocker.impl.BlocklistCatalog.sources.forEach { store.setEnabled(it.id, false) }

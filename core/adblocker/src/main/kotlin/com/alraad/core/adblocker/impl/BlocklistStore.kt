@@ -29,6 +29,7 @@ class BlocklistStore
 
         private companion object {
             const val DEFAULT_MIN_DOMAINS = 100
+            const val MIN_KEPT_FRACTION = 0.5
         }
 
         fun isEnabled(id: String): Boolean = prefs.getBoolean("enabled_$id", BlocklistCatalog.byId(id)?.enabledByDefault ?: true)
@@ -57,6 +58,9 @@ class BlocklistStore
         ): Boolean {
             val domains = AdblockPlusDomainParser.parse(text)
             if (domains.size < effectiveMin(id)) return false
+            // A candidate far smaller than the stored copy is treated as a cut-off download, not a real update.
+            val previous = storedDomains(id)?.size ?: 0
+            if (previous > 0 && domains.size < previous * MIN_KEPT_FRACTION) return false
             val target = File(dir, "$id.domains")
             val tmp = File(dir, "$id.tmp")
             dir.mkdirs()
