@@ -2,6 +2,7 @@ package com.alraad.app
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.app.navigation.CopyResult
@@ -36,6 +37,19 @@ class DiagnosticsShareTest {
         var copied = CopyResult.COPIED
         instrumentation.runOnMainSync { copied = copyDiagnostics(context, "  ") }
         assertEquals(CopyResult.EMPTY, copied)
+    }
+
+    @Test fun clipboardFailureIsReportedWithoutThrowing() {
+        val brokenContext =
+            object : ContextWrapper(context) {
+                override fun getSystemService(name: String): Any? =
+                    if (name == Context.CLIPBOARD_SERVICE) Any() else super.getSystemService(name)
+            }
+        assertEquals(CopyResult.FAILED, copyDiagnostics(brokenContext, log))
+        assertEquals(
+            ExportResult.FAILED,
+            exportDiagnostics(brokenContext, log) { error("share launch failed") },
+        )
     }
 
     @Test fun exportHandsAReadableTextFileToTheChooser() {
