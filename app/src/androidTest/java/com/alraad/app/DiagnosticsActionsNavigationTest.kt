@@ -4,6 +4,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -17,7 +18,6 @@ import androidx.test.espresso.intent.Intents.getIntents
 import androidx.test.core.app.ActivityResult
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.core.common.contracts.DiagCategory
-import com.alraad.core.common.contracts.DiagEntry
 import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.diagnostics.DiagnosticsRedactor
@@ -25,7 +25,6 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import java.io.File
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -111,7 +110,7 @@ class DiagnosticsActionsNavigationTest {
         composeRule.onNodeWithText("الإعدادات").performClick()
         composeRule.onNodeWithContentDescription("سجل التشخيص / Diagnostics log").performClick()
         composeRule.waitUntil(timeoutMillis = 10_000) {
-            runCatching { composeRule.onNodeWithText(marker).assertIsDisplayed() }.isSuccess
+            runCatching { composeRule.onNodeWithText(marker, substring = true).assertIsDisplayed() }.isSuccess
         }
         val entries = runBlocking { logger.observeLogs().first() }.map(DiagnosticsRedactor::redact)
         val expected = entries.joinToString("\n") { entry ->
