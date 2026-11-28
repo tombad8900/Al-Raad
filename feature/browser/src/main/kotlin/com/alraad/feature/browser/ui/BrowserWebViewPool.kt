@@ -17,15 +17,23 @@ class BrowserWebViewPool(context: Context) {
     internal var activeTabId: String? = null
         private set
 
+    internal var timersPaused: Boolean = false
+        private set
+
     fun obtain(tabId: String): WebView =
         views.getOrPut(tabId) { WebView(applicationContext) }.also { webView ->
             (webView.parent as? ViewGroup)?.removeView(webView)
+            if (activeTabId == tabId) webView.onResume() else pause(webView)
         }
 
     fun get(tabId: String): WebView? = views[tabId]
 
     /** Resume only the visible tab; background tabs are paused independently. */
     fun activate(tabId: String?) {
+        if (timersPaused) {
+            views.values.firstOrNull()?.resumeTimers()
+            timersPaused = false
+        }
         activeTabId = tabId
         views.forEach { (id, webView) ->
             if (id == tabId) {
@@ -40,6 +48,10 @@ class BrowserWebViewPool(context: Context) {
     fun pauseAll() {
         activeTabId = null
         views.values.forEach(::pause)
+        if (!timersPaused) {
+            views.values.firstOrNull()?.pauseTimers()
+            timersPaused = views.isNotEmpty()
+        }
     }
 
     fun retainTabs(tabIds: Set<String>) {
@@ -49,12 +61,21 @@ class BrowserWebViewPool(context: Context) {
     }
 
     fun release(tabId: String) {
-        views.remove(tabId)?.let(::destroy)
+        val removed = views.remove(tabId)
+        if (timersPaused && views.isEmpty() && removed != null) {
+            removed.resumeTimers()
+            timersPaused = false
+        }
+        removed?.let(::destroy)
         if (activeTabId == tabId) activeTabId = null
     }
 
     /** Reserved for the actual owner (TabManager) when its lifetime is reset. */
     fun clear() {
+        if (timersPaused) {
+            views.values.firstOrNull()?.resumeTimers()
+            timersPaused = false
+        }
         views.keys.toList().forEach(::release)
         activeTabId = null
     }
