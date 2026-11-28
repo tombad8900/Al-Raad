@@ -3,7 +3,6 @@ package com.alraad.feature.browser.ui
 import android.view.ViewGroup
 import android.webkit.WebView
 
-/** Retains one live WebView per tab so switching tabs never shares or discards page history. */
 class BrowserWebViewPool {
     private val views = mutableMapOf<String, WebView>()
 
