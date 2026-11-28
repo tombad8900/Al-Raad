@@ -109,20 +109,22 @@ class BrowserViewModel
                     tabId: String?,
                     documentId: String?,
                 ) {
-                    if (pageUrl == null || tabId == null) return
-                    val sourcePage = pageUrl
-                    val sourceTabId = tabId
-                    val knownTab = tabManager.state.value.tabs.any { it.id == sourceTabId }
-                    val currentDocumentId = currentDocumentIdsByTab.value[sourceTabId]
-                    val onCurrentPage = sourcePage in currentPageUrlsByTab.value[sourceTabId].orEmpty()
-                    if (!knownTab || !onCurrentPage || documentId != currentDocumentId) return
-                    val item = DetectedStreamItem(stream, sourcePage, sourceTabId, documentId)
-                    streamsByTab.update { current ->
-                        val existing = current[sourceTabId].orEmpty()
-                        val index = existing.indexOfFirst { it.stream.url == stream.url }
-                        val updated =
-                            if (index >= 0) existing.toMutableList().apply { set(index, item) } else existing + item
-                        current + (sourceTabId to updated.takeLast(MAX_STREAMS_PER_TAB))
+                    synchronized(subtitleAssociationLock) {
+                        if (pageUrl == null || tabId == null) return@synchronized
+                        val sourcePage = pageUrl
+                        val sourceTabId = tabId
+                        val knownTab = tabManager.state.value.tabs.any { it.id == sourceTabId }
+                        val currentDocumentId = currentDocumentIdsByTab.value[sourceTabId]
+                        val onCurrentPage = sourcePage in currentPageUrlsByTab.value[sourceTabId].orEmpty()
+                        if (!knownTab || !onCurrentPage || documentId != currentDocumentId) return@synchronized
+                        val item = DetectedStreamItem(stream, sourcePage, sourceTabId, documentId)
+                        streamsByTab.update { current ->
+                            val existing = current[sourceTabId].orEmpty()
+                            val index = existing.indexOfFirst { it.stream.url == stream.url }
+                            val updated =
+                                if (index >= 0) existing.toMutableList().apply { set(index, item) } else existing + item
+                            current + (sourceTabId to updated.takeLast(MAX_STREAMS_PER_TAB))
+                        }
                     }
                 }
             }
@@ -160,7 +162,9 @@ class BrowserViewModel
             synchronized(subtitleAssociationLock) {
                 if (tabManager.state.value.tabs.none { it.id == tabId }) return@synchronized
                 val currentDocumentId = currentDocumentIdsByTab.value[tabId]
-                if (!startsNewNavigation && currentDocumentId != null && documentId != currentDocumentId) return@synchronized
+                if (!startsNewNavigation && currentDocumentId != null && documentId != currentDocumentId) {
+                    return@synchronized
+                }
                 if (startsNewNavigation) {
                     currentDocumentIdsByTab.update { current -> current + (tabId to documentId) }
                 }
@@ -198,7 +202,10 @@ class BrowserViewModel
                 if (tabManager.state.value.tabs.none { it.id == tabId }) return@synchronized
                 if (currentDocumentIdsByTab.value[tabId] != documentId) return@synchronized
                 val updatedUrls =
-                    (currentPageUrlsByTab.value[tabId].orEmpty() + url).toList().takeLast(MAX_PAGE_URLS_PER_TAB).toSet()
+                    (currentPageUrlsByTab.value[tabId].orEmpty() + url)
+                        .toList()
+                        .takeLast(MAX_PAGE_URLS_PER_TAB)
+                        .toSet()
                 currentPageUrlsByTab.update { current -> current + (tabId to updatedUrls) }
             }
         }
@@ -305,7 +312,10 @@ class BrowserViewModel
             requestedTitle: String,
         ) {
             if (currentDocumentIdsByTab.value[item.sourceTabId] != item.documentId) return
-            val title = requestedTitle.trim().ifBlank { android.net.Uri.parse(item.stream.url).host ?: item.stream.url }
+            val title =
+                requestedTitle.trim().ifBlank {
+                    android.net.Uri.parse(item.stream.url).host ?: item.stream.url
+                }
             viewModelScope.launch {
                 streamActions.saveToLibrary(item.stream, title = title, sourcePageUrl = item.sourcePageUrl)
             }
