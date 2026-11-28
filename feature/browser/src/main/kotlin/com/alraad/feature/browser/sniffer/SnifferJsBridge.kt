@@ -55,8 +55,7 @@ class SnifferJsBridge(
                 val name = rawName.lowercase()
                 val value = source.optString(rawName)
                 if (
-                    name in SAFE_HEADERS && rawName.length <= MAX_HEADER_NAME_LENGTH &&
-                    value.isNotBlank() && value.length <= MAX_HEADER_VALUE_LENGTH &&
+                    name in SAFE_HEADERS && value.isNotBlank() && value.length <= MAX_HEADER_VALUE_LENGTH &&
                     value.none { it.code < 0x20 || it.code == 0x7f }
                 ) {
                     put(HEADER_NAMES.getValue(name), value)
@@ -78,7 +77,6 @@ class SnifferJsBridge(
         const val MAX_PAYLOAD_LENGTH = 16_384
         const val MAX_URL_LENGTH = 8_192
         const val MAX_HEADERS = 12
-        const val MAX_HEADER_NAME_LENGTH = 64
         const val MAX_HEADER_VALUE_LENGTH = 1_024
         val SAFE_HEADERS = setOf("accept", "authorization", "content-type", "range")
         val HEADER_NAMES =
