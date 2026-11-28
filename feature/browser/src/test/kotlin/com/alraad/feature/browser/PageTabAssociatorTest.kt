@@ -109,7 +109,7 @@ class PageTabAssociatorTest {
         associator.recordRequest("tabA", initial)
         val started = associator.onPageStartedWithContext(initial, "tabA")
 
-        val changed = associator.onPageUrlChanged(initial, pushed)
+        val changed = associator.onPageUrlChanged(initial, pushed, started.documentId)
 
         assertEquals("tabA", changed?.tabId)
         assertEquals(started.documentId, changed?.documentId)
@@ -123,7 +123,13 @@ class PageTabAssociatorTest {
         associator.recordRequest("tabA", "https://known.example/")
         associator.onPageStartedWithContext("https://known.example/", "tabA")
 
-        assertNull(associator.onPageUrlChanged("https://unknown.example/", "https://other.example/"))
+        assertNull(
+            associator.onPageUrlChanged(
+                "https://unknown.example/",
+                "https://other.example/",
+                "missing-document",
+            ),
+        )
         assertNull(associator.associationForPage("https://other.example/"))
     }
 
