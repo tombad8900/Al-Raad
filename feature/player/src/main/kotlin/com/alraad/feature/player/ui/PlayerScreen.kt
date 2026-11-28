@@ -373,6 +373,7 @@ private fun QualityMenuButton(
         }
     }
 }
+
 @Composable
 private fun PlayerSurface(
     player: Player?,
