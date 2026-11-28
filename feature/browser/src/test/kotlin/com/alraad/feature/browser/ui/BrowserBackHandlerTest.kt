@@ -10,11 +10,13 @@ class BrowserBackHandlerTest {
         val history = mutableMapOf("first" to 1, "second" to 2)
         var active = "second"
         var search = false
-        fun back(url: String) = handleBrowserBack(
-            url, { history.getValue(active) > 0 },
-            { history[active] = history.getValue(active) - 1 },
-            { search = true },
-        )
+        fun back(url: String) =
+            handleBrowserBack(
+                tabUrl = url,
+                canGoBack = { history.getValue(active) > 0 },
+                goBack = { history[active] = history.getValue(active) - 1 },
+                returnToSearch = { search = true },
+            )
         assertEquals(BrowserBackResult.HISTORY, back("second-c"))
         assertEquals(BrowserBackResult.HISTORY, back("second-b"))
         assertEquals(1, history["first"])
@@ -24,6 +26,9 @@ class BrowserBackHandlerTest {
         assertEquals(BrowserBackResult.HISTORY, back("first-b"))
         assertEquals(0, history["first"])
         assertEquals(0, history["second"])
-        assertEquals(BrowserBackResult.STAY, handleBrowserBack("", { false }, {}, { error("must stay") }))
+        assertEquals(
+            BrowserBackResult.STAY,
+            handleBrowserBack("", { false }, {}, { error("must stay") }),
+        )
     }
 }
