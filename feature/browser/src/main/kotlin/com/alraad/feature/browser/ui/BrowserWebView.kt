@@ -9,6 +9,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.feature.browser.sniffer.FetchXhrCaptureScript
 import com.alraad.feature.browser.sniffer.SnifferJsBridge
@@ -34,11 +36,18 @@ fun BrowserWebView(
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
+            var docStartInstalled = false
             WebView(context).apply {
                 setBackgroundColor(backgroundColor.toArgb())
                 SafeWebViewConfig.apply(this, environment.settings)
                 if (javaScriptEnabled.value) {
                     runCatching { addJavascriptInterface(jsBridge, SNIFFER_BRIDGE_NAME) }
+                    // Runs before page scripts on every navigation; without it the hook is injected after the page starts.
+                    docStartInstalled =
+                        WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT) &&
+                        runCatching {
+                            WebViewCompat.addDocumentStartJavaScript(this, FetchXhrCaptureScript.buildStatic(), setOf("*"))
+                        }.isSuccess
                 }
                 webChromeClient = PopupBlockingWebChromeClient(environment.diagnosticsLogger)
                 webViewClient =
@@ -55,7 +64,7 @@ fun BrowserWebView(
                                 if (id == tabs.state.value.activeTabId) onLoadingChange(true)
                                 if (javaScriptEnabled.value) {
                                     val token = jsBridge.bindPage(url, id)
-                                    if (token.isNotEmpty()) {
+                                    if (token.isNotEmpty() && !docStartInstalled) {
                                         runCatching {
                                             webView.evaluateJavascript(
                                                 FetchXhrCaptureScript.build(token),

@@ -1,8 +1,15 @@
 package com.alraad.feature.browser.sniffer
 
 internal object FetchXhrCaptureScript {
+    /** Token-free variant for `addDocumentStartJavaScript`: it runs before page scripts, so no per-page secret is injected. */
+    fun buildStatic(): String = script("")
+
     fun build(token: String): String {
         require(token.matches(Regex("[0-9a-f-]{36}")))
+        return script(token)
+    }
+
+    private fun script(token: String): String {
         return """
             (function(token) {
               if (window.__alraadCaptureInstalled === token) return;
