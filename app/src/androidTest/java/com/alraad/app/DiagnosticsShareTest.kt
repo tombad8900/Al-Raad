@@ -4,11 +4,11 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.test.platform.app.InstrumentationRegistry
+import com.alraad.app.navigation.CopyResult
 import com.alraad.app.navigation.ExportResult
 import com.alraad.app.navigation.copyDiagnostics
 import com.alraad.app.navigation.exportDiagnostics
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,21 +20,21 @@ class DiagnosticsShareTest {
     private val log = "2026-11-28\tWEBVIEW\tWARN\tLoad failed\turl=https://example.test/a.ico"
 
     @Test fun copyPutsTheLogOnTheSystemClipboard() {
-        var copied = false
+        var copied = CopyResult.FAILED
         var clip: String? = null
         instrumentation.runOnMainSync {
             copied = copyDiagnostics(context, log)
             val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             clip = manager.primaryClip?.getItemAt(0)?.text?.toString()
         }
-        assertTrue(copied)
+        assertEquals(CopyResult.COPIED, copied)
         assertEquals(log, clip)
     }
 
     @Test fun copyOfAnEmptyLogReportsNothingAndLeavesClipboardAlone() {
-        var copied = true
+        var copied = CopyResult.COPIED
         instrumentation.runOnMainSync { copied = copyDiagnostics(context, "  ") }
-        assertFalse(copied)
+        assertEquals(CopyResult.EMPTY, copied)
     }
 
     @Test fun exportHandsAReadableTextFileToTheChooser() {
