@@ -69,6 +69,14 @@ class PageTabAssociator {
         return PageStartAssociation(ownerTabId, startsNewNavigation)
     }
 
+    /** Restore ownership for a retained document after BrowserScreen is recreated. */
+    @Synchronized
+    fun restoreCurrentPage(tabId: String, url: String) {
+        if (url.isBlank() || url == "about:blank") return
+        pageTabIds[url] = tabId
+        lastBoundTabId = tabId
+    }
+
     @Synchronized
     fun onPageFinished(url: String): String? = pageTabIds[url]
 
