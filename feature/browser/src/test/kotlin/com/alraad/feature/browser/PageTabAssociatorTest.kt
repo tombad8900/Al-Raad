@@ -157,4 +157,21 @@ class PageTabAssociatorTest {
         assertEquals("tab-b", associator.tabIdForPage("https://cdn.example/final"))
     }
 
+
+    @Test
+    fun `page start after completed document creates a new generation`() {
+        val associator = PageTabAssociator()
+        val firstUrl = "https://top.example/first"
+        associator.recordRequest("tab-a", firstUrl)
+        val first = associator.onPageStartedWithContext(firstUrl, "tab-a")
+        associator.onPageFinished(firstUrl)
+
+        val next = associator.onPageStartedWithContext("https://top.example/next", "tab-a")
+
+        assertEquals("tab-a", next.tabId)
+        assertTrue(next.startsNewNavigation)
+        assertNotEquals(first.documentId, next.documentId)
+        assertNull(associator.associationForDocument(first.documentId))
+    }
+
 }
