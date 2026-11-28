@@ -112,7 +112,12 @@ jobs:
         run: |
           mkdir -p /tmp/fixture-serve
           curl -fsSL --retry 3 -o /tmp/fixture-serve/fixture.mp4 https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4
-          printf '%s' "<html><body><video autoplay muted playsinline src='/fixture.mp4'></video></body></html>" > /tmp/fixture-serve/player.html
+          printf '%s' "<html><body><video autoplay muted playsinline src='/fixture.mp4'><track kind='subtitles' srclang='ar' label='Arabic' src='/subs.vtt' default></video></body></html>" > /tmp/fixture-serve/player.html
+          # Page subtitle (sniffer-detected through the WebView track fetch) and the
+          # file the system-picker UI test attaches; cues sit in the deterministic
+          # 90s capture window.
+          printf 'WEBVTT\n\n00:00.000 --> 00:04.000\nHello from VTT\n\n00:01:28.000 --> 00:02:00.000\nCaption at ninety seconds\n' > /tmp/fixture-serve/subs.vtt
+          printf 'WEBVTT\n\n00:01:28.000 --> 00:02:00.000\nExternal file caption\n' > /tmp/fixture-serve/ui-pick.vtt
           nohup python3 -m http.server 18080 --directory /tmp/fixture-serve > /tmp/fixture-serve.log 2>&1 &
           sleep 2
           curl -fsSI http://127.0.0.1:18080/player.html | head -1
@@ -135,6 +140,7 @@ jobs:
           script: |
             adb shell settings put global cached_apps_freezer disabled || true
             adb shell rm -f /sdcard/Download/app-launch.png /sdcard/Download/diagnostics-export.txt /sdcard/Download/scenario-*.png || true
+            adb push /tmp/fixture-serve/ui-pick.vtt /sdcard/Download/ui-pick.vtt
             mkdir -p scenario-captures
             bash -c './gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.fixtureBaseUrl=http://10.0.2.2:18080; code=$?; adb pull /sdcard/Download/app-launch.png app-launch.png || true; adb pull /sdcard/Download/diagnostics-export.txt diagnostics-export.txt || true; for f in $(adb shell ls /sdcard/Download/scenario-*.png 2>/dev/null | tr -d "\r"); do adb pull "$f" scenario-captures/ || true; done; adb logcat -d -t 2000 > scenario-captures/logcat-tail.txt || true; if [ "$code" -eq 0 ]; then test -s app-launch.png; test -s diagnostics-export.txt; [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d " \n")" = "89504e470d0a1a0a" ]; fi; exit $code' 
 
