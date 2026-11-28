@@ -11,6 +11,7 @@ import com.alraad.core.common.contracts.DiagEntry
 import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.feature.browser.sniffer.StreamSniffer
+import com.alraad.feature.browser.sniffer.SubtitleSniffer
 import com.alraad.feature.browser.tabs.TabManager
 import com.alraad.feature.browser.ui.BrowserScreen
 import kotlinx.coroutines.CoroutineScope
@@ -65,6 +66,7 @@ class BrowserScreenLaunchTest {
                 helper,
                 fakeLogger,
                 StreamSniffer(fakeLogger),
+                SubtitleSniffer(),
                 settings,
             )
         }

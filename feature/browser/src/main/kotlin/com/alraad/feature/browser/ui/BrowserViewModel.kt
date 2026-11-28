@@ -9,10 +9,13 @@ import com.alraad.core.common.contracts.BookmarksRepository
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.HistoryEntry
 import com.alraad.core.common.contracts.HistoryRepository
+import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.core.common.contracts.SettingsRepository
 import com.alraad.core.common.contracts.StreamUrl
+import com.alraad.core.common.contracts.SubtitleTrack
 import com.alraad.feature.browser.actions.StreamActions
 import com.alraad.feature.browser.sniffer.StreamObservationListener
+import com.alraad.feature.browser.sniffer.SubtitleSniffer
 import com.alraad.feature.browser.tabs.TabManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -25,6 +28,7 @@ import kotlinx.coroutines.launch
 
 private const val MAX_STREAMS_PER_TAB = 100
 private const val MAX_PAGE_URLS_PER_TAB = 12
+private const val MAX_SUBTITLES_PER_TAB = 100
 
 @Suppress("LongParameterList") // Hilt-injected collaborators; grouping would obscure the graph
 @HiltViewModel
@@ -35,6 +39,7 @@ class BrowserViewModel
         val webViewIntegration: WebViewIntegrationHelper,
         val diagnosticsLogger: DiagnosticsLogger,
         val sniffer: com.alraad.feature.browser.sniffer.StreamSniffer,
+        val subtitleSniffer: SubtitleSniffer,
         private val streamActions: StreamActions,
         settingsRepository: SettingsRepository,
         private val historyRepository: HistoryRepository,
@@ -53,6 +58,30 @@ class BrowserViewModel
             kotlinx.coroutines.flow.combine(tabManager.state, streamsByTab) { tabState, byTab ->
                 tabState.activeTabId?.let { byTab[it] }.orEmpty()
             }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+        /** Subtitle tracks are isolated by the same source tab/page as detected streams. */
+        private val subtitlesByTab =
+            kotlinx.coroutines.flow.MutableStateFlow<Map<String, List<SubtitleTrack>>>(emptyMap())
+        val detectedSubtitles: StateFlow<List<SubtitleTrack>> =
+            kotlinx.coroutines.flow.combine(tabManager.state, subtitlesByTab) { tabState, byTab ->
+                tabState.activeTabId?.let { byTab[it] }.orEmpty()
+            }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+        private val subtitleListener =
+            SubtitleSniffer.Listener { track ->
+                val state = tabManager.state.value
+                val knownTab = state.tabs.any { it.id == track.sourceTabId }
+                val onCurrentPage = track.sourcePageUrl in currentPageUrlsByTab.value[track.sourceTabId].orEmpty()
+                if (knownTab && onCurrentPage) {
+                    subtitlesByTab.update { current ->
+                        val existing = current[track.sourceTabId].orEmpty()
+                        val index = existing.indexOfFirst { it.id == track.id }
+                        val updated =
+                            if (index >= 0) existing.toMutableList().apply { set(index, track) } else existing + track
+                        current + (track.sourceTabId to updated.takeLast(MAX_SUBTITLES_PER_TAB))
+                    }
+                }
+            }
 
         private val streamObservationListener =
             object : StreamObservationListener {
@@ -80,17 +109,20 @@ class BrowserViewModel
 
         init {
             sniffer.registerObservationListener(streamObservationListener)
+            subtitleSniffer.registerListener(subtitleListener)
             viewModelScope.launch {
                 tabManager.state.collect { state ->
                     val liveTabIds = state.tabs.mapTo(mutableSetOf()) { it.id }
                     streamsByTab.update { current -> current.filterKeys { it in liveTabIds } }
                     currentPageUrlsByTab.update { current -> current.filterKeys { it in liveTabIds } }
+                    subtitlesByTab.update { current -> current.filterKeys { it in liveTabIds } }
                 }
             }
         }
 
         public override fun onCleared() {
             sniffer.unregisterObservationListener(streamObservationListener)
+            subtitleSniffer.unregisterListener(subtitleListener)
             super.onCleared()
         }
 
@@ -107,11 +139,25 @@ class BrowserViewModel
             }
             if (startsNewNavigation) {
                 streamsByTab.update { current -> current + (tabId to emptyList()) }
+                subtitlesByTab.update { current -> current + (tabId to emptyList()) }
             }
         }
 
-        /** Starts playback of a selected stream with its captured request headers. */
-        fun playStream(item: DetectedStreamItem) = streamActions.play(item.stream)
+        /** Starts playback of a selected stream with its captured request headers and page subtitles. */
+        fun playStream(item: DetectedStreamItem) {
+            val pageSubtitles =
+                subtitlesByTab.value[item.sourceTabId].orEmpty().filter {
+                    it.sourceTabId == item.sourceTabId && it.sourcePageUrl == item.sourcePageUrl
+                }
+            streamActions.play(
+                PlaybackRequest(
+                    sources = listOf(item.stream),
+                    subtitles = pageSubtitles,
+                    sourcePageUrl = item.sourcePageUrl,
+                    sourceTabId = item.sourceTabId,
+                ),
+            )
+        }
 
         /** Last page reported by the WebView as finished loading; basis for bookmarking. */
         var lastVisited: Pair<String, String>? = null

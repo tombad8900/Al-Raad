@@ -6,6 +6,7 @@ import android.content.Context
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
+import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.core.common.contracts.PlayerController
 import com.alraad.core.common.contracts.SavedStream
 import com.alraad.core.common.contracts.SavedStreamsRepository
@@ -27,6 +28,17 @@ class StreamActions
         fun play(stream: StreamUrl) {
             logger.log(DiagCategory.SNIFFER, DiagLevel.INFO, "Play requested", mapOf("url" to stream.url))
             playerController.play(stream)
+        }
+
+        /** Rich playback: external subtitles ride the request; header routing happens in the player. */
+        fun play(request: PlaybackRequest) {
+            logger.log(
+                DiagCategory.SNIFFER,
+                DiagLevel.INFO,
+                "Play requested",
+                mapOf("url" to request.selectedStream.url),
+            )
+            playerController.play(request)
         }
 
         fun copyUrl(stream: StreamUrl) {

@@ -10,6 +10,7 @@ import com.alraad.core.common.fakes.FakeSavedStreamsRepository
 import com.alraad.core.common.fakes.FakeSettingsRepository
 import com.alraad.feature.browser.actions.StreamActions
 import com.alraad.feature.browser.sniffer.StreamSniffer
+import com.alraad.feature.browser.sniffer.SubtitleSniffer
 import com.alraad.feature.browser.tabs.TabManager
 import com.alraad.feature.browser.ui.BrowserViewModel
 import kotlinx.coroutines.CoroutineScope
@@ -52,6 +53,7 @@ class BrowserViewModelHistoryBookmarkTest {
                     ),
                 diagnosticsLogger = logger,
                 sniffer = StreamSniffer(logger),
+                subtitleSniffer = SubtitleSniffer(),
                 streamActions =
                     StreamActions(
                         org.robolectric.RuntimeEnvironment.getApplication(),
