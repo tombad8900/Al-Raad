@@ -51,4 +51,13 @@ class BlocklistAcceptanceTest {
         assertTrue(store.promote("brave-social", (1..10).joinToString("\n") { "||t$it.example^\$third-party" }))
         assertFalse(store.promote("brave-social", (1..4).joinToString("\n") { "||t$it.example^\$third-party" }))
     }
+
+    @Test fun `a rejected cosmetic-only update does not relabel a list whose network copy is still active`() {
+        val store = newStore()
+        assertTrue(store.promote("brave-social", (1..6).joinToString("\n") { "||t$it.example^\$third-party" }))
+        assertFalse(store.promote("brave-social", "example.com##.x\n"))
+        assertFalse(store.isCosmeticOnly("brave-social"))
+        store.setEnabled("brave-social", true)
+        assertTrue(store.activeEngineRules().contains("||t1.example^"))
+    }
 }
