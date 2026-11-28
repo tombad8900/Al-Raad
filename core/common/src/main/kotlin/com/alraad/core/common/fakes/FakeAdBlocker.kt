@@ -18,5 +18,5 @@ class FakeAdBlocker(
         return blockedHosts.any { blocked -> host == blocked || host.endsWith(".$blocked") }
     }
 
-    override fun cosmeticCss(host: String): String = cosmeticCssByHost[host].orEmpty()
+    override suspend fun cosmeticCss(host: String): String = cosmeticCssByHost[host].orEmpty()
 }

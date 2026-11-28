@@ -52,7 +52,7 @@ class BrowserScreenLaunchTest {
         object : AdBlocker {
             override suspend fun shouldBlock(url: String) = false
 
-            override fun cosmeticCss(host: String) = ""
+            override suspend fun cosmeticCss(host: String) = ""
         }
 
     @Test fun `launch opens homepage tab and address bar shows its URL`() {

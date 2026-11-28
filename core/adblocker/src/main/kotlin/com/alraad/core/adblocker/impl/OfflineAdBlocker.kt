@@ -83,5 +83,5 @@ class OfflineAdBlocker
             return blocked
         }
 
-        override fun cosmeticCss(host: String): String = CosmeticRules.forHost(host)
+        override suspend fun cosmeticCss(host: String): String = if (blockingEnabled()) CosmeticRules.forHost(host) else ""
     }

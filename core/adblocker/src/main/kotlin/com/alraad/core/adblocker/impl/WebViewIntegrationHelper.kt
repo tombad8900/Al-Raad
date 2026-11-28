@@ -168,8 +168,10 @@ class WebViewIntegrationHelper
                     view: WebView,
                     url: String,
                 ) {
-                    val css = adBlocker.cosmeticCss(url)
                     scope.launch(Dispatchers.Main) {
+                        // Global ad-block OFF returns empty CSS, so nothing is injected.
+                        val css = adBlocker.cosmeticCss(url)
+                        if (css.isEmpty()) return@launch
                         view.evaluateJavascript(
                             "(function(){var s=document.createElement('style');s.textContent=${jsQuote(
                                 css,
