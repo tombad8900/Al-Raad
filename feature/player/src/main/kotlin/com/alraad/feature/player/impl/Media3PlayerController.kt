@@ -1,30 +1,36 @@
 package com.alraad.feature.player.impl
 
 import android.content.Context
+import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionParameters
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.dash.DashMediaSource
-import androidx.media3.exoplayer.hls.HlsMediaSource
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
+import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.core.common.contracts.PlayerController
 import com.alraad.core.common.contracts.StreamFormat
 import com.alraad.core.common.contracts.StreamUrl
+import com.alraad.core.common.contracts.SubtitleTrack
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Media3-backed PlayerController (frozen contract). Every captured request header
- * (Referer, Cookie, tokens) is passed verbatim to the HTTP data source so playback
- * sends exactly what the sniffer saw. Raw URL/headers logged unredacted.
+ * (Referer, Cookie, tokens) is passed verbatim to media requests so playback sends
+ * exactly what the sniffer saw; external subtitle URLs receive only their own
+ * allowlisted headers, never video credentials. Raw URL/headers logged unredacted.
  */
 @Singleton
 class Media3PlayerController
@@ -46,6 +52,11 @@ class Media3PlayerController
         private val _currentStream = kotlinx.coroutines.flow.MutableStateFlow<StreamUrl?>(null)
         val currentStream: kotlinx.coroutines.flow.StateFlow<StreamUrl?> = _currentStream
 
+        /** Last rich playback request (sources + page-scoped subtitles), when played via PlaybackRequest. */
+        private val _currentPlaybackRequest =
+            kotlinx.coroutines.flow.MutableStateFlow<PlaybackRequest?>(null)
+        val currentPlaybackRequest: kotlinx.coroutines.flow.StateFlow<PlaybackRequest?> = _currentPlaybackRequest
+
         /** Exposed for PlayerScreen rendering. */
         fun currentPlayer(): Player? = player
 
@@ -58,6 +69,8 @@ class Media3PlayerController
 
         override fun play(stream: StreamUrl) = play(stream, drmLicenseUrl = stream.drmLicenseUrl, quality = null)
 
+        override fun play(request: PlaybackRequest) = play(request, drmLicenseUrl = request.selectedStream.drmLicenseUrl, quality = null)
+
         /**
          * Issue #8 part D: standard DRM playback (Widevine when drmLicenseUrl is
          * provided) and quality selection (cap renditions by max height).
@@ -66,12 +79,23 @@ class Media3PlayerController
             stream: StreamUrl,
             drmLicenseUrl: String? = null,
             quality: QualityLimit? = null,
+        ) = play(PlaybackRequest.single(stream), drmLicenseUrl, quality)
+
+        /**
+         * Rich playback: page/tab-scoped external subtitles are attached to the Media3
+         * item, and every request is resolved to the correct header set per URL.
+         */
+        fun play(
+            request: PlaybackRequest,
+            drmLicenseUrl: String? = null,
+            quality: QualityLimit? = null,
         ) {
+            val stream = request.selectedStream
             // Single-start guard: stream selection (the nav callback) and PlayerScreen's
             // own DisposableEffect both call play() for one tap; the second call for the
-            // same stream must not tear down and rebuild a healthy player. A previous
+            // same request must not tear down and rebuild a healthy player. A previous
             // failure leaves player == null, so retries still rebuild.
-            if (_currentStream.value == stream && player != null) {
+            if (_currentPlaybackRequest.value == request && player != null) {
                 logger.log(DiagCategory.PLAYER, DiagLevel.DEBUG, "Play already active", mapOf("url" to stream.url))
                 return
             }
@@ -79,7 +103,12 @@ class Media3PlayerController
                 DiagCategory.PLAYER,
                 DiagLevel.INFO,
                 "Playing",
-                mapOf("url" to stream.url, "format" to stream.format.name, "headers" to stream.headers.toString()),
+                mapOf(
+                    "url" to stream.url,
+                    "format" to stream.format.name,
+                    "headers" to stream.headers.toString(),
+                    "subtitleCount" to request.subtitles.size.toString(),
+                ),
             )
             // Hand the stream to the PLAYER route BEFORE any fallible construction:
             // a build failure must surface as an in-app error, never as a crash that
@@ -88,8 +117,9 @@ class Media3PlayerController
             _playbackError.value = null
             release()
             _currentStream.value = stream
+            _currentPlaybackRequest.value = request
             try {
-                val mediaSource = buildMediaSource(stream, drmLicenseUrl)
+                val mediaSource = PlaybackMediaSources.build(request, drmLicenseUrl)
                 player =
                     playerFactory(context).apply {
                         addListener(
@@ -135,34 +165,6 @@ class Media3PlayerController
             }
         }
 
-        private fun buildMediaSource(
-            stream: StreamUrl,
-            drmLicenseUrl: String?,
-        ) = run {
-            val dataSourceFactory =
-                DefaultHttpDataSource.Factory()
-                    .setDefaultRequestProperties(stream.headers)
-            val mediaItem =
-                MediaItem.Builder().setUri(stream.url).apply {
-                    val effectiveLicenseUrl = drmLicenseUrl ?: stream.drmLicenseUrl
-                    if (effectiveLicenseUrl != null) {
-                        // License-request headers stay on the DRM config, distinct from the
-                        // stream headers applied to the media data source above.
-                        setDrmConfiguration(
-                            MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
-                                .setLicenseUri(effectiveLicenseUrl)
-                                .setLicenseRequestHeaders(stream.drmLicenseRequestHeaders)
-                                .build(),
-                        )
-                    }
-                }.build()
-            when (stream.format) {
-                StreamFormat.HLS -> HlsMediaSource.Factory(dataSourceFactory)
-                StreamFormat.DASH -> DashMediaSource.Factory(dataSourceFactory)
-                else -> ProgressiveMediaSource.Factory(dataSourceFactory)
-            }.createMediaSource(mediaItem)
-        }
-
         /** Live quality change: applies (or clears) the rendition cap on the active player. */
         fun setQuality(quality: QualityLimit?) {
             val current = player ?: return
@@ -192,5 +194,98 @@ class Media3PlayerController
         override fun stop() {
             release()
             _currentStream.value = null
+            _currentPlaybackRequest.value = null
         }
     }
+
+/**
+ * Routes request headers per URL: subtitle requests receive only their own allowlisted
+ * headers; video credentials stay on media/manifest/segment requests, never subtitles.
+ */
+internal object PlaybackRequestHeaderRouter {
+    fun dataSourceFactory(
+        stream: StreamUrl,
+        subtitles: List<SubtitleTrack>,
+    ): DataSource.Factory {
+        val upstreamFactory = DefaultHttpDataSource.Factory()
+        return ResolvingDataSource.Factory(upstreamFactory) { dataSpec ->
+            val headers = headersForRequest(dataSpec.uri, stream.headers, subtitles)
+            dataSpec.buildUpon().setHttpRequestHeaders(headers).build()
+        }
+    }
+
+    internal fun headersForRequest(
+        uri: Uri,
+        streamHeaders: Map<String, String>,
+        subtitles: List<SubtitleTrack>,
+    ): Map<String, String> {
+        val requestedUrl = uri.normalizeScheme().toString()
+        val subtitle =
+            subtitles.firstOrNull {
+                Uri.parse(it.url).normalizeScheme().toString() == requestedUrl
+            }
+        return if (subtitle != null) {
+            subtitle.requestHeaders.filterKeys { it.lowercase() in SAFE_SUBTITLE_HEADER_NAMES }
+        } else {
+            streamHeaders.filterKeys {
+                !it.equals("Range", ignoreCase = true) &&
+                    !it.equals("Accept-Encoding", ignoreCase = true)
+            }
+        }
+    }
+
+    private val SAFE_SUBTITLE_HEADER_NAMES =
+        setOf(
+            "accept",
+            "accept-language",
+            "cache-control",
+            "pragma",
+            "user-agent",
+            "origin",
+            "referer",
+        )
+}
+
+/** Builds the Media3 [MediaSource] for a request: format, DRM config, external subtitles. */
+internal object PlaybackMediaSources {
+    fun build(
+        request: PlaybackRequest,
+        drmLicenseUrl: String?,
+    ): MediaSource {
+        val stream = request.selectedStream
+        val dataSourceFactory = PlaybackRequestHeaderRouter.dataSourceFactory(stream, request.subtitles)
+        val subtitleConfigurations =
+            request.subtitles.map { track ->
+                MediaItem.SubtitleConfiguration.Builder(Uri.parse(track.url))
+                    .setMimeType(track.mimeType)
+                    .setLanguage(track.language)
+                    .setLabel(track.label)
+                    .build()
+            }
+        val mediaItem =
+            MediaItem.Builder()
+                .setUri(stream.url)
+                .apply {
+                    when (stream.format) {
+                        StreamFormat.HLS -> setMimeType(MimeTypes.APPLICATION_M3U8)
+                        StreamFormat.DASH -> setMimeType(MimeTypes.APPLICATION_MPD)
+                        else -> Unit
+                    }
+                    if (subtitleConfigurations.isNotEmpty()) {
+                        setSubtitleConfigurations(subtitleConfigurations)
+                    }
+                    val effectiveLicenseUrl = drmLicenseUrl ?: stream.drmLicenseUrl
+                    if (effectiveLicenseUrl != null) {
+                        // License-request headers stay on the DRM config, distinct from the
+                        // stream headers applied to media requests by the data source.
+                        setDrmConfiguration(
+                            MediaItem.DrmConfiguration.Builder(C.WIDEVINE_UUID)
+                                .setLicenseUri(effectiveLicenseUrl)
+                                .setLicenseRequestHeaders(stream.drmLicenseRequestHeaders)
+                                .build(),
+                        )
+                    }
+                }.build()
+        return DefaultMediaSourceFactory(dataSourceFactory).createMediaSource(mediaItem)
+    }
+}
