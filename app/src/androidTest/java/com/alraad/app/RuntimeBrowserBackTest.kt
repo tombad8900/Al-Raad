@@ -120,12 +120,16 @@ class RuntimeBrowserBackTest {
         )
     }
 
-    private fun waitForBrowserAddressBar(timeoutMs: Long = 15_000) {
+    /** Wait for the initial tab and its actual attached WebView, not merely the address field. */
+    private fun awaitBrowserReady(timeoutMs: Long = 20_000) {
         composeRule.waitUntil(timeoutMillis = timeoutMs) {
-            runCatching {
-                composeRule.onAllNodes(hasSetTextAction()).onFirst().assertIsDisplayed()
-            }.isSuccess
+            onMain {
+                val tabId = tabManager.state.value.activeTabId
+                val webView = tabId?.let(::pooledWebViewOnMain)
+                webView != null && webView.parent != null
+            }
         }
+        composeRule.onAllNodes(hasSetTextAction()).onFirst().assertIsDisplayed()
     }
 
     private fun waitForText(
@@ -224,11 +228,7 @@ class RuntimeBrowserBackTest {
         try {
             val url = server.url("/trash-${System.currentTimeMillis()}").toString()
             composeRule.waitForIdle()
-            composeRule.waitUntil(20_000) {
-                runCatching {
-                    composeRule.onAllNodes(hasSetTextAction()).onFirst().assertIsDisplayed()
-                }.isSuccess
-            }
+            awaitBrowserReady()
             typeAddress(url)
             awaitUrl(url)
             awaitLoadFinished(url, "trash-fixture")
@@ -265,7 +265,7 @@ class RuntimeBrowserBackTest {
             composeRule.onNodeWithText("مسح السجل / Clear all").assertIsDisplayed()
 
             composeRule.onNodeWithText("المتصفح").performClick()
-            waitForBrowserAddressBar()
+            awaitBrowserReady()
             assertEquals(url, onMain { webView.url })
         } finally {
             server.shutdown()
@@ -295,11 +295,7 @@ class RuntimeBrowserBackTest {
             val b = server.url("/b").toString()
             val c = server.url("/c").toString()
             composeRule.waitForIdle()
-            composeRule.waitUntil(20_000) {
-                runCatching {
-                    composeRule.onAllNodes(hasSetTextAction()).onFirst().assertIsDisplayed()
-                }.isSuccess
-            }
+            awaitBrowserReady()
 
             // Page history: a -> b -> c, then Back twice returns to b and a.
             typeAddress(a)
@@ -361,7 +357,7 @@ class RuntimeBrowserBackTest {
                 .onFirst()
                 .performClick()
             composeRule.waitForIdle()
-            waitForBrowserAddressBar()
+            awaitBrowserReady()
             awaitUrl(a)
             awaitLoadFinished(a, aTitle)
 
