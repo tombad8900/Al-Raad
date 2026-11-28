@@ -64,7 +64,6 @@ class BrowserBackHandlerTest {
     @Test
     fun emptyHistoryReturnsToSearchAndSearchBackStaysWithoutExiting() {
         var searchVisible = false
-        var exitRequested = false
         val result = handleBrowserBack(
             tabUrl = "https://first-page.example",
             canGoBack = { false },
@@ -82,6 +81,5 @@ class BrowserBackHandlerTest {
         )
         assertEquals(BrowserBackResult.STAY, searchResult)
         assertTrue(searchVisible)
-        assertFalse(exitRequested)
     }
 }
