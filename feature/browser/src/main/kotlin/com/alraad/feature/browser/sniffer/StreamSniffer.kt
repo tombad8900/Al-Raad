@@ -9,12 +9,10 @@ import com.alraad.core.common.contracts.StreamUrl
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Detects media streams from observed requests (WebView network, JS bridge, DOM).
- * Captures request headers verbatim and deduplicates repeated URL+headers pairs.
- */
+/** Detects streams from WebView, JS bridge, and DOM observations. */
 private const val MAX_SEEN_KEYS = 1000
 
+@Suppress("TooManyFunctions")
 @Singleton
 class StreamSniffer
     @Inject
@@ -52,7 +50,7 @@ class StreamSniffer
                 DiagCategory.SNIFFER,
                 DiagLevel.INFO,
                 "DRM license request detected",
-                mapOf("url" to url, "headers" to headers.toString()),
+                mapOf("url" to url, "headers" to diagnosticHeaders(headers).toString()),
             )
             val target =
                 if (pageUrl != null) {
@@ -95,6 +93,12 @@ class StreamSniffer
             buildString {
                 append(tabId?.length ?: -1).append(':').append(tabId.orEmpty())
                 append(pageUrl)
+            }
+
+        private fun diagnosticHeaders(headers: Map<String, String>): Map<String, String> =
+            headers.filterKeys {
+                !it.equals("cookie", true) && !it.equals("authorization", true) &&
+                    !it.equals("proxy-authorization", true)
             }
 
         fun registerListener(listener: StreamListener) {
@@ -160,7 +164,7 @@ class StreamSniffer
                         "url" to detected.url,
                         "format" to detected.format.name,
                         "source" to source.name,
-                        "headers" to headers.toString(),
+                        "headers" to diagnosticHeaders(headers).toString(),
                     ),
                 )
                 listeners.forEach { it.onStreamDetected(detected) }
