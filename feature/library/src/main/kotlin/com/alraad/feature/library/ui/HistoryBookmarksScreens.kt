@@ -107,7 +107,7 @@ private fun EntryList(
                     Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         url,
-                        modifier = Modifier.testTag("${listTag}_entry_url_${url.hashCode()}"),
+                        modifier = Modifier.clickable { onOpen(url) }.testTag("${listTag}_entry_url_${url.hashCode()}"),
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
