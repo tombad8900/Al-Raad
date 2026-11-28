@@ -40,8 +40,7 @@ fun BrowserScreen(
     val backgroundColor = MaterialTheme.colorScheme.background
     val webViewPool = remember { BrowserWebViewPool() }
     val pageTabAssociators = remember { mutableMapOf<String, PageTabAssociator>() }
-    val pageTabAssociator =
-        activeTab?.let { pageTabAssociators.getOrPut(it.id) { PageTabAssociator() } } ?: PageTabAssociator()
+    val pageTabAssociator = activeTab?.let { pageTabAssociators.getOrPut(it.id) { PageTabAssociator() } } ?: PageTabAssociator()
     val liveTabIds = tabState.tabs.map { it.id }.toSet()
 
     DisposableEffect(webViewPool) {
