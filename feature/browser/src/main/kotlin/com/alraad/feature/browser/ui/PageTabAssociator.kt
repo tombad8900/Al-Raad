@@ -25,6 +25,9 @@ class PageTabAssociator {
     ) {
         lastRequestedNavigation = tabId to tabUrl
         pageTabIds.entries.removeAll { it.value == tabId }
+        // One WebView has one in-flight top-level navigation per tab. Repeated
+        // address-bar / shouldOverride callbacks must not leave stale pending owners.
+        pendingNavigationTabs.removeAll { it.second == tabId }
         pendingNavigationTabs.add(tabUrl to tabId)
         if (pendingNavigationTabs.size > MAX_PENDING_NAVIGATIONS) pendingNavigationTabs.removeAt(0)
     }
@@ -43,16 +46,21 @@ class PageTabAssociator {
         url: String,
         activeTabId: String?,
     ): PageStartAssociation {
-        val matchIndex = pendingNavigationTabs.indexOfFirst { it.first == url }
-        val displacedRedirect = matchIndex < 0 && pendingNavigationTabs.isNotEmpty()
+        // Resource callbacks can race ahead of onPageStarted. Resolve an exact
+        // pending navigation without consuming it; the start callback binds it.
+        val pendingMatch = pendingNavigationTabs.lastOrNull { it.first == url }
+        val displacedRedirect = pendingMatch == null && pendingNavigationTabs.isNotEmpty()
         val ownerTabId =
             when {
-                matchIndex >= 0 -> pendingNavigationTabs.removeAt(matchIndex).second
+                pendingMatch != null -> pendingMatch.second
                 displacedRedirect -> lastBoundTabId
                 lastBoundTabId != null && lastBoundTabId != activeTabId -> lastBoundTabId
                 else -> activeTabId
             }
-        val startsNewNavigation = matchIndex >= 0 || (lastBoundTabId == null && ownerTabId == activeTabId)
+        val startsNewNavigation = pendingMatch != null || (lastBoundTabId == null && ownerTabId == activeTabId)
+        if (pendingMatch != null) {
+            pendingNavigationTabs.removeAll { it.first == url && it.second == pendingMatch.second }
+        }
         if (ownerTabId != null) {
             if (startsNewNavigation) pageTabIds.entries.removeAll { it.value == ownerTabId }
             pageTabIds[url] = ownerTabId
@@ -65,7 +73,8 @@ class PageTabAssociator {
     fun onPageFinished(url: String): String? = pageTabIds[url]
 
     @Synchronized
-    fun tabIdForPage(url: String?): String? = url?.let { pageTabIds[it] }
+    fun tabIdForPage(url: String?): String? =
+        url?.let { pendingNavigationTabs.lastOrNull { pending -> pending.first == it }?.second ?: pageTabIds[it] }
 
     private companion object {
         const val MAX_PAGE_MAPPINGS = 256
