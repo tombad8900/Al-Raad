@@ -45,6 +45,7 @@ fun BrowserWebView(
                             tabs.state.value.activeTabId?.let { pageTabAssociator.recordRequest(it, url) }
                         },
                         onPageStart = { webView, url ->
+                            jsBridge.clearPage()
                             val page = pageTabAssociator.onPageStartedWithContext(url, tabs.state.value.activeTabId)
                             page.tabId?.let { id ->
                                 handlers.actions.onPageStarted(id, url, page.startsNewNavigation)
@@ -54,8 +55,6 @@ fun BrowserWebView(
                                     if (token.isNotEmpty()) {
                                         webView.evaluateJavascript(FetchXhrCaptureScript.build(token), null)
                                     }
-                                } else {
-                                    jsBridge.clearPage()
                                 }
                             }
                         },
@@ -90,6 +89,8 @@ fun BrowserWebView(
                 if (pageUrl != null && owner != null && !jsBridge.isBoundTo(pageUrl, owner)) {
                     val token = jsBridge.bindPage(pageUrl, owner)
                     if (token.isNotEmpty()) webView.evaluateJavascript(FetchXhrCaptureScript.build(token), null)
+                } else if (owner == null) {
+                    jsBridge.clearPage()
                 }
             } else {
                 webView.removeJavascriptInterface(SNIFFER_BRIDGE_NAME)
