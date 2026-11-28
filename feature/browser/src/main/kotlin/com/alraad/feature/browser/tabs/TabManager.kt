@@ -1,8 +1,8 @@
 package com.alraad.feature.browser.tabs
 
 import android.content.Context
-import com.alraad.feature.browser.ui.BrowserWebViewPool
 import androidx.annotation.VisibleForTesting
+import com.alraad.feature.browser.ui.BrowserWebViewPool
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
