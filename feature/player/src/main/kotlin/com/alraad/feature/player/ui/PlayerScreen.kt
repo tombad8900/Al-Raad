@@ -344,6 +344,7 @@ private fun PlayerControlsRow(
         }
     }
 }
+
 @Composable
 private fun PlayerSurface(
     player: Player?,
