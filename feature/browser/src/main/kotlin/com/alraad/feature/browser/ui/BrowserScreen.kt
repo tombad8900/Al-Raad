@@ -19,6 +19,7 @@ import com.alraad.core.common.contracts.AppSettings
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.feature.browser.sniffer.StreamSniffer
 import com.alraad.feature.browser.sniffer.SubtitleSniffer
+import com.alraad.feature.browser.tabs.BrowserTab
 import com.alraad.feature.browser.tabs.TabManager
 
 @Suppress("LongParameterList")
@@ -56,23 +57,12 @@ fun BrowserScreen(
         if (tabState.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
     }
 
-    BackHandler {
-        val tab = activeTab ?: return@BackHandler
-        val webView = webViewPool.get(tab.id)
-        handleBrowserBack(
-            tabUrl = tab.url,
-            canGoBack = { webView?.canGoBack() == true },
-            goBack = { webView?.goBack() },
-            returnToSearch = {
-                webView?.apply {
-                    loadUrl("about:blank")
-                    clearHistory()
-                }
-                tabManager.updateTab(tab.id, url = "")
-                isLoading = false
-            },
-        )
-    }
+    BrowserBackNavigation(
+        activeTab = activeTab,
+        tabManager = tabManager,
+        webViewPool = webViewPool,
+        onLoadingChange = { isLoading = it },
+    )
 
     Column(modifier = modifier.fillMaxSize()) {
         AddressBar(
@@ -102,7 +92,8 @@ fun BrowserScreen(
                         sniffer = sniffer,
                         subtitleSniffer = subtitleSniffer,
                         settings = settings,
-                    ),
+                        webViewPool = webViewPool,
+                            ),
                 backgroundColor = backgroundColor,
                 handlers = handlers,
                 pageTabAssociator = pageTabAssociator,
@@ -110,5 +101,32 @@ fun BrowserScreen(
                 onLoadingChange = { isLoading = it },
             )
         }
+    }
+}
+
+
+@Composable
+private fun BrowserBackNavigation(
+    activeTab: BrowserTab?,
+    tabManager: TabManager,
+    webViewPool: BrowserWebViewPool,
+    onLoadingChange: (Boolean) -> Unit,
+) {
+    BackHandler {
+        val tab = activeTab ?: return@BackHandler
+        val webView = webViewPool.get(tab.id)
+        handleBrowserBack(
+            tabUrl = tab.url,
+            canGoBack = { webView?.canGoBack() == true },
+            goBack = { webView?.goBack() },
+            returnToSearch = {
+                webView?.apply {
+                    loadUrl("about:blank")
+                    clearHistory()
+                }
+                tabManager.updateTab(tab.id, url = "")
+                onLoadingChange(false)
+            },
+        )
     }
 }
