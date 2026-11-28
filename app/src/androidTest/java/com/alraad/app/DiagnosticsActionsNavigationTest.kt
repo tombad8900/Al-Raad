@@ -10,12 +10,17 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityResult
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.Intents.getIntents
 import androidx.test.espresso.intent.Intents.intended
 import androidx.test.espresso.intent.Intents.intending
 import androidx.test.espresso.intent.VerificationModes.times
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
+import androidx.test.espresso.matcher.RootMatchers.withDecorView
+import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
+import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
@@ -27,6 +32,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.hamcrest.Matchers.not
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -50,6 +56,21 @@ class DiagnosticsActionsNavigationTest {
     @InstallIn(SingletonComponent::class)
     interface DiagnosticsLoggerEntryPoint {
         fun diagnosticsLogger(): DiagnosticsLogger
+    }
+
+    @Test
+    fun emptyDiagnosticsActionsShowVisibleFeedback() {
+        runBlocking { logger.clear() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("الإعدادات").performClick()
+        composeRule.onNodeWithContentDescription("سجل التشخيص / Diagnostics log").performClick()
+        composeRule.onNodeWithText("لا توجد سجلات مطابقة").assertIsDisplayed()
+
+        composeRule.onNodeWithText("نسخ / Copy").performClick()
+        assertToast("لا يوجد ما يُنسخ / Nothing to copy")
+
+        composeRule.onNodeWithText("تصدير النتائج / Export").performClick()
+        assertToast("لا يوجد ما يُصدَّر / Nothing to export")
     }
 
     @Test
@@ -95,6 +116,16 @@ class DiagnosticsActionsNavigationTest {
             assertFalse(exported.contains("diagnostics-private-token"))
         } finally {
             Intents.release()
+        }
+    }
+
+    private fun assertToast(message: String) {
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            runCatching {
+                onView(withText(message))
+                    .inRoot(withDecorView(not(composeRule.activity.window.decorView)))
+                    .check(matches(isDisplayed()))
+            }.isSuccess
         }
     }
 
