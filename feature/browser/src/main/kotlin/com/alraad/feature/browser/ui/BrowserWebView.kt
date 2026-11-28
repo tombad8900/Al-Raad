@@ -6,7 +6,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.runtime.key
 import androidx.compose.ui.viewinterop.AndroidView
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
@@ -25,64 +24,52 @@ fun BrowserWebView(
 ) {
     val tabs = environment.tabManager
     if (activeTab != null) {
-        val tab = activeTab
-        key(tab.id) {
-            AndroidView(
-                modifier = modifier.fillMaxSize(),
-                factory = { context ->
-                    webViewPool.obtain(tab.id) {
-                        WebView(context).apply {
-                            setBackgroundColor(backgroundColor.toArgb())
-                            SafeWebViewConfig.apply(this, environment.settings)
-                            webChromeClient = PopupBlockingWebChromeClient(environment.diagnosticsLogger)
-                            webViewClient =
-                                environment.webViewIntegration.webViewClient(
-                                    onNavigationRequested = { _, url ->
-                                        pageTabAssociator.recordRequest(tab.id, url)
-                                    },
-                                    onPageStart = { _, url ->
-                                        val page = pageTabAssociator.onPageStartedWithContext(url, tab.id)
-                                        page.tabId?.let { id ->
-                                            handlers.actions.onPageStarted(id, url, page.startsNewNavigation)
-                                            if (tabs.state.value.activeTabId == id) onLoadingChange(true)
+        AndroidView(
+            modifier = modifier.fillMaxSize(),
+            factory = { context ->
+                webViewPool.obtain(activeTab.id) {
+                    WebView(context).apply {
+                        setBackgroundColor(backgroundColor.toArgb())
+                        SafeWebViewConfig.apply(this, environment.settings)
+                        webChromeClient = PopupBlockingWebChromeClient(environment.diagnosticsLogger)
+                        webViewClient =
+                            environment.webViewIntegration.webViewClient(
+                                onNavigationRequested = { _, url -> pageTabAssociator.recordRequest(activeTab.id, url) },
+                                onPageStart = { _, url ->
+                                    val page = pageTabAssociator.onPageStartedWithContext(url, activeTab.id)
+                                    page.tabId?.let { id ->
+                                        handlers.actions.onPageStarted(id, url, page.startsNewNavigation)
+                                        if (tabs.state.value.activeTabId == id) onLoadingChange(true)
+                                    }
+                                },
+                                onPageFinished = { webView ->
+                                    webView.url?.let { url ->
+                                        if (url == "about:blank") {
+                                            webView.clearHistory()
+                                            if (tabs.state.value.activeTabId == activeTab.id) onLoadingChange(false)
+                                        } else {
+                                            val owner = pageTabAssociator.onPageFinished(url)
+                                            if (owner == tabs.state.value.activeTabId) onLoadingChange(false)
+                                            owner?.let { handlers.actions.onPageFinished(it, url, webView.title ?: "") }
                                         }
-                                    },
-                                    onPageFinished = { webView ->
-                                        webView.url?.let { url ->
-                                            if (url == "about:blank") {
-                                                webView.clearHistory()
-                                                if (tabs.state.value.activeTabId == tab.id) onLoadingChange(false)
-                                            } else {
-                                                val owner = pageTabAssociator.onPageFinished(url)
-                                                if (owner == tabs.state.value.activeTabId) onLoadingChange(false)
-                                                owner?.let { handlers.actions.onPageFinished(it, url, webView.title ?: "") }
-                                            }
-                                        }
-                                    },
-                                    onRequestObserved = { url, headers, pageUrl ->
-                                        val tabId = pageTabAssociator.tabIdForPage(pageUrl)
-                                        environment.sniffer.onRequestObserved(
-                                            url,
-                                            headers,
-                                            null,
-                                            StreamSource.NETWORK,
-                                            pageUrl,
-                                            tabId,
-                                        )
-                                        environment.subtitleSniffer.onRequestObserved(url, headers, pageUrl, tabId)
-                                    },
-                                )
-                        }
+                                    }
+                                },
+                                onRequestObserved = { url, headers, pageUrl ->
+                                    val tabId = pageTabAssociator.tabIdForPage(pageUrl)
+                                    environment.sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl, tabId)
+                                    environment.subtitleSniffer.onRequestObserved(url, headers, pageUrl, tabId)
+                                },
+                            )
                     }
-                },
-                update = { webView ->
-                    if (pageTabAssociator.shouldLoad(tab.id, tab.url, webView.url)) {
-                        pageTabAssociator.recordRequest(tab.id, tab.url)
-                        onLoadingChange(true)
-                        webView.loadUrl(tab.url)
-                    }
-                },
-            )
-        }
+                }
+            },
+            update = { webView ->
+                if (pageTabAssociator.shouldLoad(activeTab.id, activeTab.url, webView.url)) {
+                    pageTabAssociator.recordRequest(activeTab.id, activeTab.url)
+                    onLoadingChange(true)
+                    webView.loadUrl(activeTab.url)
+                }
+            },
+        )
     }
 }
