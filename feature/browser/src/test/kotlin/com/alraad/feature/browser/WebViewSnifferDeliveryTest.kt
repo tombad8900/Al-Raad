@@ -12,6 +12,7 @@ import com.alraad.core.common.contracts.StreamListener
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.core.common.contracts.StreamUrl
 import com.alraad.feature.browser.sniffer.StreamSniffer
+import com.alraad.feature.browser.ui.PageTabAssociator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -49,6 +50,7 @@ class WebViewSnifferDeliveryTest {
     private fun request(
         url: String,
         mainFrame: Boolean = false,
+        headers: Map<String, String> = mapOf("Referer" to "https://page.example"),
     ) = object : WebResourceRequest {
         override fun getUrl() = android.net.Uri.parse(url)
 
@@ -60,7 +62,7 @@ class WebViewSnifferDeliveryTest {
 
         override fun getMethod() = "GET"
 
-        override fun getRequestHeaders() = mapOf("Referer" to "https://page.example")
+        override fun getRequestHeaders() = headers
     }
 
     @Test fun `webview requests reach the sniffer and license attaches to the page stream`() {
@@ -103,4 +105,48 @@ class WebViewSnifferDeliveryTest {
         client.shouldInterceptRequest(view, request("https://cdn-b.example/movie.m3u8"))
         assertEquals(listOf("https://second.example/nav", "https://second.example/nav"), observed)
     }
+
+    @Test
+    fun `pushState document context reaches iframe detection with captured headers`() {
+        val initialPage = "https://top.example/watch"
+        val pushedPage = "https://top.example/watch/after-push-state"
+        val associator = PageTabAssociator()
+        associator.recordRequest("tab-a", initialPage)
+        val captured = mutableListOf<Triple<String?, String?, Map<String, String>>>()
+        val helper = WebViewIntegrationHelper(allowAll, logger, CoroutineScope(Dispatchers.Main))
+        val view = WebView(org.robolectric.RuntimeEnvironment.getApplication())
+        val client =
+            helper.webViewClient(
+                onPageDocumentStarted = { _, url ->
+                    associator.onPageStartedWithContext(url, "tab-a").documentId
+                },
+                onPageUrlChanged = { _, previousUrl, url, _ ->
+                    associator.onPageUrlChanged(previousUrl, url)?.documentId
+                },
+                onRequestObservedWithContext = { url, headers, pageUrl, documentId ->
+                    captured += Triple(pageUrl, documentId, headers)
+                },
+            )
+        client.onPageStarted(view, initialPage, null)
+        client.doUpdateVisitedHistory(view, pushedPage, false)
+        val iframeHeaders =
+            mapOf(
+                "Referer" to "https://iframe.other-origin.example/frame",
+                "Origin" to "https://iframe.other-origin.example",
+            )
+
+        client.shouldInterceptRequest(
+            view,
+            request(
+                "https://media.cdn-other.example/movie/index.m3u8",
+                headers = iframeHeaders,
+            ),
+        )
+
+        assertEquals(1, captured.size)
+        assertEquals(pushedPage, captured.single().first)
+        assertEquals(associator.associationForPage(pushedPage)?.documentId, captured.single().second)
+        assertEquals(iframeHeaders, captured.single().third)
+    }
+
 }
