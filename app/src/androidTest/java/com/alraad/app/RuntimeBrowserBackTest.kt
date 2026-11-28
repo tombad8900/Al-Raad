@@ -21,12 +21,12 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.feature.browser.tabs.TabManager
 import com.alraad.feature.browser.tabs.TabManagerTestEntryPoint
 import dagger.hilt.android.EntryPointAccessors
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
