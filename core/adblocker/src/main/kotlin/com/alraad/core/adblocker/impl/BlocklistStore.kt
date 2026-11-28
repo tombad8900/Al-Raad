@@ -30,6 +30,7 @@ class BlocklistStore
 
         private companion object {
             const val DEFAULT_MIN_DOMAINS = 100
+            const val MIN_KEPT_FRACTION = 0.5
         }
 
         fun isEnabled(id: String): Boolean = prefs.getBoolean("enabled_$id", BlocklistCatalog.byId(id)?.enabledByDefault ?: true)
@@ -51,13 +52,22 @@ class BlocklistStore
             prefs.edit().putStringSet("exceptions", updated).apply()
         }
 
+        /** Enough domains, and not far smaller than the stored copy (that looks like a cut-off download). */
+        private fun plausibleUpdate(
+            id: String,
+            count: Int,
+        ): Boolean {
+            val previous = storedDomains(id)?.size ?: 0
+            return count >= effectiveMin(id) && (previous == 0 || count >= previous * MIN_KEPT_FRACTION)
+        }
+
         /** Parses candidate text and promotes it only when it yields enough domains. */
         fun promote(
             id: String,
             text: String,
         ): Boolean {
             val domains = AdblockPlusDomainParser.parse(text)
-            if (domains.size < effectiveMin(id)) return false
+            if (!plausibleUpdate(id, domains.size)) return false
             dir.mkdirs()
             val rawTmp = File(dir, "$id.raw.tmp")
             // One file per list, replaced by a single rename: the stored copy is either entirely the old list or

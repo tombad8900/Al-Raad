@@ -36,14 +36,18 @@ class BlocklistUpdater
                 Result(updated, kept)
             }
 
-        private fun download(url: String): String {
+        internal fun download(url: String): String {
             val conn = URI(url).toURL().openConnection() as HttpURLConnection
             conn.connectTimeout = 15_000
             conn.readTimeout = 30_000
             conn.instanceFollowRedirects = true
             try {
                 check(conn.responseCode == HttpURLConnection.HTTP_OK) { "HTTP ${conn.responseCode}" }
-                return conn.inputStream.bufferedReader().use { it.readText() }
+                val bytes = conn.inputStream.use { it.readBytes() }
+                val expected = conn.contentLengthLong
+                // A connection cut mid-body can end quietly: a short body must never look like a complete list.
+                check(expected < 0 || bytes.size.toLong() == expected) { "incomplete download ${bytes.size}/$expected" }
+                return bytes.toString(Charsets.UTF_8)
             } finally {
                 conn.disconnect()
             }
