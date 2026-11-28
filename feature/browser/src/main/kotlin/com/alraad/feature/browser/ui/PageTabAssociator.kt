@@ -4,7 +4,9 @@ class PageTabAssociator {
     private val pendingNavigationTabs = mutableListOf<Pair<String, String>>()
     private val pageTabIds =
         object : LinkedHashMap<String, String>(16, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > MAX_PAGE_MAPPINGS
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<String, String>?,
+            ): Boolean = size > MAX_PAGE_MAPPINGS
         }
     private var lastRequestedNavigation: Pair<String, String>? = null
     private var lastBoundTabId: String? = null
