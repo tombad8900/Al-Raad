@@ -2,8 +2,8 @@ package com.alraad.feature.browser.ui
 
 import android.content.Context
 import android.view.ViewGroup
-import android.webkit.WebView
 import android.webkit.WebChromeClient
+import android.webkit.WebView
 import android.webkit.WebViewClient
 
 /**
@@ -48,6 +48,8 @@ class BrowserWebViewPool(context: Context) {
     fun pauseAll() {
         activeTabId = null
         views.values.forEach(::pause)
+        // WebView.pauseTimers() is process-wide. Call it only when the whole browser
+        // destination is hidden, never when switching between individual tabs.
         if (!timersPaused) {
             views.values.firstOrNull()?.pauseTimers()
             timersPaused = views.isNotEmpty()
