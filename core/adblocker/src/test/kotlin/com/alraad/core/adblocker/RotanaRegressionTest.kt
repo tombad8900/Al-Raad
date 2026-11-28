@@ -1,6 +1,5 @@
 package com.alraad.core.adblocker
 
-import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.alraad.core.adblocker.impl.BlocklistStore
 import com.alraad.core.adblocker.impl.NativeAdblock
@@ -51,8 +50,7 @@ class RotanaRegressionTest {
         BlocklistStore(ApplicationProvider.getApplicationContext()).also { it.minDomains = 1 }
     }
 
-    private fun newBlocker() =
-        OfflineAdBlocker(ApplicationProvider.getApplicationContext(), logger, settings, store)
+    private fun newBlocker() = OfflineAdBlocker(ApplicationProvider.getApplicationContext(), logger, settings, store)
 
     private fun requireNative() {
         // Match RuleEngineTest locally, but make a missing host library a hard CI failure.
@@ -90,32 +88,12 @@ class RotanaRegressionTest {
     fun `Rotana first-party resources and Google search stay allowed while fixture trackers are blocked`() =
         runTest {
             requireNative()
-            check(
-                store.promote(
-                    "easylist",
-                    listOf(
-                        "||googletagmanager.com^",
-                        "||analytics.google.com^",
-                        "||stats.g.doubleclick.net^",
-                        "||google.com/measurement/conversion",
-                        "||google.com.kw/ads/ga-audiences",
-                        "||example-ads.test^",
-                        "/banner-ad/",
-                    ).joinToString("\\n"),
-                ),
-            )
+            check(store.promote("easylist", RULES.joinToString("\n")))
 
             val blocker = newBlocker()
             val pageUrl = "https://rotana.net/ar"
             val fixture = loadFixture()
-            val trackingUrls =
-                setOf(
-                    "https://www.googletagmanager.com/gtag/js",
-                    "https://www.google.com/measurement/conversion",
-                    "https://analytics.google.com/g/collect",
-                    "https://stats.g.doubleclick.net/g/collect",
-                    "https://www.google.com.kw/ads/ga-audiences",
-                )
+            val trackingUrls = TRACKING_URLS
             val fixtureByUrl = fixture.associateBy { it.url }
 
             trackingUrls.forEach { url ->
@@ -165,4 +143,34 @@ class RotanaRegressionTest {
             assertEquals("Only the explicitly pinned tracking requests may be blocked", trackingUrls, blockedFixtureUrls)
             assertEquals("Blocked fixture count must equal asserted tracker count", trackingUrls.size, blockedFixtureUrls.size)
         }
+
+    private companion object {
+        val RULES =
+            listOf(
+                "||googletagmanager.com^",
+                "||analytics.google.com^",
+                "||stats.g.doubleclick.net^",
+                "||google.com/measurement/conversion",
+                "||google.com.kw/ads/ga-audiences",
+                "||example-ads.test^",
+                "/banner-ad/",
+                // Path-, option- and domain-scoped rules must stay scoped. A parser that widens them into
+                // whole-domain blocks would block the CDN, cdnjs and Google navigations in the fixture.
+                "||d1rjxhevrfxjk0.cloudfront.net/ads/",
+                "||cdnjs.cloudflare.com/ajax/libs/adblock-detect/",
+                "||rotana.net/tracking/\$script",
+                "||google.com^\$third-party,domain=example-news.test",
+                "||google.com/search?q=ad-keyword",
+                "@@||google.com/search\$document",
+            )
+
+        val TRACKING_URLS =
+            setOf(
+                "https://www.googletagmanager.com/gtag/js",
+                "https://www.google.com/measurement/conversion",
+                "https://analytics.google.com/g/collect",
+                "https://stats.g.doubleclick.net/g/collect",
+                "https://www.google.com.kw/ads/ga-audiences",
+            )
+    }
 }
