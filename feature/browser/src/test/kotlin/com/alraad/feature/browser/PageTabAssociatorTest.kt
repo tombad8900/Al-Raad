@@ -4,6 +4,8 @@ import com.alraad.feature.browser.ui.PageTabAssociator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -99,4 +101,47 @@ class PageTabAssociatorTest {
         assertNull(associator.tabIdForPage("https://closed.example/"))
         assertNull(associator.tabIdForPage("https://closed.example/next"))
     }
+
+    @Test
+    fun `pushState URL inherits the owning tab and document generation`() {
+        val associator = PageTabAssociator()
+        val initial = "https://watch.example/title/1"
+        val pushed = "https://watch.example/player/1"
+        associator.recordRequest("tabA", initial)
+        val started = associator.onPageStartedWithContext(initial, "tabA")
+
+        val changed = associator.onPageUrlChanged(initial, pushed)
+
+        assertEquals("tabA", changed?.tabId)
+        assertEquals(started.documentId, changed?.documentId)
+        assertEquals("tabA", associator.tabIdForPage(pushed))
+        assertEquals(started.documentId, associator.associationForPage(pushed)?.documentId)
+    }
+
+    @Test
+    fun `unknown URL is never assigned to whichever tab is active`() {
+        val associator = PageTabAssociator()
+        associator.recordRequest("tabA", "https://known.example/")
+        associator.onPageStartedWithContext("https://known.example/", "tabA")
+
+        assertNull(associator.onPageUrlChanged("https://unknown.example/", "https://other.example/"))
+        assertNull(associator.associationForPage("https://other.example/"))
+    }
+
+    @Test
+    fun `same URL reload receives a new document generation and retires the old one`() {
+        val associator = PageTabAssociator()
+        val url = "https://watch.example/title/1"
+        associator.recordRequest("tabA", url)
+        val oldDocument = associator.onPageStartedWithContext(url, "tabA").documentId
+
+        associator.recordRequest("tabA", url)
+        val newDocument = associator.onPageStartedWithContext(url, "tabA").documentId
+
+        assertNotNull(newDocument)
+        assertNotEquals(oldDocument, newDocument)
+        assertNull(associator.associationForDocument(oldDocument))
+        assertEquals(newDocument, associator.associationForPage(url)?.documentId)
+    }
+
 }
