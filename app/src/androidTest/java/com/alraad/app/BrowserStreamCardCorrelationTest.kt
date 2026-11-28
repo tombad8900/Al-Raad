@@ -5,7 +5,6 @@ import android.webkit.WebView
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
@@ -47,12 +46,13 @@ class BrowserStreamCardCorrelationTest {
             }.isSuccess
         }
         assertNotNull("Browser WebView must be attached", browserWebView)
+        val webView = requireNotNull(browserWebView)
 
         val baseUrl = "https://top.fixture.invalid/watch"
         val mediaUrl = "https://cdn.fixture.invalid/media/synthetic.m3u8"
         val iframeHtml =
             "<!doctype html><html><body><img src='$mediaUrl'></body></html>"
-        val iframeDataUrl = "data:text/html,\u0024{Uri.encode(iframeHtml)}"
+        val iframeDataUrl = "data:text/html," + Uri.encode(iframeHtml)
         val topLevelHtml =
             "<!doctype html><html><body><script>" +
                 "history.pushState({fixture:true}, '', '/watch/after-push-state');" +
@@ -61,7 +61,7 @@ class BrowserStreamCardCorrelationTest {
                 "</script></body></html>"
 
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            browserWebView!!.loadDataWithBaseURL(baseUrl, topLevelHtml, "text/html", "UTF-8", null)
+            webView.loadDataWithBaseURL(baseUrl, topLevelHtml, "text/html", "UTF-8", null)
         }
 
         composeRule.waitUntil(timeoutMillis = 30_000) {
