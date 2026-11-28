@@ -106,10 +106,21 @@ class OfflineAdBlocker
 
         private fun baselineText(): String = context.assets.open("blocklist.txt").bufferedReader().use { it.readText() }
 
+        /**
+         * Builds the engine ahead of the first page load so that request does not pay for it. A request that arrives
+         * while this runs waits on the same lock and is then checked by the finished engine; none passes unchecked.
+         * Does nothing while blocking is off, so a disabled blocker never holds the engine in memory.
+         */
+        suspend fun warmUp() {
+            if (blockingEnabled()) ensureEngine()
+        }
+
         private suspend fun ensureEngine() {
             // While a rebuild runs, keep answering from the last-known-good engine instead of waiting for it.
             val servingOldEngine = engine.hasEngine() && loadMutex.isLocked
-            if (rebuildNeeded && !servingOldEngine) {
+            // rebuildNeeded is cleared when a build starts, so a request arriving mid-build must also wait while there is
+            // no engine yet (NOT_BUILT); otherwise it would be answered "allow" by an engine that does not exist.
+            if ((rebuildNeeded || engineStatus == EngineStatus.NOT_BUILT) && !servingOldEngine) {
                 loadMutex.withLock {
                     if (rebuildNeeded) withContext(Dispatchers.IO) { rebuildEngine() }
                 }
