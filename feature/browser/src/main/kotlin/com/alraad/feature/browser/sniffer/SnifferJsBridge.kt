@@ -8,7 +8,6 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import org.json.JSONObject
 
-/** Receives only bounded, page-visible fetch/XHR request metadata from the current document. */
 class SnifferJsBridge
     @Inject
     constructor(
@@ -16,7 +15,10 @@ class SnifferJsBridge
     ) {
         private val pageContext = AtomicReference<PageContext?>(null)
 
-        fun bindPage(pageUrl: String, tabId: String): String {
+        fun bindPage(
+            pageUrl: String,
+            tabId: String,
+        ): String {
             if (!isHttpUrl(pageUrl) || tabId.isBlank()) {
                 clearPage()
                 return ""
@@ -26,7 +28,10 @@ class SnifferJsBridge
             return token
         }
 
-        fun isBoundTo(pageUrl: String, tabId: String): Boolean =
+        fun isBoundTo(
+            pageUrl: String,
+            tabId: String,
+        ): Boolean =
             pageContext.get()?.let { it.pageUrl == pageUrl && it.tabId == tabId } == true
 
         fun clearPage() {
