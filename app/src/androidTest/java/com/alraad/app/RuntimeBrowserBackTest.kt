@@ -177,7 +177,10 @@ class RuntimeBrowserBackTest {
                         override fun dispatch(request: RecordedRequest) =
                             MockResponse()
                                 .setHeader("Content-Type", "text/html; charset=utf-8")
-                                .setBody("<html><head><title>trash-fixture</title></head><body>trash fixture</body></html>")
+                                .setBody(
+                                    "<html><head><title>trash-fixture</title></head>" +
+                                        "<body>trash fixture</body></html>",
+                                )
                     }
                 start()
             }
@@ -210,8 +213,16 @@ class RuntimeBrowserBackTest {
                 }.isFailure
             }
 
-            assertEquals("trash must not create or switch tabs", activeTabId, tabManager.state.value.activeTabId)
-            assertSame("trash must not replace the current WebView", webView, onMain { pooledWebViewOnMain(activeTabId) })
+            assertEquals(
+                "trash must not create or switch tabs",
+                activeTabId,
+                tabManager.state.value.activeTabId,
+            )
+            assertSame(
+                "trash must not replace the current WebView",
+                webView,
+                onMain { pooledWebViewOnMain(activeTabId) },
+            )
             assertEquals("trash must not navigate the current WebView", url, onMain { webView.url })
             composeRule.onNodeWithText("مسح السجل / Clear all").assertIsDisplayed()
 
