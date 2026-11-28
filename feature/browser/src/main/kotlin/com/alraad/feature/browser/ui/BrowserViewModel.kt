@@ -80,11 +80,12 @@ class BrowserViewModel
                     if (onCurrentPage) {
                         subtitlesByTab.update { current ->
                             current +
-                                (track.sourceTabId to
-                                    mergeSubtitleTracks(
-                                        current[track.sourceTabId].orEmpty(),
-                                        listOf(track),
-                                    )
+                                (
+                                    track.sourceTabId to
+                                        mergeSubtitleTracks(
+                                            current[track.sourceTabId].orEmpty(),
+                                            listOf(track),
+                                        )
                                 )
                         }
                         pendingSubtitlesByTab.update { current ->
@@ -100,11 +101,12 @@ class BrowserViewModel
                         // callback. Hold the page-scoped track briefly instead of dropping it.
                         pendingSubtitlesByTab.update { current ->
                             current +
-                                (track.sourceTabId to
-                                    mergeSubtitleTracks(
-                                        current[track.sourceTabId].orEmpty(),
-                                        listOf(track),
-                                    )
+                                (
+                                    track.sourceTabId to
+                                        mergeSubtitleTracks(
+                                            current[track.sourceTabId].orEmpty(),
+                                            listOf(track),
+                                        )
                                 )
                         }
                     }
