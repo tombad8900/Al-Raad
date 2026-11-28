@@ -148,18 +148,12 @@ class PageTabAssociator {
     fun onPageUrlChanged(
         previousUrl: String?,
         url: String,
+        documentId: String?,
     ): PageDocumentAssociation? {
-        val association =
-            previousUrl?.let(pageDocuments::get)
-                ?: pendingNavigationTabs.lastOrNull { it.url == url }?.let {
-                    PageDocumentAssociation(it.tabId, it.documentId)
-                }
-                ?: pageDocuments[url]
-        if (association != null) {
-            pageDocuments[url] = association
-            documentOwners[association.documentId] = association
-            lastBoundDocument = association
-        }
+        val association = documentId?.let(documentOwners::get) ?: return null
+        if (lastBoundDocument?.documentId != documentId) return null
+        if (previousUrl == null || pageDocuments[previousUrl]?.documentId != documentId) return null
+        pageDocuments[url] = association
         return association
     }
 
