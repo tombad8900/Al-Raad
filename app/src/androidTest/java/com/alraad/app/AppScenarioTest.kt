@@ -69,10 +69,14 @@ class AppScenarioTest {
     /** TabManager is a process-wide @Singleton: clear tabs leaked by earlier tests. */
     @Before
     fun resetTabManager() {
-        EntryPointAccessors.fromApplication(
-            InstrumentationRegistry.getInstrumentation().targetContext.applicationContext,
-            TabManagerTestEntryPoint::class.java,
-        ).tabManager().reset()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val tabManager =
+            EntryPointAccessors.fromApplication(
+                instrumentation.targetContext.applicationContext,
+                TabManagerTestEntryPoint::class.java,
+            ).tabManager()
+        // reset() destroys pooled WebViews, which must happen on the main thread.
+        instrumentation.runOnMainSync { tabManager.reset() }
     }
 
     @Test fun browseThenHistoryBookmarkAndReopen() {
