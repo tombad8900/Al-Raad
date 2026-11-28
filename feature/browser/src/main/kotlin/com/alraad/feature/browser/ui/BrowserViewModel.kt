@@ -54,6 +54,8 @@ class BrowserViewModel
             kotlinx.coroutines.flow.MutableStateFlow<Map<String, List<DetectedStreamItem>>>(emptyMap())
         private val currentPageUrlsByTab =
             kotlinx.coroutines.flow.MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+        private val currentDocumentIdsByTab =
+            kotlinx.coroutines.flow.MutableStateFlow<Map<String, String?>>(emptyMap())
         val detectedStreams: StateFlow<List<DetectedStreamItem>> =
             kotlinx.coroutines.flow.combine(tabManager.state, streamsByTab) { tabState, byTab ->
                 tabState.activeTabId?.let { byTab[it] }.orEmpty()
@@ -105,14 +107,16 @@ class BrowserViewModel
                     stream: StreamUrl,
                     pageUrl: String?,
                     tabId: String?,
+                    documentId: String?,
                 ) {
                     if (pageUrl == null || tabId == null) return
                     val sourcePage = pageUrl
                     val sourceTabId = tabId
                     val knownTab = tabManager.state.value.tabs.any { it.id == sourceTabId }
+                    val currentDocumentId = currentDocumentIdsByTab.value[sourceTabId]
                     val onCurrentPage = sourcePage in currentPageUrlsByTab.value[sourceTabId].orEmpty()
-                    if (!knownTab || !onCurrentPage) return
-                    val item = DetectedStreamItem(stream, sourcePage, sourceTabId)
+                    if (!knownTab || !onCurrentPage || documentId != currentDocumentId) return
+                    val item = DetectedStreamItem(stream, sourcePage, sourceTabId, documentId)
                     streamsByTab.update { current ->
                         val existing = current[sourceTabId].orEmpty()
                         val index = existing.indexOfFirst { it.stream.url == stream.url }
@@ -132,6 +136,7 @@ class BrowserViewModel
                     synchronized(subtitleAssociationLock) {
                         streamsByTab.update { current -> current.filterKeys { it in liveTabIds } }
                         currentPageUrlsByTab.update { current -> current.filterKeys { it in liveTabIds } }
+                        currentDocumentIdsByTab.update { current -> current.filterKeys { it in liveTabIds } }
                         subtitlesByTab.update { current -> current.filterKeys { it in liveTabIds } }
                         pendingSubtitlesByTab.update { current -> current.filterKeys { it in liveTabIds } }
                     }
@@ -150,9 +155,15 @@ class BrowserViewModel
             tabId: String,
             url: String,
             startsNewNavigation: Boolean,
+            documentId: String? = null,
         ) {
             synchronized(subtitleAssociationLock) {
                 if (tabManager.state.value.tabs.none { it.id == tabId }) return@synchronized
+                val currentDocumentId = currentDocumentIdsByTab.value[tabId]
+                if (!startsNewNavigation && currentDocumentId != null && documentId != currentDocumentId) return@synchronized
+                if (startsNewNavigation) {
+                    currentDocumentIdsByTab.update { current -> current + (tabId to documentId) }
+                }
                 val urls = if (startsNewNavigation) emptySet() else currentPageUrlsByTab.value[tabId].orEmpty()
                 val updatedUrls = (urls + url).toList().takeLast(MAX_PAGE_URLS_PER_TAB).toSet()
                 currentPageUrlsByTab.update { current -> current + (tabId to updatedUrls) }
@@ -177,6 +188,21 @@ class BrowserViewModel
             }
         }
 
+        /** Same-document URL changes (pushState/replaceState/redirect) retain the owner token. */
+        fun recordPageUrlChanged(
+            tabId: String,
+            url: String,
+            documentId: String,
+        ) {
+            synchronized(subtitleAssociationLock) {
+                if (tabManager.state.value.tabs.none { it.id == tabId }) return@synchronized
+                if (currentDocumentIdsByTab.value[tabId] != documentId) return@synchronized
+                val updatedUrls =
+                    (currentPageUrlsByTab.value[tabId].orEmpty() + url).toList().takeLast(MAX_PAGE_URLS_PER_TAB).toSet()
+                currentPageUrlsByTab.update { current -> current + (tabId to updatedUrls) }
+            }
+        }
+
         private fun mergeSubtitleTracks(
             existing: List<SubtitleTrack>,
             incoming: List<SubtitleTrack>,
@@ -195,10 +221,12 @@ class BrowserViewModel
          * switchable source (T5); the picked item starts selected.
          */
         fun playStream(item: DetectedStreamItem) {
+            if (currentDocumentIdsByTab.value[item.sourceTabId] != item.documentId) return
+            if (item.sourcePageUrl !in currentPageUrlsByTab.value[item.sourceTabId].orEmpty()) return
             val pageStreams =
                 sortDetectedStreamItems(
                     streamsByTab.value[item.sourceTabId].orEmpty().filter {
-                        it.sourcePageUrl == item.sourcePageUrl
+                        it.sourcePageUrl == item.sourcePageUrl && it.documentId == item.documentId
                     },
                 )
             val selectedIndex = pageStreams.indexOfFirst { it.stream.url == item.stream.url }
@@ -276,6 +304,7 @@ class BrowserViewModel
             item: DetectedStreamItem,
             requestedTitle: String,
         ) {
+            if (currentDocumentIdsByTab.value[item.sourceTabId] != item.documentId) return
             val title = requestedTitle.trim().ifBlank { android.net.Uri.parse(item.stream.url).host ?: item.stream.url }
             viewModelScope.launch {
                 streamActions.saveToLibrary(item.stream, title = title, sourcePageUrl = item.sourcePageUrl)
