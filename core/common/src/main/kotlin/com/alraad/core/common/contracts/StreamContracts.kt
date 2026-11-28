@@ -28,6 +28,19 @@ data class SavedStream(
     val createdAt: Long,
 )
 
+/** A page/tab-scoped external subtitle captured from a WebView request. */
+data class SubtitleTrack(
+    val id: String,
+    val url: String,
+    val mimeType: String,
+    val language: String?,
+    val label: String,
+    val sourcePageUrl: String,
+    val sourceTabId: String,
+    /** Allowlisted, non-credential headers scoped only to this subtitle URL. */
+    val requestHeaders: Map<String, String> = emptyMap(),
+)
+
 interface StreamListener {
     fun onStreamDetected(stream: StreamUrl)
 
