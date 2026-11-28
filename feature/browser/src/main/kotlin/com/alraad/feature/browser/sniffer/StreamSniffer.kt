@@ -95,8 +95,9 @@ class StreamSniffer
             }
 
         private fun diagnosticHeaders(headers: Map<String, String>): Map<String, String> =
-            headers.filterKeys { !it.equals("cookie", true) && !it.equals("authorization", true) &&
-                !it.equals("proxy-authorization", true)
+            headers.filterKeys {
+                !it.equals("cookie", true) && !it.equals("authorization", true) &&
+                    !it.equals("proxy-authorization", true)
             }
 
         fun registerListener(listener: StreamListener) {
