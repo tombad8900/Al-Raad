@@ -4,39 +4,25 @@ import android.content.Context
 import android.webkit.WebView
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertNotSame
-import org.junit.Assert.assertSame
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class BrowserWebViewPoolTest {
-    private val context: Context = ApplicationProvider.getApplicationContext()
-
     @Test
-    fun eachTabKeepsItsOwnWebViewAndItsHistoryOwner() {
+    fun keepsSeparateReusableViewsAndReleasesOnlyClosedTabs() {
+        val context: Context = ApplicationProvider.getApplicationContext()
         val pool = BrowserWebViewPool()
-        val firstTab = pool.obtain("first") { WebView(context) }
-        val secondTab = pool.obtain("second") { WebView(context) }
-
-        assertNotSame(firstTab, secondTab)
-        assertSame(firstTab, pool.obtain("first") { error("existing tab view must be reused") })
-        assertSame(secondTab, pool.obtain("second") { error("existing tab view must be reused") })
-        pool.clear()
-    }
-
-    @Test
-    fun closingATabReleasesOnlyItsWebView() {
-        val pool = BrowserWebViewPool()
-        val firstTab = pool.obtain("first") { WebView(context) }
-        val secondTab = pool.obtain("second") { WebView(context) }
-        assertNotSame(firstTab, secondTab)
-
+        val first = pool.obtain("first") { WebView(context) }
+        val second = pool.obtain("second") { WebView(context) }
+        assertNotSame(first, second)
+        assertSame(first, pool.obtain("first") { error("must reuse") })
         pool.retainTabs(setOf("second"))
-
-        assertSame(secondTab, pool.get("second"))
         assertNull(pool.get("first"))
+        assertSame(second, pool.get("second"))
         pool.clear()
     }
 }
