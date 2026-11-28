@@ -81,7 +81,11 @@ class BrowserViewModel
                         subtitlesByTab.update { current ->
                             current +
                                 (track.sourceTabId to
-                                    mergeSubtitleTracks(current[track.sourceTabId].orEmpty(), listOf(track)))
+                                    mergeSubtitleTracks(
+                                        current[track.sourceTabId].orEmpty(),
+                                        listOf(track),
+                                    )
+                                )
                         }
                         pendingSubtitlesByTab.update { current ->
                             val remaining = current[track.sourceTabId].orEmpty().filterNot { it.id == track.id }
@@ -97,7 +101,11 @@ class BrowserViewModel
                         pendingSubtitlesByTab.update { current ->
                             current +
                                 (track.sourceTabId to
-                                    mergeSubtitleTracks(current[track.sourceTabId].orEmpty(), listOf(track)))
+                                    mergeSubtitleTracks(
+                                        current[track.sourceTabId].orEmpty(),
+                                        listOf(track),
+                                    )
+                                )
                         }
                     }
                 }
