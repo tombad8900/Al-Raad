@@ -24,6 +24,26 @@ class PageTabAssociatorTest {
     }
 
     @Test
+    fun `pending request resolves resource ownership before page start callback`() {
+        val associator = PageTabAssociator()
+        associator.recordRequest("tabA", "https://a.example/")
+
+        assertEquals("tabA", associator.tabIdForPage("https://a.example/"))
+        assertEquals("tabA", associator.onPageStartedWithContext("https://a.example/", "tabA").tabId)
+        assertEquals("tabA", associator.tabIdForPage("https://a.example/"))
+    }
+
+    @Test
+    fun `new request retires stale pending ownership for the same tab`() {
+        val associator = PageTabAssociator()
+        associator.recordRequest("tabA", "https://a.example/")
+        associator.recordRequest("tabA", "https://a.example/next")
+
+        assertNull(associator.tabIdForPage("https://a.example/"))
+        assertEquals("tabA", associator.tabIdForPage("https://a.example/next"))
+    }
+
+    @Test
     fun `new navigation retires previous page mapping`() {
         val associator = PageTabAssociator()
         associator.recordRequest("tabA", "https://a.example/")
