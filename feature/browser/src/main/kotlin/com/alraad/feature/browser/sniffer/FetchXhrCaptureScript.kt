@@ -8,7 +8,7 @@ internal object FetchXhrCaptureScript {
             (function(token) {
               if (window.__alraadCaptureInstalled === token) return;
               window.__alraadCaptureInstalled = token;
-              var allowed = {accept: true, "content-type": true, range: true};
+              var allowed = {accept: true, authorization: true, "content-type": true, range: true};
               function report(rawUrl, headers, method) {
                 try {
                   var url = new URL(rawUrl, location.href);
