@@ -232,7 +232,11 @@ class RuntimeBrowserBackTest {
             composeRule.onNodeWithText("المتصفح").performClick()
             composeRule.waitForIdle()
             assertEquals(tab2, tabManager.state.value.activeTabId)
-            assertSame("active History-created WebView survives section navigation", view2, onMain { activeWebViewOnMain() })
+            assertSame(
+                "active History-created WebView survives section navigation",
+                view2,
+                onMain { activeWebViewOnMain() },
+            )
             assertSame("background original WebView is still retained", view1, onMain { pooledWebViewOnMain(tab1) })
             assertTrue("background original WebView history is still retained", onMain { view1.canGoBack() })
             awaitUrl(a)
