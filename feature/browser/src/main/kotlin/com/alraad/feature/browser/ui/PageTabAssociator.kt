@@ -87,7 +87,7 @@ class PageTabAssociator {
         val previousDocument = lastBoundDocument
         val redirectBelongsToPrevious =
             pendingRedirect != null && previousDocument != null && previousDocument.tabId != activeTabId
-        val ownerTabId =
+        val candidateOwnerTabId =
             when {
                 pendingMatch != null -> pendingMatch.tabId
                 redirectBelongsToPrevious -> previousDocument?.tabId
@@ -97,7 +97,12 @@ class PageTabAssociator {
             }
         val isRedirectContinuation =
             previousDocument != null && previousDocument.documentId == loadingDocumentId &&
-                ownerTabId == previousDocument.tabId
+                candidateOwnerTabId == previousDocument.tabId
+        val hasExplicitNavigationOwner = pendingMatch != null || (pendingRedirect != null && !redirectBelongsToPrevious)
+        val ownerTabId =
+            candidateOwnerTabId?.takeIf {
+                it == activeTabId || isRedirectContinuation || hasExplicitNavigationOwner
+            }
         val startsNewNavigation =
             pendingMatch != null || (pendingRedirect != null && !redirectBelongsToPrevious) ||
                 (ownerTabId != null && !isRedirectContinuation)
