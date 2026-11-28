@@ -222,7 +222,8 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
                     when (exportDiagnostics(context, text) { context.startActivity(it) }) {
                         ExportResult.SHARED -> null
                         ExportResult.EMPTY -> "لا يوجد ما يُصدَّر / Nothing to export"
-                        ExportResult.COPIED_INSTEAD -> "تعذر التصدير، تم النسخ بدلًا منه / Export failed, copied instead"
+                        ExportResult.COPIED_INSTEAD ->
+                            "تعذر التصدير، تم النسخ بدلًا منه / Export failed, copied instead"
                         ExportResult.FAILED -> "تعذر التصدير / Export failed"
                     }
                 message?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show() }
