@@ -9,12 +9,9 @@ class PageTabAssociatorTest {
     fun restoresCurrentDocumentOwnershipAfterBrowserScreenRecreation() {
         val associator = PageTabAssociator()
         val currentUrl = "https://example.com/watch"
-
         associator.restoreCurrentPage("retained-tab", currentUrl)
-
         assertEquals("retained-tab", associator.tabIdForPage(currentUrl))
         assertEquals("retained-tab", associator.onPageFinished(currentUrl))
-
         val redirect = associator.onPageStartedWithContext(
             "https://cdn.example.com/watch",
             "different-active-tab",
