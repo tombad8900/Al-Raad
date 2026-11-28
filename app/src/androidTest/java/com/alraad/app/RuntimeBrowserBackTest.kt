@@ -25,6 +25,8 @@ import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -331,13 +333,13 @@ class RuntimeBrowserBackTest {
             // Rebuild a -> b -> c in tab 1 so its own history has a known previous entry.
             typeAddress(a)
             awaitUrl(a)
-            awaitLoadFinished(a)
+            awaitLoadFinished(a, aTitle)
             onMain { view1.loadUrl(b) }
             awaitUrl(b)
-            awaitLoadFinished(b)
+            awaitLoadFinished(b, "page/b")
             onMain { view1.loadUrl(c) }
             awaitUrl(c)
-            awaitLoadFinished(c)
+            awaitLoadFinished(c, "page/c")
             back()
             awaitUrl(b)
             assertTrue(onMain { view1.canGoBack() })
@@ -361,7 +363,7 @@ class RuntimeBrowserBackTest {
             composeRule.waitForIdle()
             waitForBrowserAddressBar()
             awaitUrl(a)
-            awaitLoadFinished(a)
+            awaitLoadFinished(a, aTitle)
 
             val tab2 = checkNotNull(tabManager.state.value.activeTabId)
             assertNotEquals("History opens a distinct tab", tab1, tab2)
