@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDirection
@@ -55,6 +56,7 @@ fun AddressBar(
     onBookmarkClick: (() -> Unit)? = null,
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val keyboardController = LocalSoftwareKeyboardController.current
     var text by remember(currentUrl) { mutableStateOf(currentUrl) }
     Row(
         modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -83,7 +85,13 @@ fun AddressBar(
                 }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { onNavigate(normalizeAddress(text)) }),
+            keyboardActions =
+                KeyboardActions(
+                    onGo = {
+                        keyboardController?.hide()
+                        onNavigate(normalizeAddress(text))
+                    },
+                ),
         )
         if (onBookmarkClick != null) {
             IconButton(onClick = onBookmarkClick, modifier = Modifier.testTag("bookmark_action")) {

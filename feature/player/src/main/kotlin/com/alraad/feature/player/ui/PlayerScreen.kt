@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.alraad.feature.player.ui
 
 import android.app.Activity
@@ -10,6 +12,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -122,9 +125,10 @@ fun PlayerScreen(
 
     Box(modifier = modifier.fillMaxSize().background(Color.Black)) {
         PlayerSurface(player = player, gestures = gestures, isRtl = isRtl, speed = speed, fillScreen = fillScreen)
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth().padding(8.dp).align(Alignment.TopEnd),
-            horizontalArrangement = Arrangement.End,
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             PlayerControlsRow(
                 controller = controller,
@@ -184,7 +188,13 @@ private fun SpeedMenu(
     var open by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { open = true }) {
-            Text(text = "${speed}x", color = Color.White, style = MaterialTheme.typography.labelLarge)
+            Text(
+                text = "${speed}x",
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             SPEEDS.forEach { option ->
@@ -256,47 +266,114 @@ private fun PlayerControlsRow(
     menus: PlaybackMenus,
 ) {
     var qualityMenuOpen by remember { mutableStateOf(false) }
-    IconButton(onClick = display.onToggleFullscreen) {
-        Icon(
-            if (display.fullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-            contentDescription = if (display.fullscreen) "Exit fullscreen" else "Fullscreen",
-            tint = Color.White,
+    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        PlayerDisplayControlsRow(display, onEnterPip, menus)
+        PlayerSubtitleControlsRow(
+            controller = controller,
+            player = player,
+            subtitles = subtitles,
+            qualityMenuOpen = qualityMenuOpen,
+            onQualityMenuOpenChange = { qualityMenuOpen = it },
         )
     }
-    IconButton(onClick = onEnterPip) {
-        Icon(Icons.Default.PictureInPictureAlt, contentDescription = "Picture in picture", tint = Color.White)
-    }
-    TextButton(onClick = subtitles.onSelect, enabled = player != null) {
-        Text("الترجمة", color = Color.White, style = MaterialTheme.typography.labelLarge)
-    }
-    TextButton(onClick = subtitles.onPickFile, enabled = player != null) {
-        Text("ملف ترجمة", color = Color.White, style = MaterialTheme.typography.labelLarge)
-    }
-    IconButton(onClick = display.onToggleFill) {
-        Icon(
-            if (display.fillScreen) Icons.Default.FitScreen else Icons.Default.AspectRatio,
-            contentDescription = if (display.fillScreen) "Fit video inside screen" else "Fill screen",
-            tint = Color.White,
-        )
-    }
-    Box {
-        TextButton(onClick = { qualityMenuOpen = true }) {
-            Text("جودة / Quality", color = Color.White, style = MaterialTheme.typography.labelLarge)
+}
+
+@Composable
+private fun PlayerDisplayControlsRow(
+    display: DisplayControls,
+    onEnterPip: () -> Unit,
+    menus: PlaybackMenus,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = display.onToggleFullscreen) {
+            Icon(
+                if (display.fullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                contentDescription = if (display.fullscreen) "Exit fullscreen" else "Fullscreen",
+                tint = Color.White,
+            )
         }
-        DropdownMenu(expanded = qualityMenuOpen, onDismissRequest = { qualityMenuOpen = false }) {
+        IconButton(onClick = onEnterPip) {
+            Icon(Icons.Default.PictureInPictureAlt, contentDescription = "Picture in picture", tint = Color.White)
+        }
+        IconButton(onClick = display.onToggleFill) {
+            Icon(
+                if (display.fillScreen) Icons.Default.FitScreen else Icons.Default.AspectRatio,
+                contentDescription = if (display.fillScreen) "Fit video inside screen" else "Fill screen",
+                tint = Color.White,
+            )
+        }
+        SpeedMenu(speed = menus.speed, onSelect = menus.onSelectSpeed)
+        SourceMenu(menus)
+    }
+}
+
+@Composable
+private fun PlayerSubtitleControlsRow(
+    controller: Media3PlayerController,
+    player: Player?,
+    subtitles: SubtitleControls,
+    qualityMenuOpen: Boolean,
+    onQualityMenuOpenChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextButton(onClick = subtitles.onSelect, enabled = player != null) {
+            Text(
+                "الترجمة",
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+        TextButton(onClick = subtitles.onPickFile, enabled = player != null) {
+            Text(
+                "ملف ترجمة",
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+        QualityMenuButton(controller, qualityMenuOpen, onQualityMenuOpenChange)
+    }
+}
+
+@Composable
+private fun QualityMenuButton(
+    controller: Media3PlayerController,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+) {
+    Box {
+        TextButton(onClick = { onExpandedChange(true) }) {
+            Text(
+                "الجودة",
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
             QUALITY_OPTIONS.forEach { option ->
                 DropdownMenuItem(
                     text = { Text(option?.let { "${it}p" } ?: "Auto") },
                     onClick = {
-                        qualityMenuOpen = false
+                        onExpandedChange(false)
                         controller.setQuality(option?.let { Media3PlayerController.QualityLimit(it) })
                     },
                 )
             }
         }
     }
-    SpeedMenu(speed = menus.speed, onSelect = menus.onSelectSpeed)
-    SourceMenu(menus)
 }
 
 @Composable

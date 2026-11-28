@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 
 /** Arabic actions for distinct links detected on the current page. */
@@ -30,6 +31,7 @@ fun DetectedStreamPicker(
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
+    val keyboardController = LocalSoftwareKeyboardController.current
     val options = remember(items) { sortDetectedStreamItems(items) }
     var selectedUrl by remember(options.first().sourceTabId, options.first().sourcePageUrl) {
         mutableStateOf(options.first().stream.url)
@@ -58,7 +60,10 @@ fun DetectedStreamPicker(
         }
         Text(selected.stream.url, style = MaterialTheme.typography.bodySmall, maxLines = 1)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onPlay(selected) }) { Text("تشغيل") }
+            Button(onClick = {
+                keyboardController?.hide()
+                onPlay(selected)
+            }) { Text("تشغيل") }
             TextButton(onClick = { onCopy(selected) }) { Text("نسخ الرابط") }
             TextButton(onClick = { saveItem = selected }) { Text("حفظ في المكتبة") }
         }
