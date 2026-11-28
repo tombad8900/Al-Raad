@@ -24,12 +24,10 @@ import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
+import com.alraad.app.di.DiagnosticsLoggerTestEntryPoint
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.diagnostics.DiagnosticsRedactor
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.hamcrest.Matchers.not
@@ -49,14 +47,8 @@ class DiagnosticsActionsNavigationTest {
     private val logger: DiagnosticsLogger
         get() = EntryPointAccessors.fromApplication(
             context.applicationContext,
-            DiagnosticsLoggerEntryPoint::class.java,
+            DiagnosticsLoggerTestEntryPoint::class.java,
         ).diagnosticsLogger()
-
-    @EntryPoint
-    @InstallIn(SingletonComponent::class)
-    interface DiagnosticsLoggerEntryPoint {
-        fun diagnosticsLogger(): DiagnosticsLogger
-    }
 
     @Test
     fun emptyDiagnosticsActionsShowVisibleFeedback() {
