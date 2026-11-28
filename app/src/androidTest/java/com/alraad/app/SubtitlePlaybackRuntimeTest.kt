@@ -1,0 +1,528 @@
+package com.alraad.app
+
+import android.util.Log
+import androidx.media3.common.C
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
+import androidx.media3.common.text.CueGroup
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.util.EventLogger
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.alraad.core.common.contracts.DiagCategory
+import com.alraad.core.common.contracts.DiagEntry
+import com.alraad.core.common.contracts.DiagLevel
+import com.alraad.core.common.contracts.DiagnosticsLogger
+import com.alraad.core.common.contracts.PlaybackRequest
+import com.alraad.core.common.contracts.StreamFormat
+import com.alraad.core.common.contracts.StreamSource
+import com.alraad.core.common.contracts.StreamUrl
+import com.alraad.core.common.contracts.SubtitleTrack
+import com.alraad.feature.player.impl.Media3PlayerController
+import com.alraad.feature.player.impl.externalSubtitleTrack
+import com.alraad.feature.player.impl.switchSource
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import okio.Buffer
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * On-device proof for T4 subtitles: real VTT/SRT/ASS cues decoded by Media3,
+ * track selection on/off, external-file attachment with playback continuity,
+ * and runtime header isolation (subtitle requests never carry the stream's
+ * credentials). Runs in the emulator lane; Robolectric cannot decode media.
+ */
+@RunWith(AndroidJUnit4::class)
+class SubtitlePlaybackRuntimeTest {
+    private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val context
+        get() = instrumentation.targetContext.applicationContext
+
+    private val noopLogger =
+        object : DiagnosticsLogger {
+            override fun log(
+                category: DiagCategory,
+                level: DiagLevel,
+                message: String,
+                details: Map<String, String>,
+            ) = Unit
+
+            override fun observeLogs(): Flow<List<DiagEntry>> = flowOf(emptyList())
+
+            override suspend fun exportAsText(): String = ""
+
+            override suspend fun clear() = Unit
+        }
+
+    private lateinit var server: MockWebServer
+    private lateinit var controller: Media3PlayerController
+
+    /**
+     * Host-served fixture base (CI passes fixtureBaseUrl), mirroring AppScenarioTest:
+     * keeps the ~20MB clip and its serving buffers out of the instrumented process
+     * (OOM evidence: run 46110584922 logcat, dispatcher copying the fixture in-process).
+     * Falls back to in-process MockWebServer serving for local runs.
+     */
+    private val fixtureBaseUrl: String?
+        get() = InstrumentationRegistry.getArguments().getString("fixtureBaseUrl")
+
+    private fun videoUrl(path: String): String =
+        // The second source carries a dummy query so the two switch sources stay
+        // distinct URLs while the host serves the same clip for both: this proves
+        // the selection transition (observable runner-side via the ?second=1 fetch),
+        // not switching between different media content.
+        fixtureBaseUrl?.let { "$it/fixture.mp4" + if (path == "video2.mp4") "?second=1" else "" }
+            ?: server.url("/$path").toString()
+
+    @Before
+    fun setUp() {
+        server = MockWebServer()
+        server.dispatcher = subtitleDispatcher()
+        server.start()
+        controller = Media3PlayerController(context, noopLogger)
+    }
+
+    @After
+    fun tearDown() {
+        instrumentation.runOnMainSync { controller.release() }
+        server.shutdown()
+    }
+
+    @Test
+    fun vttCuesRenderDuringPlayback() {
+        val cues = playWithSubtitle("subs.vtt", "text/vtt", "Hello from VTT")
+        assertTrue("No VTT cue rendered", cues.await(60, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun srtCuesRenderDuringPlayback() {
+        val cues = playWithSubtitle("subs.srt", "application/x-subrip", "Hello from SRT")
+        assertTrue("No SRT cue rendered", cues.await(60, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun assCuesRenderDuringPlayback() {
+        val cues = playWithSubtitle("subs.ass", "text/x-ssa", "Hello from ASS")
+        assertTrue("No ASS cue rendered", cues.await(60, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun textTrackSelectionTogglesOffAndOn() {
+        playWithSubtitle("subs.vtt", "text/vtt", "Hello from VTT")
+        awaitReady()
+        var textTracksEnabled = false
+        instrumentation.runOnMainSync {
+            val player = checkNotNull(controller.currentPlayer())
+            textTracksEnabled = hasEnabledTextTrack(player)
+            player.trackSelectionParameters =
+                player.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                    .build()
+        }
+        instrumentation.runOnMainSync {
+            assertTrue("Text track should be enabled before the toggle", textTracksEnabled)
+        }
+        // Selection changes apply asynchronously on the playback thread; await them.
+        awaitTextTrackEnabled(false, "Text track still enabled after disabling")
+        instrumentation.runOnMainSync {
+            val player = checkNotNull(controller.currentPlayer())
+            player.trackSelectionParameters =
+                player.trackSelectionParameters
+                    .buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .build()
+        }
+        awaitTextTrackEnabled(true, "Text track not re-enabled")
+    }
+
+    private fun awaitTextTrackEnabled(
+        enabled: Boolean,
+        message: String,
+    ) {
+        var state = !enabled
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (System.nanoTime() < deadline) {
+            instrumentation.runOnMainSync {
+                state = hasEnabledTextTrack(checkNotNull(controller.currentPlayer()))
+            }
+            if (state == enabled) return
+            Thread.sleep(250)
+        }
+        assertTrue(message, state == enabled)
+    }
+
+    @Test
+    fun externalSubtitleAttachPreservesPlaybackAndRenders() {
+        val cues = playWithSubtitle(null, null, "Hello from VTT")
+        var positionBefore = 0L
+        var positionAfter = -1L
+        instrumentation.runOnMainSync {
+            val player = checkNotNull(controller.currentPlayer())
+            positionBefore = player.currentPosition
+        }
+        val track =
+            requireNotNull(
+                externalSubtitleTrack(server.url("/subs.vtt").toString(), "movie.ar.vtt"),
+            )
+        instrumentation.runOnMainSync {
+            controller.addExternalSubtitle(track)
+            positionAfter = checkNotNull(controller.currentPlayer()).currentPosition
+        }
+        // Attached local files carry no language, so a preferred-language selection
+        // cannot match them; select via an explicit override, mirroring a tap on the
+        // track row in the shipped dialog.
+        selectFirstTextTrack()
+        // The attach rebuilt the player, so the cue listener from playWithSubtitle
+        // went away with the old instance; watch again on the rebuilt player.
+        watchCues("Hello from VTT", cues)
+        assertEquals(listOf(track), controller.currentPlaybackRequest.value?.subtitles)
+        assertTrue("Player was not rebuilt", positionAfter >= 0)
+        assertTrue(
+            "Position jumped by the attach: before=$positionBefore after=$positionAfter",
+            positionAfter in (positionBefore - 1500)..(positionBefore + 1500),
+        )
+        assertTrue("Attached subtitle never rendered a cue", cues.await(60, TimeUnit.SECONDS))
+    }
+
+    @Test
+    fun subtitleRequestsNeverCarryStreamCredentials() {
+        val cues = playWithSubtitle("subs.vtt", "text/vtt", "Hello from VTT")
+        assertTrue(cues.await(60, TimeUnit.SECONDS))
+        val requests = mutableListOf<RecordedRequest>()
+        while (true) {
+            requests += server.takeRequest(100, TimeUnit.MILLISECONDS) ?: break
+        }
+        val subtitleRequest = requests.first { it.path.orEmpty().startsWith("/subs.vtt") }
+        if (fixtureBaseUrl == null) {
+            // Local-run positive control: the video request carried the synthetic
+            // test Cookie. In CI the fixture is host-served, so the same control is
+            // asserted runner-side from the fixture server's request log (ci.yml
+            // "Verify fixture request instrumentation").
+            val videoRequest = requests.first { it.path.orEmpty().startsWith("/video.mp4") }
+            assertEquals("session-secret", videoRequest.getHeader("Cookie"))
+        }
+        assertNull("Credential leaked to the subtitle request", subtitleRequest.getHeader("Cookie"))
+        assertNull(subtitleRequest.getHeader("Authorization"))
+        assertEquals("text/vtt", subtitleRequest.getHeader("Accept"))
+    }
+
+    @Test
+    fun sourceSwitchPreservesPositionAndPlayState() {
+        val v1 =
+            StreamUrl(
+                url = videoUrl("video.mp4"),
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+            )
+        val v2 =
+            StreamUrl(
+                url = videoUrl("video2.mp4"),
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+            )
+        instrumentation.runOnMainSync { controller.play(PlaybackRequest(sources = listOf(v1, v2))) }
+        awaitReady()
+        instrumentation.runOnMainSync { checkNotNull(controller.currentPlayer()).seekTo(1500) }
+        Thread.sleep(POSITION_SETTLE_MS)
+
+        var positionBefore = 0L
+        var positionAfter = -1L
+        var playingAfter = false
+        instrumentation.runOnMainSync {
+            positionBefore = checkNotNull(controller.currentPlayer()).currentPosition
+            controller.switchSource(1)
+            val switched = checkNotNull(controller.currentPlayer())
+            positionAfter = switched.currentPosition
+            playingAfter = switched.playWhenReady
+        }
+        assertEquals(v2, controller.currentStream.value)
+        assertTrue(
+            "Position lost on source switch: $positionBefore -> $positionAfter",
+            positionAfter in (positionBefore - 1500)..(positionBefore + 1500),
+        )
+        assertTrue("Playback did not continue after switching while playing", playingAfter)
+
+        instrumentation.runOnMainSync {
+            checkNotNull(controller.currentPlayer()).pause()
+            controller.switchSource(0)
+            assertTrue(
+                "Paused playback resumed after a source switch",
+                checkNotNull(controller.currentPlayer()).playWhenReady.not(),
+            )
+        }
+        assertEquals(v1, controller.currentStream.value)
+
+        instrumentation.runOnMainSync { controller.release() }
+        assertNull("Screen-exit cleanup left a player behind", controller.currentPlayer())
+        assertNotNull("release() must preserve the selection for restore", controller.currentStream.value)
+    }
+
+    private fun awaitReady() {
+        val ready = CountDownLatch(1)
+        instrumentation.runOnMainSync {
+            val player = checkNotNull(controller.currentPlayer()) { "Player build failed" }
+            if (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED) {
+                ready.countDown()
+            } else {
+                player.addListener(
+                    object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
+                                ready.countDown()
+                            }
+                        }
+                    },
+                )
+            }
+        }
+        assertTrue("Player never became READY", ready.await(90, TimeUnit.SECONDS))
+    }
+
+    /** Plays the fixture with (or without) one subtitle; returns a latch that fires on its cue text. */
+    private fun playWithSubtitle(
+        subtitlePath: String?,
+        mimeType: String?,
+        expectedCue: String,
+    ): CountDownLatch {
+        val cueLatch = CountDownLatch(1)
+        val stream =
+            StreamUrl(
+                url = videoUrl("video.mp4"),
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+                headers = mapOf("Cookie" to "session-secret"),
+            )
+        val subtitles =
+            if (subtitlePath != null && mimeType != null) {
+                listOf(
+                    SubtitleTrack(
+                        id = "net:$subtitlePath",
+                        url = server.url("/$subtitlePath").toString(),
+                        mimeType = mimeType,
+                        language = "ar",
+                        label = subtitlePath,
+                        sourcePageUrl = "",
+                        sourceTabId = "",
+                        requestHeaders = mapOf("Accept" to mimeType),
+                    ),
+                )
+            } else {
+                emptyList()
+            }
+        instrumentation.runOnMainSync {
+            controller.play(PlaybackRequest(sources = listOf(stream), subtitles = subtitles))
+            val player = checkNotNull(controller.currentPlayer()) { "Player build failed" }
+            attachEvidenceListener(player)
+            selectTextTrack(player)
+        }
+        // Without a subtitle there is nothing to emit; attach-only for that caller.
+        watchCues(expectedCue, cueLatch, awaitCycles = subtitles.isNotEmpty())
+        return cueLatch
+    }
+
+    /**
+     * Evidence logging for the emulator lane: full EventLogger analytics plus explicit
+     * timestamps for text-track selection, cue emission (with playback position) and
+     * player errors. Lets a red run distinguish fixture/test faults (no/mistimed HTTP,
+     * wrong MIME) from player defects (request served, still no cues), instead of
+     * theorizing about cue timing.
+     */
+    private fun attachEvidenceListener(player: Player) {
+        if (player is ExoPlayer) {
+            player.addAnalyticsListener(EventLogger(TAG))
+        }
+        player.addListener(
+            object : Player.Listener {
+                override fun onTracksChanged(tracks: Tracks) {
+                    val textGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+                    Log.i(
+                        TAG,
+                        "tracks textGroups=" + textGroups.size +
+                            " selected=" + textGroups.count { it.isSelected } +
+                            " t=" + System.currentTimeMillis(),
+                    )
+                }
+
+                override fun onCues(cueGroup: CueGroup) {
+                    Log.i(
+                        TAG,
+                        "cues n=" + cueGroup.cues.size +
+                            " pos=" + player.currentPosition + "ms t=" + System.currentTimeMillis(),
+                    )
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    Log.i(TAG, "playerError " + error.errorCodeName + " t=" + System.currentTimeMillis())
+                }
+            },
+        )
+    }
+
+    /**
+     * Selects the sideloaded text track, mirroring what the shipped subtitle button
+     * (TrackSelectionDialogBuilder) does on a user tap: ExoPlayer never auto-selects
+     * a sideloaded track whose language matches no preference, so without this no
+     * text renderer outputs and no cues can fire.
+     */
+    private fun selectTextTrack(player: Player) {
+        player.trackSelectionParameters =
+            player.trackSelectionParameters
+                .buildUpon()
+                .setPreferredTextLanguage("ar")
+                .build()
+    }
+
+    /**
+     * Selects the first text track via an explicit TrackSelectionOverride, waiting for
+     * the group to appear. Mirrors the shipped dialog's row tap; works for tracks
+     * without a language tag.
+     */
+    private fun selectFirstTextTrack() {
+        var applied = false
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+        while (System.nanoTime() < deadline && !applied) {
+            instrumentation.runOnMainSync {
+                val group =
+                    controller.currentPlayer()?.currentTracks?.groups?.firstOrNull {
+                        it.type == C.TRACK_TYPE_TEXT
+                    }
+                val player = controller.currentPlayer()
+                if (group != null && player != null) {
+                    player.trackSelectionParameters =
+                        player.trackSelectionParameters
+                            .buildUpon()
+                            .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, 0))
+                            .build()
+                    applied = true
+                }
+            }
+            if (!applied) Thread.sleep(250)
+        }
+        assertTrue("No text track group appeared to select", applied)
+    }
+
+    /**
+     * Awaits [expectedCue] on the CURRENT player. Each cycle re-seeks into the 0-4s
+     * fixture cue window and briefly plays: while playing, onCues fires as soon as the
+     * subtitle load completes with the position inside the window. A pure paused seek
+     * misses cues that finish loading after the paused render pass, and a single
+     * play-through races the fetch against crossing the window end (the flaky
+     * failures in runs 46112042274/46114354695/46115550853) - the cycles remove both.
+     */
+    private fun watchCues(
+        expectedCue: String,
+        cueLatch: CountDownLatch,
+        awaitCycles: Boolean = true,
+    ) {
+        instrumentation.runOnMainSync {
+            val player = checkNotNull(controller.currentPlayer()) { "Player build failed" }
+            player.addListener(
+                object : Player.Listener {
+                    override fun onCues(cueGroup: CueGroup) {
+                        if (cueGroup.cues.any { it.text?.contains(expectedCue) == true }) {
+                            cueLatch.countDown()
+                        }
+                    }
+                },
+            )
+        }
+        if (!awaitCycles) return
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(60)
+        while (System.nanoTime() < deadline && cueLatch.count > 0) {
+            instrumentation.runOnMainSync {
+                val player = controller.currentPlayer() ?: return@runOnMainSync
+                player.seekTo(CUE_WINDOW_MS)
+                player.playWhenReady = true
+            }
+            cueLatch.await(5, TimeUnit.SECONDS)
+        }
+        instrumentation.runOnMainSync { controller.currentPlayer()?.pause() }
+    }
+
+    private fun hasEnabledTextTrack(player: Player): Boolean =
+        player.currentTracks.groups.any { group ->
+            group.type == C.TRACK_TYPE_TEXT && group.isSelected
+        }
+
+    private fun subtitleDispatcher(): Dispatcher =
+        object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val response = responseFor(request)
+                // Evidence log: exactly which subtitle/media requests arrived, when,
+                // and what they were served (distinguishes fixture/test vs player faults).
+                Log.i(
+                    TAG,
+                    "serve path=" + request.path + " status=" + response.status.split(' ')[1] +
+                        " bytes=" + (response.getBody()?.size ?: 0L) + " t=" + System.currentTimeMillis(),
+                )
+                return response
+            }
+
+            private fun responseFor(request: RecordedRequest): MockResponse =
+                when (request.path?.substringBefore('?')) {
+                    "/video.mp4", "/video2.mp4" ->
+                        MockResponse()
+                            .setHeader("Content-Type", "video/mp4")
+                            .setHeader("Accept-Ranges", "bytes")
+                            .setBody(Buffer().write(videoFixture))
+                    "/subs.vtt" -> MockResponse().setHeader("Content-Type", "text/vtt").setBody(VTT_FIXTURE)
+                    "/subs.srt" -> MockResponse().setHeader("Content-Type", "application/x-subrip").setBody(SRT_FIXTURE)
+                    "/subs.ass" -> MockResponse().setHeader("Content-Type", "text/x-ssa").setBody(ASS_FIXTURE)
+                    else -> MockResponse().setResponseCode(404)
+                }
+        }
+
+    private companion object {
+        const val TAG: String = "SubtitleProof"
+
+        const val VTT_FIXTURE = "WEBVTT\n\n00:00.000 --> 00:04.000\nHello from VTT\n"
+
+        const val SRT_FIXTURE = "1\n00:00:00,000 --> 00:00:04,000\nHello from SRT\n"
+
+        const val ASS_FIXTURE =
+            "[Script Info]\nScriptType: v4.00+\n\n" +
+                "[V4+ Styles]\n" +
+                "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour," +
+                " Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow," +
+                " Alignment, MarginL, MarginR, MarginV, Encoding\n" +
+                "Style: Default,Arial,20,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2," +
+                "10,10,10,1\n\n" +
+                "[Events]\n" +
+                "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
+                "Dialogue: 0,0:00:00.00,0:00:04.00,Default,,0,0,0,,Hello from ASS\n"
+
+        const val POSITION_SETTLE_MS = 800L
+
+        /** Mid-window position inside the 0-4s fixture cue, used for paused deterministic emission. */
+        const val CUE_WINDOW_MS = 2_000L
+
+        /** Shared download of the same clip the player-runtime scenario uses. */
+        val videoFixture: ByteArray by lazy {
+            val fixtureUrl =
+                "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4"
+            val client = OkHttpClient.Builder().callTimeout(90, TimeUnit.SECONDS).build()
+            client.newCall(Request.Builder().url(fixtureUrl).build()).execute().use { response ->
+                check(response.isSuccessful) { "Test video download failed: HTTP ${response.code}" }
+                requireNotNull(response.body).bytes()
+            }
+        }
+    }
+}
