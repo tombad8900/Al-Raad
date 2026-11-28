@@ -118,13 +118,17 @@ class RuntimeBrowserBackTest {
         }
     }
 
-    /** Wait for both the loading indicator to appear and the WebView load to finish. */
-    private fun awaitLoadFinished(timeoutMs: Long = 30_000) {
+    /** Wait until the expected URL has a completed document in the actual pooled WebView. */
+    private fun awaitLoadFinished(
+        expectedUrl: String,
+        timeoutMs: Long = 30_000,
+    ) {
         composeRule.waitUntil(timeoutMillis = timeoutMs) {
-            runCatching { composeRule.onNodeWithTag("page_loading").assertIsDisplayed() }.isSuccess
-        }
-        composeRule.waitUntil(timeoutMillis = timeoutMs) {
-            runCatching { composeRule.onNodeWithTag("page_loading").assertIsDisplayed() }.isFailure
+            onMain {
+                activeWebViewOnMain()?.let { webView ->
+                    webView.url == expectedUrl && webView.progress == 100 && !webView.title.isNullOrBlank()
+                } == true
+            }
         }
     }
 
@@ -194,7 +198,7 @@ class RuntimeBrowserBackTest {
             }
             typeAddress(url)
             awaitUrl(url)
-            awaitLoadFinished()
+            awaitLoadFinished(a)
             val activeTabId = checkNotNull(tabManager.state.value.activeTabId)
             val webView = checkNotNull(onMain { activeWebViewOnMain() })
             assertEquals(url, onMain { webView.url })
@@ -266,15 +270,15 @@ class RuntimeBrowserBackTest {
             // Page history: a -> b -> c, then Back twice returns to b and a.
             typeAddress(a)
             awaitUrl(a)
-            awaitLoadFinished()
+            awaitLoadFinished(b)
             val tab1 = checkNotNull(tabManager.state.value.activeTabId)
             val view1 = checkNotNull(onMain { activeWebViewOnMain() })
             onMain { view1.loadUrl(b) }
             awaitUrl(b)
-            awaitLoadFinished()
+            awaitLoadFinished(c)
             onMain { view1.loadUrl(c) }
             awaitUrl(c)
-            awaitLoadFinished()
+            awaitLoadFinished(url)
             capture("backtest-1-on-c.png")
             back()
             awaitUrl(b)
