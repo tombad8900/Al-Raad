@@ -57,16 +57,24 @@ class BlocklistStore
         ): Boolean {
             val domains = AdblockPlusDomainParser.parse(text)
             if (domains.size < effectiveMin(id)) return false
-            val target = File(dir, "$id.domains")
-            val tmp = File(dir, "$id.tmp")
             dir.mkdirs()
-            tmp.writeText(domains.sorted().joinToString("\n"))
-            check(tmp.renameTo(target)) { "atomic promote failed for $id" }
-            // Raw list text feeds the rule engine; promoted only after the domain sanity check passed.
+            val domainsTmp = File(dir, "$id.tmp")
             val rawTmp = File(dir, "$id.raw.tmp")
-            rawTmp.writeText(text)
-            check(rawTmp.renameTo(File(dir, "$id.raw"))) { "atomic raw promote failed for $id" }
-            return true
+            // Stage both files first: a failure here leaves the last-known-good pair untouched. Then promote the
+            // raw text (the engine's source) before the domains; a crash between the two renames leaves new raw plus
+            // old domains, which is still a usable list, never a missing or half-written one.
+            val promoted =
+                runCatching {
+                    domainsTmp.writeText(domains.sorted().joinToString("\n"))
+                    rawTmp.writeText(text)
+                    check(rawTmp.renameTo(File(dir, "$id.raw"))) { "atomic raw promote failed for $id" }
+                    check(domainsTmp.renameTo(File(dir, "$id.domains"))) { "atomic promote failed for $id" }
+                }.isSuccess
+            if (!promoted) {
+                domainsTmp.delete()
+                rawTmp.delete()
+            }
+            return promoted
         }
 
         fun storedDomains(id: String): Set<String>? {

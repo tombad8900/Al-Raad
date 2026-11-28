@@ -35,6 +35,26 @@ class BlocklistStoreTest {
         assertEquals(before, store.storedDomains("easylist"))
     }
 
+    @Test fun `a failed raw write keeps the last-known-good domains and raw text and does not throw`() {
+        assertTrue(store.promote("easylist", goodList("good")))
+        val domainsBefore = store.storedDomains("easylist")
+        val rulesBefore = store.activeEngineRules()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        // A directory where the raw temp file must go makes the raw write fail after the domain sanity check passed.
+        val blocker = java.io.File(context.filesDir, "blocklists/easylist.raw.tmp")
+        check(blocker.mkdirs())
+        try {
+            assertFalse(store.promote("easylist", goodList("new")))
+            assertEquals(domainsBefore, store.storedDomains("easylist"))
+            assertEquals(rulesBefore, store.activeEngineRules())
+            assertFalse(java.io.File(context.filesDir, "blocklists/easylist.tmp").exists())
+        } finally {
+            blocker.delete()
+        }
+        assertTrue(store.promote("easylist", goodList("recovered")))
+        assertTrue(store.storedDomains("easylist").orEmpty().any { it.startsWith("recovered") })
+    }
+
     @Test fun `disabled list contributes nothing to active domains`() {
         store.promote("easylist", goodList("on"))
         store.promote("easyprivacy", goodList("off"))

@@ -117,6 +117,21 @@ class SettingsDiagnosticsViewModelTest {
     }
 
     @Test
+    fun `toggling a list in settings reloads the blocker so the list stops applying`() =
+        kotlinx.coroutines.test.runTest {
+            val (store, updater, adBlocker) = testBlocklistDeps(fakeSettings, fakeLogger)
+            val vm = SettingsDiagnosticsViewModel(fakeSettings, fakeLogger, store, updater, adBlocker)
+            store.setEnabled("easylist", true)
+            check(store.promote("easylist", (1..5_000).joinToString("\n") { "||filler$it.example^" } + "\n||only-in-easylist.example^"))
+            adBlocker.reload()
+            assertTrue(adBlocker.shouldBlock("https://only-in-easylist.example/x.js"))
+            vm.setListEnabled("easylist", false)
+            assertFalse(adBlocker.shouldBlock("https://only-in-easylist.example/x.js"))
+            vm.setListEnabled("easylist", true)
+            assertTrue(adBlocker.shouldBlock("https://only-in-easylist.example/x.js"))
+        }
+
+    @Test
     fun `severity and text filters narrow visible logs and export`() {
         val vm =
             testBlocklistDeps(fakeSettings, fakeLogger).let { (store, updater, adBlocker) ->
