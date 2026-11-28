@@ -12,6 +12,7 @@ import javax.inject.Singleton
 /** Detects streams from WebView, JS bridge, and DOM observations. */
 private const val MAX_SEEN_KEYS = 1000
 
+@Suppress("TooManyFunctions")
 @Singleton
 class StreamSniffer
     @Inject
