@@ -56,7 +56,8 @@ class WebViewIntegrationHelper
             onPageStart: (WebView, String) -> Unit = { _, _ -> },
             onNavigationRequested: (WebView, String) -> Unit = { _, _ -> },
             onPageDocumentStarted: (WebView, String) -> String? = { _, _ -> null },
-            onPageUrlChanged: (WebView, String?, String, Boolean) -> String? = { _, _, _, _ -> null },
+            onPageUrlChanged: (WebView, String?, String?, String, Boolean) -> String? =
+                { _, _, _, _, _ -> null },
             onRequestObservedWithContext: (
                 url: String,
                 headers: Map<String, String>,
@@ -86,8 +87,9 @@ class WebViewIntegrationHelper
                     url: String,
                     isReload: Boolean,
                 ) {
-                    val previousUrl = currentPageContext.url
-                    val documentId = onPageUrlChanged(view, previousUrl, url, isReload)
+                    val previousContext = currentPageContext
+                    val previousUrl = previousContext.url
+                    val documentId = onPageUrlChanged(view, previousUrl, previousContext.documentId, url, isReload)
                     currentPageContext = CachedPageContext(url, documentId)
                     super.doUpdateVisitedHistory(view, url, isReload)
                 }
