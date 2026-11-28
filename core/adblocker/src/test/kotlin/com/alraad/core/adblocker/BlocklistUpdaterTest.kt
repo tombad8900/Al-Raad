@@ -88,6 +88,16 @@ class BlocklistUpdaterTest {
             }
         }
 
+    @Test fun `a list with only cosmetic and option rules is reported as unsupported, not as a failed update`() =
+        runTest {
+            onlyListEnabled()
+            updater.fetcher = { "example.com##.ad\nsite.example.org##+js(trusted-click-element, #x)\n||fb.example.net^${'$'}third-party\n" }
+            val result = updater.updateAll()
+            assertEquals(listOf(LIST_ID), result.unsupportedOnly)
+            assertTrue(result.updated.isEmpty() && result.keptLastGood.isEmpty())
+            assertTrue(warnings.isEmpty())
+        }
+
     @Test fun `disabled lists are not fetched`() =
         runTest {
             com.alraad.core.adblocker.impl.BlocklistCatalog.sources.forEach { store.setEnabled(it.id, false) }
