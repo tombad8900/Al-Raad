@@ -37,7 +37,17 @@ class FileDiagnosticsLogger(
     private val nextId = AtomicLong(1L)
 
     // log() is called from WebView request threads and must never wait on disk.
-    private val writer = DiagnosticsFileWriter(logFile, fileLock, ::formatLine)
+    private val writer =
+        DiagnosticsFileWriter(logFile, fileLock, ::formatLine, droppedNote = { count ->
+            DiagEntry(
+                id = nextId.getAndIncrement(),
+                timestamp = System.currentTimeMillis(),
+                category = DiagCategory.APP,
+                level = DiagLevel.WARN,
+                message = "Diagnostics file writer fell behind",
+                details = mapOf("entriesNotPersisted" to count.toString()),
+            )
+        })
 
     init {
         scope.launch(ioDispatcher) {

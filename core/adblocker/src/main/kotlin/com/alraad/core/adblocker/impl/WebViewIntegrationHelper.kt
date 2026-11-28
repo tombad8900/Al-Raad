@@ -113,7 +113,6 @@ class WebViewIntegrationHelper
                         )
                     val blocked = runBlocking(Dispatchers.IO) { adBlocker.shouldBlock(url, currentPageUrl.orEmpty(), type) }
                     if (blocked) {
-                        logger.log(DiagCategory.ADBLOCK, DiagLevel.DEBUG, "Intercepted", mapOf("url" to url))
                         return WebResourceResponse(
                             "text/plain",
                             "utf-8",
