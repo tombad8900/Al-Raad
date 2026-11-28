@@ -68,8 +68,10 @@ class BrowserStreamCardCorrelationTest {
         val topLevelHtml =
             "<!doctype html><html><body><script>" +
                 "history.pushState({fixture:true}, '', '/watch/after-push-state');" +
+                "setTimeout(function(){" +
                 "const frame=document.createElement('iframe');" +
                 "frame.src='$iframeDataUrl';document.body.appendChild(frame);" +
+                "},150);" +
                 "</script></body></html>"
 
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
