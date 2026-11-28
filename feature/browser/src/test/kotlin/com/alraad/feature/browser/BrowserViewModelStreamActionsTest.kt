@@ -112,14 +112,24 @@ class BrowserViewModelStreamActionsTest {
         val pageA = "https://page-a.example/watch"
         val pageB = "https://page-b.example/watch"
         val tabA = tabManager.openTab(pageA)
-        viewModel.recordPageStarted(tabA.id, pageA, startsNewNavigation = true)
+        viewModel.recordPageStarted(tabA.id, pageA, startsNewNavigation = true, documentId = "doc-a")
         val tabB = tabManager.openTab(pageB)
-        viewModel.recordPageStarted(tabB.id, pageB, startsNewNavigation = true)
+        viewModel.recordPageStarted(tabB.id, pageB, startsNewNavigation = true, documentId = "doc-b")
 
-        sniffer.onRequestObserved("https://cdn.example/a.m3u8", pageUrl = pageA, tabId = tabA.id)
+        sniffer.onRequestObserved(
+            "https://cdn.example/a.m3u8",
+            pageUrl = pageA,
+            tabId = tabA.id,
+            documentId = "doc-a",
+        )
         assertTrue(viewModel.detectedStreams.value.isEmpty())
 
-        sniffer.onRequestObserved("https://cdn.example/b.m3u8", pageUrl = pageB, tabId = tabB.id)
+        sniffer.onRequestObserved(
+            "https://cdn.example/b.m3u8",
+            pageUrl = pageB,
+            tabId = tabB.id,
+            documentId = "doc-b",
+        )
         assertEquals(
             listOf("https://cdn.example/b.m3u8"),
             viewModel.detectedStreams.value.map { it.stream.url },
@@ -132,7 +142,12 @@ class BrowserViewModelStreamActionsTest {
         )
 
         viewModel.recordPageStarted(tabA.id, "https://page-a.example/next", startsNewNavigation = true)
-        sniffer.onRequestObserved("https://cdn.example/stale.m3u8", pageUrl = pageA, tabId = tabA.id)
+        sniffer.onRequestObserved(
+            "https://cdn.example/stale.m3u8",
+            pageUrl = pageA,
+            tabId = tabA.id,
+            documentId = "doc-a",
+        )
         assertTrue(viewModel.detectedStreams.value.isEmpty())
     }
 
@@ -336,30 +351,5 @@ class BrowserViewModelStreamActionsTest {
         )
     }
 
-    @Test
-    fun `streams from another tab stay hidden until that tab becomes active`() {
-        val pageA = "https://top-a.example/watch"
-        val pageB = "https://top-b.example/watch"
-        val tabA = tabManager.openTab(pageA)
-        viewModel.recordPageStarted(tabA.id, pageA, startsNewNavigation = true, documentId = "doc-a")
-        val tabB = tabManager.openTab(pageB)
-        viewModel.recordPageStarted(tabB.id, pageB, startsNewNavigation = true, documentId = "doc-b")
 
-        sniffer.onRequestObserved(
-            "https://cdn-a.example/a.m3u8",
-            pageUrl = pageA,
-            tabId = tabA.id,
-            documentId = "doc-a",
-        )
-        sniffer.onRequestObserved(
-            "https://cdn-b.example/b.m3u8",
-            pageUrl = pageB,
-            tabId = tabB.id,
-            documentId = "doc-b",
-        )
-        assertEquals(listOf("https://cdn-b.example/b.m3u8"), viewModel.detectedStreams.value.map { it.stream.url })
-
-        tabManager.switchTo(tabA.id)
-        assertEquals(listOf("https://cdn-a.example/a.m3u8"), viewModel.detectedStreams.value.map { it.stream.url })
-    }
 }
