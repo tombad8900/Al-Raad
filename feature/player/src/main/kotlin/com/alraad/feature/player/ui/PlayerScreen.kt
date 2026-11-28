@@ -302,14 +302,32 @@ private fun PlayerControlsRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TextButton(onClick = subtitles.onSelect, enabled = player != null) {
-                Text("الترجمة", color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
+                Text(
+                    "الترجمة",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
             TextButton(onClick = subtitles.onPickFile, enabled = player != null) {
-                Text("ملف ترجمة", color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
+                Text(
+                    "ملف ترجمة",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelLarge,
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
             Box {
                 TextButton(onClick = { qualityMenuOpen = true }) {
-                    Text("الجودة", color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
+                    Text(
+                        "الجودة",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
                 }
                 DropdownMenu(expanded = qualityMenuOpen, onDismissRequest = { qualityMenuOpen = false }) {
                     QUALITY_OPTIONS.forEach { option ->
