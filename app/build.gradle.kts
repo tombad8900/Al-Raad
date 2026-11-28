@@ -70,5 +70,6 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     androidTestImplementation(libs.espresso.core)
+    androidTestImplementation(libs.media3.common)
     androidTestImplementation(libs.mockwebserver)
 }
