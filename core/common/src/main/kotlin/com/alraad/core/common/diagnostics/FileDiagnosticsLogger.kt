@@ -5,6 +5,7 @@ import com.alraad.core.common.contracts.DiagEntry
 import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import java.io.File
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,27 +34,44 @@ class FileDiagnosticsLogger(
 ) : DiagnosticsLogger {
     private val entries = MutableStateFlow<List<DiagEntry>>(emptyList())
     private val fileLock = Any()
-    private var nextId = 1L
+    private val nextId = AtomicLong(1L)
+
+    // log() is called from WebView request threads and must never wait on disk.
+    private val writer =
+        DiagnosticsFileWriter(logFile, fileLock, ::formatLine, droppedNote = { count ->
+            DiagEntry(
+                id = nextId.getAndIncrement(),
+                timestamp = System.currentTimeMillis(),
+                category = DiagCategory.APP,
+                level = DiagLevel.WARN,
+                message = "Diagnostics file writer fell behind",
+                details = mapOf("entriesNotPersisted" to count.toString()),
+            )
+        })
 
     init {
         scope.launch(ioDispatcher) {
-            synchronized(fileLock) {
-                if (logFile.exists()) {
-                    val rawLines = logFile.readLines()
-                    val loaded = rawLines.mapNotNull { parseLine(it) }
-                    entries.value = loaded.takeLast(maxInMemory)
-                    // Migrate valid legacy/raw entries in place so secrets are not left
-                    // on disk after the new redaction policy is introduced.
-                    if (loaded.size == rawLines.count { it.isNotBlank() }) {
-                        val safeContent =
-                            loaded.joinToString(
-                                separator = "\n",
-                                postfix = if (loaded.isEmpty()) "" else "\n",
-                                transform = ::formatLine,
-                            )
-                        if (safeContent != logFile.readText()) logFile.writeText(safeContent)
-                    }
-                }
+            loadExisting()
+            writer.runLoop()
+        }
+    }
+
+    private fun loadExisting() {
+        synchronized(fileLock) {
+            if (!logFile.exists()) return
+            val rawLines = logFile.readLines()
+            val loaded = rawLines.mapNotNull { parseLine(it) }
+            entries.value = loaded.takeLast(maxInMemory)
+            // Migrate valid legacy/raw entries in place so secrets are not left
+            // on disk after the new redaction policy is introduced.
+            if (loaded.size == rawLines.count { it.isNotBlank() }) {
+                val safeContent =
+                    loaded.joinToString(
+                        separator = "\n",
+                        postfix = if (loaded.isEmpty()) "" else "\n",
+                        transform = ::formatLine,
+                    )
+                if (safeContent != logFile.readText()) logFile.writeText(safeContent)
             }
         }
     }
@@ -67,7 +85,7 @@ class FileDiagnosticsLogger(
         val entry =
             DiagnosticsRedactor.redact(
                 DiagEntry(
-                    id = nextId++,
+                    id = nextId.getAndIncrement(),
                     timestamp = System.currentTimeMillis(),
                     category = category,
                     level = level,
@@ -76,15 +94,17 @@ class FileDiagnosticsLogger(
                 ),
             )
         entries.update { (it + entry).takeLast(maxInMemory) }
-        synchronized(fileLock) {
-            logFile.parentFile?.mkdirs()
-            logFile.appendText(formatLine(entry) + "\n")
-        }
+        writer.enqueue(entry)
     }
 
     override fun observeLogs(): Flow<List<DiagEntry>> = entries
 
-    override suspend fun exportAsText(): String =
+    override suspend fun exportAsText(): String {
+        writer.flush()
+        return readExport()
+    }
+
+    private fun readExport(): String =
         synchronized(fileLock) {
             if (!logFile.exists()) return ""
             // Decoded rendering retains safe diagnostics and excludes credential values.
@@ -97,9 +117,7 @@ class FileDiagnosticsLogger(
 
     override suspend fun clear() {
         entries.value = emptyList()
-        synchronized(fileLock) {
-            if (logFile.exists()) logFile.delete()
-        }
+        writer.clear()
     }
 
     private fun formatLine(entry: DiagEntry): String {
@@ -126,7 +144,7 @@ class FileDiagnosticsLogger(
                 }
         return DiagnosticsRedactor.redact(
             DiagEntry(
-                id = nextId++,
+                id = nextId.getAndIncrement(),
                 timestamp = parts[offset].toLongOrNull() ?: 0L,
                 category = runCatching { DiagCategory.valueOf(parts[offset + 1]) }.getOrDefault(DiagCategory.APP),
                 level = runCatching { DiagLevel.valueOf(parts[offset + 2]) }.getOrDefault(DiagLevel.INFO),

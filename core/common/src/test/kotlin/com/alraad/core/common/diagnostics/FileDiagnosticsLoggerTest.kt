@@ -148,4 +148,32 @@ class FileDiagnosticsLoggerTest {
             assertEquals("old message", entries.single().message)
             assertEquals("https://a.example", entries.single().details["url"])
         }
+
+    @Test
+    fun `log returns without touching the file and export still sees every entry in order`() =
+        runTest {
+            val file = tmp.newFile("diag-async.log")
+            file.delete()
+            val logger = logger(file)
+            repeat(50) { logger.log(DiagCategory.ADBLOCK, DiagLevel.DEBUG, "Blocked", mapOf("n" to "$it")) }
+            // The caller (a WebView request thread) did no disk work: nothing is written yet.
+            assertFalse(file.exists())
+            val lines = logger.exportAsText().lines()
+            assertEquals(50, lines.size)
+            assertTrue(lines.first().contains("n=0"))
+            assertTrue(lines.last().contains("n=49"))
+        }
+
+    @Test
+    fun `entries logged before clear are removed and entries after it are kept`() =
+        runTest {
+            val file = tmp.newFile("diag-clear.log")
+            val logger = logger(file)
+            logger.log(DiagCategory.APP, DiagLevel.INFO, "before", emptyMap())
+            logger.clear()
+            logger.log(DiagCategory.APP, DiagLevel.INFO, "after", emptyMap())
+            val exported = logger.exportAsText()
+            assertFalse(exported.contains("before"))
+            assertTrue(exported.contains("after"))
+        }
 }
