@@ -9,6 +9,7 @@ import com.alraad.app.navigation.ExportResult
 import com.alraad.app.navigation.copyDiagnostics
 import com.alraad.app.navigation.exportDiagnostics
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
