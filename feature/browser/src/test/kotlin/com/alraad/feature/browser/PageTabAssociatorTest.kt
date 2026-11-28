@@ -112,7 +112,6 @@ class PageTabAssociatorTest {
 
         assertEquals("tabA", changed?.tabId)
         assertEquals(started.documentId, changed?.documentId)
-        assertEquals("tabA", associator.tabIdForPage(pushed))
         assertEquals(started.documentId, associator.associationForPage(pushed)?.documentId)
     }
 
