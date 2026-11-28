@@ -57,14 +57,14 @@ class StreamSniffer
             )
             val target =
                 if (pageUrl != null) {
-                    lastDetectedByPageAndTab[pageKey(pageUrl, tabId)]
+                    lastDetectedByPageAndTab[pageKey(pageUrl, tabId, documentId)]
                 } else {
                     lastDetected
                 }
             target?.let { found ->
                 val updated = found.copy(drmLicenseUrl = url, drmLicenseRequestHeaders = headers)
                 if (lastDetected?.url == found.url) lastDetected = updated
-                pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = updated }
+                pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId, documentId)] = updated }
                 listeners.forEach { it.onStreamUpdated(updated) }
                 observationListeners.forEach { it.onStreamObserved(updated, pageUrl, tabId, documentId) }
             }
@@ -92,9 +92,11 @@ class StreamSniffer
         private fun pageKey(
             pageUrl: String,
             tabId: String?,
+            documentId: String?,
         ): String =
             buildString {
                 append(tabId?.length ?: -1).append(':').append(tabId.orEmpty())
+                append(documentId?.length ?: -1).append(':').append(documentId.orEmpty())
                 append(pageUrl)
             }
 
@@ -153,7 +155,7 @@ class StreamSniffer
                 )
             val isDuplicate = seen.put(dedupKey(url, headers), System.currentTimeMillis()) != null
             lastDetected = detected
-            pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = detected }
+            pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId, documentId)] = detected }
             if (!isDuplicate) {
                 logger.log(
                     DiagCategory.SNIFFER,
