@@ -27,10 +27,10 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import com.alraad.feature.browser.R
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.LayoutDirection
+import com.alraad.feature.browser.R
 import androidx.compose.ui.unit.dp
 
 /** Routes a search query (no TLD dot, or contains spaces) to the search engine. */
