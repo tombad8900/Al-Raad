@@ -120,6 +120,7 @@ class SubtitlePlaybackRuntimeTest {
     @Test
     fun textTrackSelectionTogglesOffAndOn() {
         playWithSubtitle("subs.vtt", "text/vtt", "Hello from VTT")
+        awaitReady()
         var textTracksEnabled = false
         instrumentation.runOnMainSync {
             val player = checkNotNull(controller.currentPlayer())
@@ -164,8 +165,13 @@ class SubtitlePlaybackRuntimeTest {
             )
         instrumentation.runOnMainSync {
             controller.addExternalSubtitle(track)
-            positionAfter = checkNotNull(controller.currentPlayer()).currentPosition
+            val rebuilt = checkNotNull(controller.currentPlayer())
+            selectTextTrack(rebuilt)
+            positionAfter = rebuilt.currentPosition
         }
+        // The attach rebuilt the player, so the cue listener from playWithSubtitle
+        // went away with the old instance; watch again on the rebuilt player.
+        watchCues("Hello from VTT", cues)
         assertEquals(listOf(track), controller.currentPlaybackRequest.value?.subtitles)
         assertTrue("Player was not rebuilt", positionAfter >= 0)
         assertTrue(
@@ -300,22 +306,47 @@ class SubtitlePlaybackRuntimeTest {
             } else {
                 emptyList()
             }
-        val listener =
-            object : Player.Listener {
-                override fun onCues(cueGroup: CueGroup) {
-                    if (cueGroup.cues.any { it.text?.contains(expectedCue) == true }) {
-                        cueLatch.countDown()
-                    }
-                }
-            }
         instrumentation.runOnMainSync {
             controller.play(PlaybackRequest(sources = listOf(stream), subtitles = subtitles))
+            selectTextTrack(checkNotNull(controller.currentPlayer()) { "Player build failed" })
+        }
+        watchCues(expectedCue, cueLatch)
+        return cueLatch
+    }
+
+    /**
+     * Selects the sideloaded text track, mirroring what the shipped subtitle button
+     * (TrackSelectionDialogBuilder) does on a user tap: ExoPlayer never auto-selects
+     * a sideloaded track whose language matches no preference, so without this no
+     * text renderer outputs and no cues can fire.
+     */
+    private fun selectTextTrack(player: Player) {
+        player.trackSelectionParameters =
+            player.trackSelectionParameters
+                .buildUpon()
+                .setPreferredTextLanguage("ar")
+                .build()
+    }
+
+    /** Attaches a cue listener to the CURRENT player and re-seeks into the cue window. */
+    private fun watchCues(
+        expectedCue: String,
+        cueLatch: CountDownLatch,
+    ) {
+        instrumentation.runOnMainSync {
             val player = checkNotNull(controller.currentPlayer()) { "Player build failed" }
-            player.addListener(listener)
+            player.addListener(
+                object : Player.Listener {
+                    override fun onCues(cueGroup: CueGroup) {
+                        if (cueGroup.cues.any { it.text?.contains(expectedCue) == true }) {
+                            cueLatch.countDown()
+                        }
+                    }
+                },
+            )
             // Re-seek to the cue window so cues that fired before listener attach re-emit.
             player.seekTo(1)
         }
-        return cueLatch
     }
 
     private fun hasEnabledTextTrack(player: Player): Boolean =
