@@ -285,7 +285,11 @@ class BrowserViewModelStreamActionsTest {
         val tab = tabManager.openTab(page)
         viewModel.recordPageStarted(tab.id, page, startsNewNavigation = true, documentId = "doc-a")
         viewModel.recordPageUrlChanged(tab.id, pushedPage, "doc-a")
-        val headers = mapOf("Referer" to "https://iframe.other-origin.example/", "Origin" to "https://iframe.other-origin.example")
+        val headers =
+            mapOf(
+                "Referer" to "https://iframe.other-origin.example/",
+                "Origin" to "https://iframe.other-origin.example",
+            )
 
         sniffer.onRequestObserved(
             "https://media.cdn-other.example/movie/index.m3u8",
@@ -326,7 +330,10 @@ class BrowserViewModelStreamActionsTest {
             tabId = tab.id,
             documentId = "new-doc",
         )
-        assertEquals(listOf("https://media.example/current.m3u8"), viewModel.detectedStreams.value.map { it.stream.url })
+        assertEquals(
+            listOf("https://media.example/current.m3u8"),
+            viewModel.detectedStreams.value.map { it.stream.url },
+        )
     }
 
     @Test
@@ -355,5 +362,4 @@ class BrowserViewModelStreamActionsTest {
         tabManager.switchTo(tabA.id)
         assertEquals(listOf("https://cdn-a.example/a.m3u8"), viewModel.detectedStreams.value.map { it.stream.url })
     }
-
 }
