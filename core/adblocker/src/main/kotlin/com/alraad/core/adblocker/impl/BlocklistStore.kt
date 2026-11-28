@@ -62,6 +62,10 @@ class BlocklistStore
             dir.mkdirs()
             tmp.writeText(domains.sorted().joinToString("\n"))
             check(tmp.renameTo(target)) { "atomic promote failed for $id" }
+            // Raw list text feeds the rule engine; promoted only after the domain sanity check passed.
+            val rawTmp = File(dir, "$id.raw.tmp")
+            rawTmp.writeText(text)
+            check(rawTmp.renameTo(File(dir, "$id.raw"))) { "atomic raw promote failed for $id" }
             return true
         }
 
@@ -77,6 +81,24 @@ class BlocklistStore
                 if (isEnabled(source.id)) storedDomains(source.id)?.let(merged::addAll)
             }
             return merged
+        }
+
+        /**
+         * Rule text for the engine: raw text of every enabled list, or domain-anchored rules rebuilt from the
+         * stored domains for a list promoted before raw text was kept.
+         */
+        fun activeEngineRules(): String {
+            val out = StringBuilder()
+            for (source in BlocklistCatalog.sources) {
+                if (!isEnabled(source.id)) continue
+                val raw = File(dir, "${source.id}.raw")
+                if (raw.isFile) {
+                    out.append(raw.readText()).append('\n')
+                } else {
+                    storedDomains(source.id)?.forEach { out.append("||").append(it).append("^\n") }
+                }
+            }
+            return out.toString()
         }
 
         fun lastUpdated(id: String): Long = File(dir, "$id.domains").takeIf { it.isFile }?.lastModified() ?: 0L
