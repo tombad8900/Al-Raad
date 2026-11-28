@@ -54,7 +54,7 @@ class EngineWarmUpTest {
     }
 
     private fun requireNative() {
-        assumeTrue(NativeAdblock.isAvailable() || System.getenv("CI") == null)
+        if (System.getenv("CI") == null) assumeTrue(NativeAdblock.isAvailable())
         assertTrue("native library missing in CI", NativeAdblock.isAvailable())
     }
 
