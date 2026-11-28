@@ -2,9 +2,11 @@ package com.alraad.feature.browser.ui
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -40,8 +42,27 @@ class BrowserWebViewPoolTest {
 
         pool.pauseAll()
         assertNull(pool.activeTabId)
+        assertTrue(pool.timersPaused)
         assertSame(first, pool.get("first"))
         assertSame(second, pool.get("second"))
+        pool.activate("first")
+        assertFalse(pool.timersPaused)
         pool.clear()
+    }
+
+    @Test
+    fun tabManagerOwnsPoolAcrossScreenRecreationAndReleasesClosedTabs() {
+        val context: Context = ApplicationProvider.getApplicationContext()
+        val tabManager = com.alraad.feature.browser.tabs.TabManager()
+        val tab = tabManager.openTab("https://example.com")
+        val firstPool = tabManager.webViewPool(context)
+        val webView = firstPool.obtain(tab.id)
+
+        assertSame(firstPool, tabManager.webViewPool(context))
+        assertSame(webView, tabManager.webViewPool(context).get(tab.id))
+
+        tabManager.closeTab(tab.id)
+        assertNull(firstPool.get(tab.id))
+        tabManager.reset()
     }
 }
