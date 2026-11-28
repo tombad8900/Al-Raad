@@ -6,7 +6,6 @@ internal enum class BrowserBackResult {
     STAY,
 }
 
-/** Applies Back to the active tab only; the search root never delegates Back to app exit. */
 internal fun handleBrowserBack(
     tabUrl: String,
     canGoBack: () -> Boolean,
