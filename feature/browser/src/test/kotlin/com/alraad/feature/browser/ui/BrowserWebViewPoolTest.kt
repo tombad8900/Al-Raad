@@ -2,6 +2,7 @@ package com.alraad.feature.browser.ui
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
@@ -36,7 +37,7 @@ class BrowserWebViewPoolTest {
         val second = pool.obtain("second")
 
         pool.activate("second")
-        assertSame("second", pool.activeTabId)
+        assertEquals("second", pool.activeTabId)
         assertSame(first, pool.get("first"))
         assertSame(second, pool.get("second"))
 
