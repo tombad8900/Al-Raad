@@ -55,7 +55,12 @@ fun BrowserWebView(
                                 if (javaScriptEnabled.value) {
                                     val token = jsBridge.bindPage(url, id)
                                     if (token.isNotEmpty()) {
-                                        runCatching { webView.evaluateJavascript(FetchXhrCaptureScript.build(token), null) }
+                                        runCatching {
+                                            webView.evaluateJavascript(
+                                                FetchXhrCaptureScript.build(token),
+                                                null,
+                                            )
+                                        }
                                     }
                                 }
                             }
