@@ -28,7 +28,6 @@ class BrowserWebViewPool(context: Context) {
 
     fun get(tabId: String): WebView? = views[tabId]
 
-    /** Resume only the visible tab; background tabs are paused independently. */
     fun activate(tabId: String?) {
         if (timersPaused) {
             // This resumes the process-wide WebView timer queue, including retained background tabs.
@@ -45,7 +44,6 @@ class BrowserWebViewPool(context: Context) {
         }
     }
 
-    /** Called when BrowserScreen is not visible or the host Activity is pausing. */
     fun pauseAll() {
         activeTabId = null
         views.values.forEach(::pause)
@@ -81,7 +79,6 @@ class BrowserWebViewPool(context: Context) {
         }
     }
 
-    /** Reserved for the actual owner (TabManager) when its lifetime is reset. */
     fun clear() {
         if (timersPaused) {
             views.values.firstOrNull()?.resumeTimers()
