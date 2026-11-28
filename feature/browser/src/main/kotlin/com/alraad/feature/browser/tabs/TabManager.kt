@@ -27,7 +27,8 @@ class TabManager
     @Inject
     constructor() {
         private val _state = MutableStateFlow(TabState())
-        @Volatile private var retainedWebViewPool: BrowserWebViewPool? = null
+        @Volatile
+        private var retainedWebViewPool: BrowserWebViewPool? = null
 
         /** Process-scoped pool: survives BrowserScreen disposal while section navigation occurs. */
         fun webViewPool(context: Context): BrowserWebViewPool =
@@ -36,6 +37,7 @@ class TabManager
                     retainedWebViewPool = it
                 }
             }
+
         val state: StateFlow<TabState> = _state.asStateFlow()
 
         /** androidTest isolation: clears all tabs between instrumented tests. */
