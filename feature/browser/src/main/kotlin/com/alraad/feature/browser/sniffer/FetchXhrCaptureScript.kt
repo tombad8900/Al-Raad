@@ -8,7 +8,7 @@ internal object FetchXhrCaptureScript {
               if (window.__alraadCaptureInstalled === token) return;
               window.__alraadCaptureInstalled = token;
               var allowed = {accept:true, authorization:true, "content-type":true, range:true};
-              function report(rawUrl, headers, method) {
+              function report(rawUrl, headers) {
                 try {
                   var url = new URL(rawUrl, location.href);
                   if (url.protocol !== "http:" && url.protocol !== "https:") return;
@@ -19,7 +19,7 @@ internal object FetchXhrCaptureScript {
                   });
                   var payload = JSON.stringify({
                     token:token, pageUrl:location.href, url:url.href,
-                    method:String(method || "GET").slice(0, 16), headers:safe
+                    headers:safe
                   });
                   if (payload.length <= 16384 && window.AlRaadSniffer)
                     window.AlRaadSniffer.onRequestObserved(payload);
@@ -33,8 +33,7 @@ internal object FetchXhrCaptureScript {
                     if (init && init.headers) new Headers(init.headers).forEach(function(v, k) {
                       headers.set(k, v);
                     });
-                    report(request ? request.url : String(input), headers,
-                      (init && init.method) || (request && request.method) || "GET");
+                    report(request ? request.url : String(input), headers);
                   } catch (_) {}
                   return originalFetch.apply(this, arguments);
                 };
@@ -44,7 +43,7 @@ internal object FetchXhrCaptureScript {
                 var setHeader = XMLHttpRequest.prototype.setRequestHeader;
                 var send = XMLHttpRequest.prototype.send;
                 XMLHttpRequest.prototype.open = function(method, url) {
-                  this.__alraadMethod = method; this.__alraadUrl = url; this.__alraadHeaders = {};
+                  this.__alraadUrl = url; this.__alraadHeaders = {};
                   return open.apply(this, arguments);
                 };
                 XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
@@ -53,7 +52,7 @@ internal object FetchXhrCaptureScript {
                   return setHeader.apply(this, arguments);
                 };
                 XMLHttpRequest.prototype.send = function() {
-                  try { report(this.__alraadUrl, new Headers(this.__alraadHeaders || {}), this.__alraadMethod); }
+                  try { report(this.__alraadUrl, new Headers(this.__alraadHeaders || {})); }
                   catch (_) {}
                   return send.apply(this, arguments);
                 };
