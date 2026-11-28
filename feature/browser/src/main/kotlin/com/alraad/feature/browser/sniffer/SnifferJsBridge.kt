@@ -23,9 +23,7 @@ class SnifferJsBridge(
         pageContext.set(PageContext(pageUrl, tabId, token))
         return token
     }
-    fun clearPage() {
-        pageContext.set(null)
-    }
+    fun clearPage() = pageContext.set(null)
     @JavascriptInterface
     fun onRequestObserved(payload: String) {
         if (payload.isEmpty() || payload.length > MAX_PAYLOAD_LENGTH) return
