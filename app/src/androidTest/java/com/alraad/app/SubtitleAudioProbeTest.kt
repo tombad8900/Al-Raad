@@ -100,7 +100,7 @@ class SubtitleAudioProbeTest {
             }
         val stream =
             StreamUrl(
-                url = "$baseUrl/audio.mp4",
+                url = "$baseUrl/audio.wav",
                 format = StreamFormat.MP4,
                 source = StreamSource.NETWORK,
                 headers = mapOf("Cookie" to "session-secret"),

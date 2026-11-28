@@ -119,7 +119,8 @@ jobs:
           curl -fsSL --retry 3 -o /tmp/fixture-serve/fixture.mp4 https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4
           # Diagnostic (t4-subtitle-diagnostic): audio-only clip so cue tests can run
           # without the starved software h264 decode competing with extraction.
-          ffmpeg -f lavfi -i anullsrc=r=8000:cl=mono -t 30 -c:a aac -b:a 24k -y /tmp/fixture-serve/audio.mp4
+          # 30s of 8kHz mono 16-bit silence as WAV (no ffmpeg on the runner).
+          python3 -c "import wave; w=wave.open('/tmp/fixture-serve/audio.wav','wb'); w.setnchannels(1); w.setsampwidth(2); w.setframerate(8000); w.writeframes(bytes(8000*2*30)); w.close()"
           printf '%s' "<html><body><video autoplay muted playsinline src='/fixture.mp4'></video></body></html>" > /tmp/fixture-serve/player.html
           # Instrumented fixture server: logs each request path and whether the
           # synthetic test Cookie rode along (only the non-secret "session-secret"
