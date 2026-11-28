@@ -23,12 +23,6 @@ class SnifferJsBridge(
             pageContext.set(PageContext(pageUrl, tabId, token))
             return token
         }
-        fun isBoundTo(
-            pageUrl: String,
-            tabId: String,
-        ): Boolean =
-            pageContext.get()?.let { it.pageUrl == pageUrl && it.tabId == tabId } == true
-
         fun clearPage() {
             pageContext.set(null)
         }
@@ -72,11 +66,7 @@ class SnifferJsBridge(
                 !uri.host.isNullOrBlank() && uri.userInfo == null
         }
 
-        private data class PageContext(
-            val pageUrl: String,
-            val tabId: String,
-            val token: String,
-        )
+        private data class PageContext(val pageUrl: String, val tabId: String, val token: String)
 
         private companion object {
             const val MAX_PAYLOAD_LENGTH = 16_384
