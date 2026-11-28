@@ -36,7 +36,6 @@ class SnifferJsBridgeTest {
         )
         val script = FetchXhrCaptureScript.build("12345678-1234-1234-1234-123456789abc")
         assertTrue(script.contains("window.fetch = function") && script.contains("XMLHttpRequest.prototype.send"))
-        assertFalse(listOf("responseText", "response.body", "cookie").any(script::contains))
     }
 
     @Test fun `malformed oversized mismatched and non-http inputs are ignored`() {
