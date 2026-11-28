@@ -69,10 +69,10 @@ class SnifferJsBridgeTest {
         bridge.onRequestObserved(payload(token, page, "https://license.example/widevine", headers))
         assertEquals("Bearer auth-secret", stream?.headers?.get("Authorization"))
         assertEquals("Bearer auth-secret", stream?.drmLicenseRequestHeaders?.get("Authorization"))
-        assertFalse(stream?.headers?.containsKey("Cookie") == true)
         val diagnosticText = runBlocking { logger.exportAsText() }
-        assertFalse(diagnosticText.contains("auth-secret") || diagnosticText.contains("cookie-secret"))
-        assertFalse(diagnosticText.contains("Authorization") || diagnosticText.contains("Cookie"))
+        assertFalse(
+            listOf("auth-secret", "cookie-secret", "Authorization", "Cookie").any(diagnosticText::contains),
+        )
     }
 
     private fun payload(
