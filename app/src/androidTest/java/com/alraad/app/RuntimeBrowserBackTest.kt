@@ -198,7 +198,7 @@ class RuntimeBrowserBackTest {
             }
             typeAddress(url)
             awaitUrl(url)
-            awaitLoadFinished(a)
+            awaitLoadFinished(url)
             val activeTabId = checkNotNull(tabManager.state.value.activeTabId)
             val webView = checkNotNull(onMain { activeWebViewOnMain() })
             assertEquals(url, onMain { webView.url })
@@ -270,15 +270,15 @@ class RuntimeBrowserBackTest {
             // Page history: a -> b -> c, then Back twice returns to b and a.
             typeAddress(a)
             awaitUrl(a)
-            awaitLoadFinished(b)
+            awaitLoadFinished(a)
             val tab1 = checkNotNull(tabManager.state.value.activeTabId)
             val view1 = checkNotNull(onMain { activeWebViewOnMain() })
             onMain { view1.loadUrl(b) }
             awaitUrl(b)
-            awaitLoadFinished(c)
+            awaitLoadFinished(b)
             onMain { view1.loadUrl(c) }
             awaitUrl(c)
-            awaitLoadFinished(url)
+            awaitLoadFinished(c)
             capture("backtest-1-on-c.png")
             back()
             awaitUrl(b)
@@ -299,13 +299,13 @@ class RuntimeBrowserBackTest {
             // Rebuild a -> b -> c in tab 1 so its own history has a known previous entry.
             typeAddress(a)
             awaitUrl(a)
-            awaitLoadFinished()
+            awaitLoadFinished(a)
             onMain { view1.loadUrl(b) }
             awaitUrl(b)
-            awaitLoadFinished()
+            awaitLoadFinished(b)
             onMain { view1.loadUrl(c) }
             awaitUrl(c)
-            awaitLoadFinished()
+            awaitLoadFinished(c)
             back()
             awaitUrl(b)
             assertTrue(onMain { view1.canGoBack() })
@@ -328,7 +328,7 @@ class RuntimeBrowserBackTest {
             composeRule.waitForIdle()
             waitForBrowserAddressBar()
             awaitUrl(a)
-            awaitLoadFinished()
+            awaitLoadFinished(a)
 
             val tab2 = checkNotNull(tabManager.state.value.activeTabId)
             assertNotEquals("History opens a distinct tab", tab1, tab2)
