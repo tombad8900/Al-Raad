@@ -95,7 +95,7 @@ class StreamSnifferTest {
         val sniffer = StreamSniffer(noopLogger)
         val observations = mutableListOf<Triple<String?, String?, StreamUrl>>()
         sniffer.registerObservationListener(
-            StreamObservationListener { stream, pageUrl, tabId ->
+            StreamObservationListener { stream, pageUrl, tabId, _ ->
                 observations += Triple(pageUrl, tabId, stream)
             },
         )

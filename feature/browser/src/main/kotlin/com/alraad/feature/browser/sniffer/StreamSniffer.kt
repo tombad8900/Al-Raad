@@ -46,6 +46,7 @@ class StreamSniffer
             headers: Map<String, String> = emptyMap(),
             pageUrl: String? = null,
             tabId: String? = null,
+            documentId: String? = null,
         ) {
             if (!isLicenseRequest(url)) return
             logger.log(
@@ -56,16 +57,16 @@ class StreamSniffer
             )
             val target =
                 if (pageUrl != null) {
-                    lastDetectedByPageAndTab[pageKey(pageUrl, tabId)]
+                    lastDetectedByPageAndTab[pageKey(pageUrl, tabId, documentId)]
                 } else {
                     lastDetected
                 }
             target?.let { found ->
                 val updated = found.copy(drmLicenseUrl = url, drmLicenseRequestHeaders = headers)
                 if (lastDetected?.url == found.url) lastDetected = updated
-                pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = updated }
+                pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId, documentId)] = updated }
                 listeners.forEach { it.onStreamUpdated(updated) }
-                observationListeners.forEach { it.onStreamObserved(updated, pageUrl, tabId) }
+                observationListeners.forEach { it.onStreamObserved(updated, pageUrl, tabId, documentId) }
             }
         }
 
@@ -91,9 +92,11 @@ class StreamSniffer
         private fun pageKey(
             pageUrl: String,
             tabId: String?,
+            documentId: String?,
         ): String =
             buildString {
                 append(tabId?.length ?: -1).append(':').append(tabId.orEmpty())
+                append(documentId?.length ?: -1).append(':').append(documentId.orEmpty())
                 append(pageUrl)
             }
 
@@ -120,11 +123,12 @@ class StreamSniffer
             source: StreamSource = StreamSource.NETWORK,
             pageUrl: String? = null,
             tabId: String? = null,
+            documentId: String? = null,
         ): StreamUrl? {
             if (StreamFormatDetector.isStream(url, contentType)) {
-                return detectStream(url, headers, contentType, source, pageUrl, tabId)
+                return detectStream(url, headers, contentType, source, pageUrl, tabId, documentId)
             }
-            if (isLicenseRequest(url)) onDrmLicenseObserved(url, headers, pageUrl, tabId)
+            if (isLicenseRequest(url)) onDrmLicenseObserved(url, headers, pageUrl, tabId, documentId)
             return null
         }
 
@@ -135,6 +139,7 @@ class StreamSniffer
             source: StreamSource,
             pageUrl: String?,
             tabId: String?,
+            documentId: String?,
         ): StreamUrl? {
             val detected =
                 StreamUrl(
@@ -150,7 +155,7 @@ class StreamSniffer
                 )
             val isDuplicate = seen.put(dedupKey(url, headers), System.currentTimeMillis()) != null
             lastDetected = detected
-            pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId)] = detected }
+            pageUrl?.let { lastDetectedByPageAndTab[pageKey(it, tabId, documentId)] = detected }
             if (!isDuplicate) {
                 logger.log(
                     DiagCategory.SNIFFER,
@@ -165,7 +170,7 @@ class StreamSniffer
                 )
                 listeners.forEach { it.onStreamDetected(detected) }
             }
-            observationListeners.forEach { it.onStreamObserved(detected, pageUrl, tabId) }
+            observationListeners.forEach { it.onStreamObserved(detected, pageUrl, tabId, documentId) }
             return if (isDuplicate) null else detected
         }
     }
@@ -176,5 +181,6 @@ fun interface StreamObservationListener {
         stream: StreamUrl,
         pageUrl: String?,
         tabId: String?,
+        documentId: String?,
     )
 }

@@ -125,6 +125,7 @@ private fun NavGraphBuilder.browserDestination(navController: NavHostController)
                     actions =
                         com.alraad.feature.browser.ui.BrowserActions(
                             onPageStarted = viewModel::recordPageStarted,
+                            onPageUrlChanged = viewModel::recordPageUrlChanged,
                             onPageFinished = viewModel::recordPageFinished,
                             onBookmark = viewModel::bookmarkLastVisited,
                         ),

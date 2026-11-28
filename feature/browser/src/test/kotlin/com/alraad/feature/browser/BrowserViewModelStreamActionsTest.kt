@@ -112,14 +112,24 @@ class BrowserViewModelStreamActionsTest {
         val pageA = "https://page-a.example/watch"
         val pageB = "https://page-b.example/watch"
         val tabA = tabManager.openTab(pageA)
-        viewModel.recordPageStarted(tabA.id, pageA, startsNewNavigation = true)
+        viewModel.recordPageStarted(tabA.id, pageA, startsNewNavigation = true, documentId = "doc-a")
         val tabB = tabManager.openTab(pageB)
-        viewModel.recordPageStarted(tabB.id, pageB, startsNewNavigation = true)
+        viewModel.recordPageStarted(tabB.id, pageB, startsNewNavigation = true, documentId = "doc-b")
 
-        sniffer.onRequestObserved("https://cdn.example/a.m3u8", pageUrl = pageA, tabId = tabA.id)
+        sniffer.onRequestObserved(
+            "https://cdn.example/a.m3u8",
+            pageUrl = pageA,
+            tabId = tabA.id,
+            documentId = "doc-a",
+        )
         assertTrue(viewModel.detectedStreams.value.isEmpty())
 
-        sniffer.onRequestObserved("https://cdn.example/b.m3u8", pageUrl = pageB, tabId = tabB.id)
+        sniffer.onRequestObserved(
+            "https://cdn.example/b.m3u8",
+            pageUrl = pageB,
+            tabId = tabB.id,
+            documentId = "doc-b",
+        )
         assertEquals(
             listOf("https://cdn.example/b.m3u8"),
             viewModel.detectedStreams.value.map { it.stream.url },
@@ -132,7 +142,12 @@ class BrowserViewModelStreamActionsTest {
         )
 
         viewModel.recordPageStarted(tabA.id, "https://page-a.example/next", startsNewNavigation = true)
-        sniffer.onRequestObserved("https://cdn.example/stale.m3u8", pageUrl = pageA, tabId = tabA.id)
+        sniffer.onRequestObserved(
+            "https://cdn.example/stale.m3u8",
+            pageUrl = pageA,
+            tabId = tabA.id,
+            documentId = "doc-a",
+        )
         assertTrue(viewModel.detectedStreams.value.isEmpty())
     }
 
@@ -276,5 +291,63 @@ class BrowserViewModelStreamActionsTest {
 
         assertEquals(listOf(StreamFormat.DASH, StreamFormat.HLS), sorted.map { it.stream.format })
         assertEquals(2, sorted.size)
+    }
+
+    @Test
+    fun `cross-origin iframe stream appears for parent document and keeps request headers`() {
+        val page = "https://top.example/watch"
+        val pushedPage = "https://top.example/watch/player"
+        val tab = tabManager.openTab(page)
+        viewModel.recordPageStarted(tab.id, page, startsNewNavigation = true, documentId = "doc-a")
+        viewModel.recordPageUrlChanged(tab.id, pushedPage, "doc-a")
+        val headers =
+            mapOf(
+                "Referer" to "https://iframe.other-origin.example/",
+                "Origin" to "https://iframe.other-origin.example",
+            )
+
+        sniffer.onRequestObserved(
+            "https://media.cdn-other.example/movie/index.m3u8",
+            headers,
+            pageUrl = pushedPage,
+            tabId = tab.id,
+            documentId = "doc-a",
+        )
+
+        val item = viewModel.detectedStreams.value.single()
+        assertEquals(pushedPage, item.sourcePageUrl)
+        assertEquals(tab.id, item.sourceTabId)
+        assertEquals("doc-a", item.documentId)
+        assertEquals(headers, item.stream.headers)
+
+        viewModel.playStream(item)
+        assertEquals(headers, requireNotNull(playerController.lastPlaybackRequest).selectedStream.headers)
+    }
+
+    @Test
+    fun `delayed detection from previous document cannot repopulate same URL after reload`() {
+        val page = "https://top.example/watch"
+        val tab = tabManager.openTab(page)
+        viewModel.recordPageStarted(tab.id, page, startsNewNavigation = true, documentId = "old-doc")
+        viewModel.recordPageStarted(tab.id, page, startsNewNavigation = true, documentId = "new-doc")
+
+        sniffer.onRequestObserved(
+            "https://media.example/stale.m3u8",
+            pageUrl = page,
+            tabId = tab.id,
+            documentId = "old-doc",
+        )
+        assertTrue(viewModel.detectedStreams.value.isEmpty())
+
+        sniffer.onRequestObserved(
+            "https://media.example/current.m3u8",
+            pageUrl = page,
+            tabId = tab.id,
+            documentId = "new-doc",
+        )
+        assertEquals(
+            listOf("https://media.example/current.m3u8"),
+            viewModel.detectedStreams.value.map { it.stream.url },
+        )
     }
 }

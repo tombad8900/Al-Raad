@@ -34,12 +34,22 @@ fun BrowserWebView(
                         onNavigationRequested = { _, url ->
                             tabs.state.value.activeTabId?.let { pageTabAssociator.recordRequest(it, url) }
                         },
-                        onPageStart = { _, url ->
+                        onPageDocumentStarted = { _, url ->
                             val page = pageTabAssociator.onPageStartedWithContext(url, tabs.state.value.activeTabId)
                             page.tabId?.let { id ->
-                                handlers.actions.onPageStarted(id, url, page.startsNewNavigation)
+                                handlers.actions.onPageStarted(id, url, page.startsNewNavigation, page.documentId)
                                 if (id == tabs.state.value.activeTabId) onLoadingChange(true)
                             }
+                            page.documentId
+                        },
+                        onPageUrlChanged = { _, previousUrl, previousDocumentId, url, _ ->
+                            pageTabAssociator.onPageUrlChanged(previousUrl, url, previousDocumentId)?.also { association ->
+                                handlers.actions.onPageUrlChanged(
+                                    association.tabId,
+                                    url,
+                                    association.documentId,
+                                )
+                            }?.documentId
                         },
                         onPageFinished = { webView ->
                             webView.url?.let { url ->
@@ -48,8 +58,15 @@ fun BrowserWebView(
                                 owner?.let { handlers.actions.onPageFinished(it, url, webView.title ?: "") }
                             }
                         },
-                        onRequestObserved = { url, headers, pageUrl ->
-                            val tabId = pageTabAssociator.tabIdForPage(pageUrl)
+                        onRequestObservedWithContext = { url, headers, pageUrl, documentId ->
+                            val association =
+                                if (documentId != null) {
+                                    pageTabAssociator.associationForDocument(documentId)
+                                } else {
+                                    pageTabAssociator.associationForPage(pageUrl)
+                                }
+                            val tabId = association?.tabId
+                            val sourceDocumentId = association?.documentId
                             environment.sniffer.onRequestObserved(
                                 url,
                                 headers,
@@ -57,6 +74,7 @@ fun BrowserWebView(
                                 StreamSource.NETWORK,
                                 pageUrl,
                                 tabId,
+                                sourceDocumentId,
                             )
                             environment.subtitleSniffer.onRequestObserved(url, headers, pageUrl, tabId)
                         },

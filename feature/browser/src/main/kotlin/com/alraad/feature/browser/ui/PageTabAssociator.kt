@@ -1,43 +1,73 @@
 package com.alraad.feature.browser.ui
 
+import java.util.UUID
+
+data class PageDocumentAssociation(
+    val tabId: String,
+    val documentId: String,
+)
+
+data class PageStartAssociation(
+    val tabId: String?,
+    val startsNewNavigation: Boolean,
+    val documentId: String? = null,
+)
+
+/** Associates top-level URLs with their document owner; iframe hostnames are not compared. */
 class PageTabAssociator {
-    private val pendingNavigationTabs = mutableListOf<Pair<String, String>>()
-    private val pageTabIds =
-        object : LinkedHashMap<String, String>(16, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean = size > MAX_PAGE_MAPPINGS
+    private data class PendingNavigation(
+        val url: String,
+        val tabId: String,
+        val documentId: String,
+    )
+
+    private val pendingNavigationTabs = mutableListOf<PendingNavigation>()
+    private val pageDocuments =
+        object : LinkedHashMap<String, PageDocumentAssociation>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PageDocumentAssociation>?): Boolean =
+                size > MAX_PAGE_MAPPINGS
         }
+    private val documentOwners = mutableMapOf<String, PageDocumentAssociation>()
     private var lastRequestedNavigation: Pair<String, String>? = null
-    private var lastBoundTabId: String? = null
+    private var lastBoundDocument: PageDocumentAssociation? = null
+    private var loadingDocumentId: String? = null
 
     @Synchronized
     fun shouldLoad(
         tabId: String,
         tabUrl: String,
         webViewUrl: String?,
-    ): Boolean {
-        return tabUrl.isNotBlank() && tabUrl != webViewUrl && (tabId to tabUrl) != lastRequestedNavigation
-    }
+    ): Boolean = tabUrl.isNotBlank() && tabUrl != webViewUrl && (tabId to tabUrl) != lastRequestedNavigation
 
+    /** Returns a stable token for repeated callbacks belonging to the same pending request. */
     @Synchronized
     fun recordRequest(
         tabId: String,
         tabUrl: String,
-    ) {
+    ): String {
+        val existing = pendingNavigationTabs.lastOrNull { it.tabId == tabId && it.url == tabUrl }
+        if (existing != null) return existing.documentId
+
         lastRequestedNavigation = tabId to tabUrl
-        pageTabIds.entries.removeAll { it.value == tabId }
-        // One WebView has one in-flight top-level navigation per tab. Repeated
-        // address-bar / shouldOverride callbacks must not leave stale pending owners.
-        pendingNavigationTabs.removeAll { it.second == tabId }
-        pendingNavigationTabs.add(tabUrl to tabId)
+        pageDocuments.entries.removeAll { it.value.tabId == tabId }
+        documentOwners.entries.removeAll { it.value.tabId == tabId }
+        pendingNavigationTabs.removeAll { it.tabId == tabId }
+        val pending = PendingNavigation(tabUrl, tabId, UUID.randomUUID().toString())
+        pendingNavigationTabs.add(pending)
         if (pendingNavigationTabs.size > MAX_PENDING_NAVIGATIONS) pendingNavigationTabs.removeAt(0)
+        return pending.documentId
     }
 
     /** Remove navigation and page ownership state for tabs that have been closed. */
     @Synchronized
     fun retainTabs(activeTabIds: Set<String>) {
-        pendingNavigationTabs.removeAll { it.second !in activeTabIds }
-        pageTabIds.entries.removeAll { it.value !in activeTabIds }
-        if (lastBoundTabId !in activeTabIds) lastBoundTabId = null
+        pendingNavigationTabs.removeAll { it.tabId !in activeTabIds }
+        pageDocuments.entries.removeAll { it.value.tabId !in activeTabIds }
+        documentOwners.entries.removeAll { it.value.tabId !in activeTabIds }
+        if (lastBoundDocument?.tabId !in activeTabIds) {
+            lastBoundDocument = null
+            loadingDocumentId = null
+        }
         if (lastRequestedNavigation?.first !in activeTabIds) lastRequestedNavigation = null
     }
 
@@ -46,43 +76,107 @@ class PageTabAssociator {
         url: String,
         activeTabId: String?,
     ): PageStartAssociation {
-        // Resource callbacks can race ahead of onPageStarted. Resolve an exact
-        // pending navigation without consuming it; the start callback binds it.
-        val pendingMatch = pendingNavigationTabs.lastOrNull { it.first == url }
-        val displacedRedirect = pendingMatch == null && pendingNavigationTabs.isNotEmpty()
-        val ownerTabId =
+        val pendingMatch = pendingNavigationTabs.lastOrNull { it.url == url }
+        val pendingRedirect =
+            if (pendingMatch == null) {
+                pendingNavigationTabs.lastOrNull { it.tabId == activeTabId } ?: pendingNavigationTabs.singleOrNull()
+            } else {
+                null
+            }
+        val previousDocument = lastBoundDocument
+        val redirectBelongsToPrevious =
+            pendingRedirect != null && previousDocument != null && previousDocument.tabId != activeTabId
+        val candidateOwnerTabId =
             when {
-                pendingMatch != null -> pendingMatch.second
-                displacedRedirect -> lastBoundTabId
-                lastBoundTabId != null && lastBoundTabId != activeTabId -> lastBoundTabId
+                pendingMatch != null -> pendingMatch.tabId
+                redirectBelongsToPrevious -> previousDocument?.tabId
+                pendingRedirect != null -> pendingRedirect.tabId
+                previousDocument != null && previousDocument.tabId != activeTabId -> previousDocument.tabId
                 else -> activeTabId
             }
-        val startsNewNavigation = pendingMatch != null || (lastBoundTabId == null && ownerTabId == activeTabId)
-        if (pendingMatch != null) {
-            pendingNavigationTabs.removeAll { it.first == url && it.second == pendingMatch.second }
+        val isRedirectContinuation =
+            previousDocument != null && previousDocument.documentId == loadingDocumentId &&
+                candidateOwnerTabId == previousDocument.tabId
+        val hasExplicitNavigationOwner = pendingMatch != null || (pendingRedirect != null && !redirectBelongsToPrevious)
+        val ownerTabId =
+            candidateOwnerTabId?.takeIf {
+                it == activeTabId || isRedirectContinuation || hasExplicitNavigationOwner
+            }
+        val startsNewNavigation =
+            pendingMatch != null || (pendingRedirect != null && !redirectBelongsToPrevious) ||
+                (ownerTabId != null && !isRedirectContinuation)
+        val documentId =
+            when {
+                pendingMatch != null -> pendingMatch.documentId
+                pendingRedirect != null && !redirectBelongsToPrevious -> pendingRedirect.documentId
+                !startsNewNavigation && ownerTabId != null && previousDocument?.tabId == ownerTabId ->
+                    previousDocument.documentId
+                ownerTabId != null -> UUID.randomUUID().toString()
+                else -> null
+            }
+
+        val resolvedNavigation =
+            pendingMatch ?: pendingRedirect?.takeUnless { redirectBelongsToPrevious }
+        if (resolvedNavigation != null) {
+            pendingNavigationTabs.removeAll {
+                it.url == resolvedNavigation.url && it.tabId == resolvedNavigation.tabId &&
+                    it.documentId == resolvedNavigation.documentId
+            }
         }
-        if (ownerTabId != null) {
-            if (startsNewNavigation) pageTabIds.entries.removeAll { it.value == ownerTabId }
-            pageTabIds[url] = ownerTabId
-            lastBoundTabId = ownerTabId
+
+        val association =
+            if (ownerTabId != null && documentId != null) PageDocumentAssociation(ownerTabId, documentId) else null
+        if (association != null) {
+            if (startsNewNavigation) {
+                pageDocuments.entries.removeAll { it.value.tabId == ownerTabId }
+                documentOwners.entries.removeAll { it.value.tabId == ownerTabId }
+            }
+            pageDocuments[url] = association
+            documentOwners[documentId] = association
+            lastBoundDocument = association
+            loadingDocumentId = documentId
         }
-        return PageStartAssociation(ownerTabId, startsNewNavigation)
+        return PageStartAssociation(ownerTabId, startsNewNavigation, documentId)
+    }
+
+    /**
+     * WebView reports pushState, replaceState and redirect URL changes here. Reuse the
+     * association of the previous URL; never assign an unknown URL to the active tab.
+     */
+    @Synchronized
+    fun onPageUrlChanged(
+        previousUrl: String?,
+        url: String,
+        documentId: String?,
+    ): PageDocumentAssociation? =
+        documentId?.let(documentOwners::get)?.takeIf {
+            it == lastBoundDocument && previousUrl?.let(pageDocuments::get) == it
+        }?.also { pageDocuments[url] = it }
+
+    @Synchronized
+    fun associationForDocument(documentId: String?): PageDocumentAssociation? = documentId?.let(documentOwners::get)
+
+    @Synchronized
+    fun associationForPage(url: String?): PageDocumentAssociation? =
+        url?.let { pageUrl ->
+            pageDocuments[pageUrl]
+                ?: pendingNavigationTabs.lastOrNull { it.url == pageUrl }?.let {
+                    PageDocumentAssociation(it.tabId, it.documentId)
+                }
+        }
+
+    @Synchronized
+    fun onPageFinished(url: String): String? {
+        val association = pageDocuments[url] ?: return null
+        if (loadingDocumentId == association.documentId) loadingDocumentId = null
+        return association.tabId
     }
 
     @Synchronized
-    fun onPageFinished(url: String): String? = pageTabIds[url]
-
-    @Synchronized
-    fun tabIdForPage(url: String?): String? =
-        url?.let { pendingNavigationTabs.lastOrNull { pending -> pending.first == it }?.second ?: pageTabIds[it] }
+    fun tabIdForPage(url: String?): String? = associationForPage(url)?.tabId
 
     private companion object {
         const val MAX_PAGE_MAPPINGS = 256
         const val MAX_PENDING_NAVIGATIONS = 64
     }
 }
-
-data class PageStartAssociation(
-    val tabId: String?,
-    val startsNewNavigation: Boolean,
-)
