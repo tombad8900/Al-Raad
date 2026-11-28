@@ -68,6 +68,21 @@ class SubtitlePlaybackRuntimeTest {
     private lateinit var server: MockWebServer
     private lateinit var controller: Media3PlayerController
 
+    /**
+     * Host-served fixture base (CI passes fixtureBaseUrl), mirroring AppScenarioTest:
+     * keeps the ~20MB clip and its serving buffers out of the instrumented process
+     * (OOM evidence: run 46110584922 logcat, dispatcher copying the fixture in-process).
+     * Falls back to in-process MockWebServer serving for local runs.
+     */
+    private val fixtureBaseUrl: String?
+        get() = InstrumentationRegistry.getArguments().getString("fixtureBaseUrl")
+
+    private fun videoUrl(path: String): String =
+        // The second source carries a dummy query so the two switch sources stay
+        // distinct URLs while the host serves the same clip for both.
+        fixtureBaseUrl?.let { "$it/fixture.mp4" + if (path == "video2.mp4") "?second=1" else "" }
+            ?: server.url("/$path").toString()
+
     @Before
     fun setUp() {
         server = MockWebServer()
@@ -166,9 +181,13 @@ class SubtitlePlaybackRuntimeTest {
         while (true) {
             requests += server.takeRequest(100, TimeUnit.MILLISECONDS) ?: break
         }
-        val videoRequest = requests.first { it.path.orEmpty().startsWith("/video.mp4") }
         val subtitleRequest = requests.first { it.path.orEmpty().startsWith("/subs.vtt") }
-        assertEquals("session-secret", videoRequest.getHeader("Cookie"))
+        if (fixtureBaseUrl == null) {
+            // Positive control is observable only while the video rides MockWebServer
+            // (local runs); in CI the fixture is host-served and not visible here.
+            val videoRequest = requests.first { it.path.orEmpty().startsWith("/video.mp4") }
+            assertEquals("session-secret", videoRequest.getHeader("Cookie"))
+        }
         assertNull("Credential leaked to the subtitle request", subtitleRequest.getHeader("Cookie"))
         assertNull(subtitleRequest.getHeader("Authorization"))
         assertEquals("text/vtt", subtitleRequest.getHeader("Accept"))
@@ -178,13 +197,13 @@ class SubtitlePlaybackRuntimeTest {
     fun sourceSwitchPreservesPositionAndPlayState() {
         val v1 =
             StreamUrl(
-                url = server.url("/video.mp4").toString(),
+                url = videoUrl("video.mp4"),
                 format = StreamFormat.MP4,
                 source = StreamSource.NETWORK,
             )
         val v2 =
             StreamUrl(
-                url = server.url("/video2.mp4").toString(),
+                url = videoUrl("video2.mp4"),
                 format = StreamFormat.MP4,
                 source = StreamSource.NETWORK,
             )
@@ -255,7 +274,7 @@ class SubtitlePlaybackRuntimeTest {
         val cueLatch = CountDownLatch(1)
         val stream =
             StreamUrl(
-                url = server.url("/video.mp4").toString(),
+                url = videoUrl("video.mp4"),
                 format = StreamFormat.MP4,
                 source = StreamSource.NETWORK,
                 headers = mapOf("Cookie" to "session-secret"),
@@ -304,12 +323,7 @@ class SubtitlePlaybackRuntimeTest {
         object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse =
                 when (request.path?.substringBefore('?')) {
-                    "/video.mp4" ->
-                        MockResponse()
-                            .setHeader("Content-Type", "video/mp4")
-                            .setHeader("Accept-Ranges", "bytes")
-                            .setBody(Buffer().write(videoFixture))
-                    "/video2.mp4" ->
+                    "/video.mp4", "/video2.mp4" ->
                         MockResponse()
                             .setHeader("Content-Type", "video/mp4")
                             .setHeader("Accept-Ranges", "bytes")
