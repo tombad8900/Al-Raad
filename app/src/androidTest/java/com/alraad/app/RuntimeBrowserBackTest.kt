@@ -71,6 +71,12 @@ class RuntimeBrowserBackTest {
     @get:Rule val ruleChain: RuleChain = RuleChain.outerRule(resetTabsBeforeActivity).around(composeRule)
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private var activeServer: MockWebServer? = null
+    private val diagnostics by lazy {
+        EntryPointAccessors
+            .fromApplication(instrumentation.targetContext.applicationContext, TabManagerTestEntryPoint::class.java)
+            .diagnosticsLogger()
+    }
     private val tabManager: TabManager by lazy {
         EntryPointAccessors
             .fromApplication(instrumentation.targetContext.applicationContext, TabManagerTestEntryPoint::class.java)
@@ -114,7 +120,8 @@ class RuntimeBrowserBackTest {
         val state = tabManager.state.value
         assertEquals(
             "WebView url (tabs=${state.tabs.map { it.id.take(4) to it.url }} active=${state.activeTabId?.take(4)} " +
-                "viewExists=${onMain { activeWebViewOnMain() != null }} ${uiDiagnostics()})",
+                "viewExists=${onMain { activeWebViewOnMain() != null }} ${uiDiagnostics()} " +
+                "serverRequests=${activeServer?.requestCount} webviewLogs=${webViewLogs()})",
             expected,
             url(),
         )
@@ -168,6 +175,13 @@ class RuntimeBrowserBackTest {
         check(completed.await(5, TimeUnit.SECONDS)) { "WebView body text evaluation timed out" }
         return checkNotNull(result)
     }
+
+    private fun webViewLogs(): String =
+        kotlinx.coroutines.runBlocking { diagnostics.exportAsText() }
+            .lines()
+            .filter { it.contains("Tab load") || it.contains("Page started") || it.contains("HTTP") }
+            .takeLast(12)
+            .joinToString(" | ")
 
     private fun uiDiagnostics(): String =
         onMain {
@@ -225,6 +239,7 @@ class RuntimeBrowserBackTest {
                     }
                 start()
             }
+        activeServer = server
         try {
             val url = server.url("/trash-${System.currentTimeMillis()}").toString()
             composeRule.waitForIdle()
@@ -288,6 +303,7 @@ class RuntimeBrowserBackTest {
                     }
                 start()
             }
+        activeServer = server
         try {
             val uniquePath = "/a-${System.currentTimeMillis()}"
             val a = server.url(uniquePath).toString()

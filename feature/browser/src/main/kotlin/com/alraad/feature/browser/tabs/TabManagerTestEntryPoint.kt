@@ -15,4 +15,6 @@ import dagger.hilt.components.SingletonComponent
 @InstallIn(SingletonComponent::class)
 interface TabManagerTestEntryPoint {
     fun tabManager(): TabManager
+
+    fun diagnosticsLogger(): com.alraad.core.common.contracts.DiagnosticsLogger
 }

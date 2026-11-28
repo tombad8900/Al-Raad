@@ -6,6 +6,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
+import com.alraad.core.common.contracts.DiagCategory
+import com.alraad.core.common.contracts.DiagLevel
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
 import com.alraad.feature.browser.web.SafeWebViewConfig
@@ -67,13 +69,30 @@ fun BrowserWebView(
                         )
                 }
             },
-            update = { webView ->
-                if (pageTabAssociator.shouldLoad(activeTab.id, activeTab.url, webView.url)) {
-                    pageTabAssociator.recordRequest(activeTab.id, activeTab.url)
-                    onLoadingChange(true)
-                    webView.loadUrl(activeTab.url)
-                }
-            },
+            update = { webView -> syncTabUrl(environment, pageTabAssociator, activeTab, webView, onLoadingChange) },
         )
+    }
+}
+
+private fun syncTabUrl(
+    environment: BrowserWebViewEnvironment,
+    pageTabAssociator: PageTabAssociator,
+    activeTab: com.alraad.feature.browser.tabs.BrowserTab,
+    webView: android.webkit.WebView,
+    onLoadingChange: (Boolean) -> Unit,
+) {
+    val load = pageTabAssociator.shouldLoad(activeTab.id, activeTab.url, webView.url)
+    if (activeTab.url.isNotBlank() && activeTab.url != webView.url) {
+        environment.diagnosticsLogger.log(
+            DiagCategory.WEBVIEW,
+            DiagLevel.DEBUG,
+            if (load) "Tab load issued" else "Tab load skipped",
+            mapOf("tab" to activeTab.id.take(4), "webViewUrl" to webView.url.orEmpty()),
+        )
+    }
+    if (load) {
+        pageTabAssociator.recordRequest(activeTab.id, activeTab.url)
+        onLoadingChange(true)
+        webView.loadUrl(activeTab.url)
     }
 }
