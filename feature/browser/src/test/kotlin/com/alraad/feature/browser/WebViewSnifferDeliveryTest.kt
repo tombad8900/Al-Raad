@@ -143,7 +143,6 @@ class WebViewSnifferDeliveryTest {
             ),
         )
 
-        assertEquals(1, captured.size)
         assertEquals(pushedPage, captured.single().first)
         assertEquals(associator.associationForPage(pushedPage)?.documentId, captured.single().second)
         assertEquals(iframeHeaders, captured.single().third)
