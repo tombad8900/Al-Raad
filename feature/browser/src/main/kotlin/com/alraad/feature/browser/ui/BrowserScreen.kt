@@ -129,9 +129,9 @@ private fun BrowserTabLifecycle(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            // Preserve WebViews and their navigation history; only pause them while this
-            // destination is absent. TabManager owns final release at tab/process lifetime.
+            // Preserve history but release callbacks that may capture the old Activity/NavController.
             webViewPool.pauseAll()
+            webViewPool.detachCallbacks()
         }
     }
     LaunchedEffect(Unit) {
