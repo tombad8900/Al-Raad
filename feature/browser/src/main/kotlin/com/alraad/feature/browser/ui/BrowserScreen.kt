@@ -45,28 +45,17 @@ fun BrowserScreen(
         activeTab?.let { pageTabAssociators.getOrPut(it.id) { PageTabAssociator() } } ?: PageTabAssociator()
     val liveTabIds = tabState.tabs.map { it.id }.toSet()
     val browserWebViewEnvironment =
-        BrowserWebViewEnvironment(
-            tabManager = tabManager,
-            webViewIntegration = webViewIntegration,
-            diagnosticsLogger = diagnosticsLogger,
-            sniffer = sniffer,
-            subtitleSniffer = subtitleSniffer,
-            settings = settings,
-            webViewPool = webViewPool,
+        createBrowserWebViewEnvironment(
+            tabManager,
+            webViewIntegration,
+            diagnosticsLogger,
+            sniffer,
+            subtitleSniffer,
+            settings,
+            webViewPool,
         )
 
-    DisposableEffect(webViewPool) {
-        onDispose { webViewPool.clear() }
-    }
-
-    LaunchedEffect(liveTabIds) {
-        pageTabAssociators.keys.retainAll(liveTabIds)
-        webViewPool.retainTabs(liveTabIds)
-    }
-
-    LaunchedEffect(Unit) {
-        if (tabState.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
-    }
+    BrowserTabLifecycle(tabManager, settings, liveTabIds, pageTabAssociators, webViewPool)
 
     BrowserBackNavigation(
         activeTab = activeTab,
@@ -96,6 +85,45 @@ fun BrowserScreen(
         )
     }
 }
+
+@Composable
+private fun BrowserTabLifecycle(
+    tabManager: TabManager,
+    settings: AppSettings,
+    liveTabIds: Set<String>,
+    pageTabAssociators: MutableMap<String, PageTabAssociator>,
+    webViewPool: BrowserWebViewPool,
+) {
+    DisposableEffect(webViewPool) {
+        onDispose { webViewPool.clear() }
+    }
+    LaunchedEffect(liveTabIds) {
+        pageTabAssociators.keys.retainAll(liveTabIds)
+        webViewPool.retainTabs(liveTabIds)
+    }
+    LaunchedEffect(Unit) {
+        if (tabManager.state.value.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
+    }
+}
+
+private fun createBrowserWebViewEnvironment(
+    tabManager: TabManager,
+    webViewIntegration: WebViewIntegrationHelper,
+    diagnosticsLogger: DiagnosticsLogger,
+    sniffer: StreamSniffer,
+    subtitleSniffer: SubtitleSniffer,
+    settings: AppSettings,
+    webViewPool: BrowserWebViewPool,
+): BrowserWebViewEnvironment =
+    BrowserWebViewEnvironment(
+        tabManager = tabManager,
+        webViewIntegration = webViewIntegration,
+        diagnosticsLogger = diagnosticsLogger,
+        sniffer = sniffer,
+        subtitleSniffer = subtitleSniffer,
+        settings = settings,
+        webViewPool = webViewPool,
+    )
 
 @Composable
 private fun BrowserWebViewHost(
