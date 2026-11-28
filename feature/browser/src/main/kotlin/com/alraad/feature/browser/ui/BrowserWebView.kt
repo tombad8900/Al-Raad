@@ -35,7 +35,7 @@ fun BrowserWebView(
                 setBackgroundColor(backgroundColor.toArgb())
                 SafeWebViewConfig.apply(this, environment.settings)
                 if (environment.settings.javaScriptEnabled) {
-                    addJavascriptInterface(jsBridge, SNIFFER_BRIDGE_NAME)
+                    runCatching { addJavascriptInterface(jsBridge, SNIFFER_BRIDGE_NAME) }
                 }
                 webChromeClient = PopupBlockingWebChromeClient(environment.diagnosticsLogger)
                 webViewClient =
@@ -53,7 +53,7 @@ fun BrowserWebView(
                                 if (environment.settings.javaScriptEnabled) {
                                     val token = jsBridge.bindPage(url, id)
                                     if (token.isNotEmpty()) {
-                                        webView.evaluateJavascript(FetchXhrCaptureScript.build(token), null)
+                                        runCatching { webView.evaluateJavascript(FetchXhrCaptureScript.build(token), null) }
                                     }
                                 }
                             }
@@ -93,7 +93,7 @@ fun BrowserWebView(
                     jsBridge.clearPage()
                 }
             } else {
-                webView.removeJavascriptInterface(SNIFFER_BRIDGE_NAME)
+                runCatching { webView.removeJavascriptInterface(SNIFFER_BRIDGE_NAME) }
                 jsBridge.clearPage()
             }
             activeTab?.let { tab ->
