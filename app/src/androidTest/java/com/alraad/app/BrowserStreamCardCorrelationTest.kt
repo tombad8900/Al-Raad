@@ -15,11 +15,7 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
-/**
- * Exercises the real WebView -> request observer -> BrowserViewModel -> Compose card path.
- * The top-level fixture is loaded locally with an HTTPS origin; its data: iframe has a
- * distinct opaque origin and requests a synthetic HLS URL. No external stream is fetched.
- */
+/** Real WebView-to-card regression using a local top page and an opaque-origin iframe fixture. */
 class BrowserStreamCardCorrelationTest {
     @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
 
