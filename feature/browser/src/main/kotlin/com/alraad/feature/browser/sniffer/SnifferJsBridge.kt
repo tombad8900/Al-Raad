@@ -14,7 +14,6 @@ class SnifferJsBridge
         private val sniffer: StreamSniffer,
     ) {
         private val pageContext = AtomicReference<PageContext?>(null)
-
         fun bindPage(
             pageUrl: String,
             tabId: String,
@@ -27,7 +26,6 @@ class SnifferJsBridge
             pageContext.set(PageContext(pageUrl, tabId, token))
             return token
         }
-
         fun isBoundTo(
             pageUrl: String,
             tabId: String,
@@ -37,7 +35,6 @@ class SnifferJsBridge
         fun clearPage() {
             pageContext.set(null)
         }
-
         @JavascriptInterface
         fun onRequestObserved(payload: String) {
             if (payload.isEmpty() || payload.length > MAX_PAYLOAD_LENGTH) return
@@ -55,7 +52,6 @@ class SnifferJsBridge
                 tabId = context.tabId,
             )
         }
-
         private fun safeHeaders(source: JSONObject): Map<String, String> =
             buildMap {
                 val keys = source.keys()
