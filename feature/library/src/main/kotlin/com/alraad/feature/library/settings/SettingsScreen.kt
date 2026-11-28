@@ -243,7 +243,7 @@ private fun DiagnosticsLogEntry(entry: DiagEntry) {
         )
         if (entry.details.isNotEmpty()) {
             Text(
-                entry.details.entries.joinToString("\\n") { "${it.key}=${it.value}" },
+                entry.details.entries.joinToString("\n") { "${it.key}=${it.value}" },
                 style = MaterialTheme.typography.bodySmall,
             )
         }
