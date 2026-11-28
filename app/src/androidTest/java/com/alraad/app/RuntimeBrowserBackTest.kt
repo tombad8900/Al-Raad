@@ -121,7 +121,7 @@ class RuntimeBrowserBackTest {
         assertEquals(
             "WebView url (tabs=${state.tabs.map { it.id.take(4) to it.url }} active=${state.activeTabId?.take(4)} " +
                 "viewExists=${onMain { activeWebViewOnMain() != null }} ${uiDiagnostics()} " +
-                "serverRequests=${activeServer?.requestCount} webviewLogs=${webViewLogs()})",
+                "serverRequests=${activeServer?.requestCount} ${serverProbe(expected)} webviewLogs=${webViewLogs()})",
             expected,
             url(),
         )
@@ -174,6 +174,22 @@ class RuntimeBrowserBackTest {
         }
         check(completed.await(5, TimeUnit.SECONDS)) { "WebView body text evaluation timed out" }
         return checkNotNull(result)
+    }
+
+    /** Control read from the test process itself: shows whether the fixture server answers at all and where it is bound. */
+    private fun serverProbe(url: String): String {
+        val server = activeServer ?: return "probe=noServer"
+        val before = server.requestCount
+        val outcome =
+            runCatching {
+                val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 3_000
+                conn.readTimeout = 3_000
+                "http=${conn.responseCode}"
+            }.getOrElse { "err=${it.javaClass.simpleName}" }
+        val localhostAddrs = runCatching { java.net.InetAddress.getAllByName("localhost").joinToString { it.hostAddress.orEmpty() } }
+        return "probe[host=${server.hostName} port=${server.port} localhost=${localhostAddrs.getOrNull()} " +
+            "$outcome requestsDelta=${server.requestCount - before}]"
     }
 
     private fun webViewLogs(): String =
