@@ -3,13 +3,18 @@ package com.alraad.feature.browser.ui
 import android.webkit.WebView
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import com.alraad.core.common.contracts.StreamSource
+import com.alraad.feature.browser.sniffer.FetchXhrCaptureScript
+import com.alraad.feature.browser.sniffer.SnifferJsBridge
 import com.alraad.feature.browser.web.PopupBlockingWebChromeClient
 import com.alraad.feature.browser.web.SafeWebViewConfig
+
+private const val SNIFFER_BRIDGE_NAME = "AlRaadSniffer"
 
 @Composable
 fun BrowserWebView(
@@ -22,23 +27,36 @@ fun BrowserWebView(
     modifier: Modifier = Modifier,
 ) {
     val tabs = environment.tabManager
+    val jsBridge = remember(environment.sniffer) { SnifferJsBridge(environment.sniffer) }
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
             WebView(context).apply {
                 setBackgroundColor(backgroundColor.toArgb())
                 SafeWebViewConfig.apply(this, environment.settings)
+                if (environment.settings.javaScriptEnabled) {
+                    addJavascriptInterface(jsBridge, SNIFFER_BRIDGE_NAME)
+                }
                 webChromeClient = PopupBlockingWebChromeClient(environment.diagnosticsLogger)
                 webViewClient =
                     environment.webViewIntegration.webViewClient(
                         onNavigationRequested = { _, url ->
+                            jsBridge.clearPage()
                             tabs.state.value.activeTabId?.let { pageTabAssociator.recordRequest(it, url) }
                         },
-                        onPageStart = { _, url ->
+                        onPageStart = { webView, url ->
                             val page = pageTabAssociator.onPageStartedWithContext(url, tabs.state.value.activeTabId)
                             page.tabId?.let { id ->
                                 handlers.actions.onPageStarted(id, url, page.startsNewNavigation)
                                 if (id == tabs.state.value.activeTabId) onLoadingChange(true)
+                                if (environment.settings.javaScriptEnabled) {
+                                    val token = jsBridge.bindPage(url, id)
+                                    if (token.isNotEmpty()) {
+                                        webView.evaluateJavascript(FetchXhrCaptureScript.build(token), null)
+                                    }
+                                } else {
+                                    jsBridge.clearPage()
+                                }
                             }
                         },
                         onPageFinished = { webView ->
@@ -64,8 +82,22 @@ fun BrowserWebView(
             }
         },
         update = { webView ->
+            SafeWebViewConfig.apply(webView, environment.settings)
+            if (environment.settings.javaScriptEnabled) {
+                webView.addJavascriptInterface(jsBridge, SNIFFER_BRIDGE_NAME)
+                val pageUrl = webView.url
+                val owner = pageTabAssociator.tabIdForPage(pageUrl)
+                if (pageUrl != null && owner != null && !jsBridge.isBoundTo(pageUrl, owner)) {
+                    val token = jsBridge.bindPage(pageUrl, owner)
+                    if (token.isNotEmpty()) webView.evaluateJavascript(FetchXhrCaptureScript.build(token), null)
+                }
+            } else {
+                webView.removeJavascriptInterface(SNIFFER_BRIDGE_NAME)
+                jsBridge.clearPage()
+            }
             activeTab?.let { tab ->
                 if (pageTabAssociator.shouldLoad(tab.id, tab.url, webView.url)) {
+                    jsBridge.clearPage()
                     pageTabAssociator.recordRequest(tab.id, tab.url)
                     onLoadingChange(true)
                     webView.loadUrl(tab.url)
