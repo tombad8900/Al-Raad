@@ -51,16 +51,22 @@ class BlocklistStore
             prefs.edit().putStringSet("exceptions", updated).apply()
         }
 
+        /** Enough domains, and not far smaller than the stored copy (that looks like a cut-off download). */
+        private fun plausibleUpdate(
+            id: String,
+            count: Int,
+        ): Boolean {
+            val previous = storedDomains(id)?.size ?: 0
+            return count >= effectiveMin(id) && (previous == 0 || count >= previous * MIN_KEPT_FRACTION)
+        }
+
         /** Parses candidate text and promotes it only when it yields enough domains. */
         fun promote(
             id: String,
             text: String,
         ): Boolean {
             val domains = AdblockPlusDomainParser.parse(text)
-            if (domains.size < effectiveMin(id)) return false
-            // A candidate far smaller than the stored copy is treated as a cut-off download, not a real update.
-            val previous = storedDomains(id)?.size ?: 0
-            if (previous > 0 && domains.size < previous * MIN_KEPT_FRACTION) return false
+            if (!plausibleUpdate(id, domains.size)) return false
             val target = File(dir, "$id.domains")
             val tmp = File(dir, "$id.tmp")
             dir.mkdirs()
