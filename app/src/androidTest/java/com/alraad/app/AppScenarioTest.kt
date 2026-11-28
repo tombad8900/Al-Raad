@@ -49,6 +49,12 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 
+/** Recognizable bright fixture position for deterministic Fit/Fill captures. */
+private const val CAPTURE_POSITION_MS = 90_000L
+
+/** Acceptable undershoot when awaiting the deterministic capture position. */
+private const val SEEK_TOLERANCE_MS = 2_000L
+
 /**
  * End-to-end runtime scenario on the real app: browse a page, then prove the visit
  * is recorded in history, bookmarked, and survives an activity reopen. Each step
@@ -142,8 +148,7 @@ class AppScenarioTest {
             composeRule.onNodeWithText("\u062a\u0634\u063a\u064a\u0644").performClick()
             // The player route shows its controls; the no-stream placeholder must be absent.
             waitForNode(hasContentDescription("Fullscreen"), 15_000)
-            waitForRenderedVideoFrames()
-            Thread.sleep(1_000)
+            waitForRenderedVideoFrames().also { seekAndPauseForCapture(it) }
             capture("scenario-player-fit-frames.png")
 
             composeRule.onNode(hasContentDescription("Fill screen")).performClick()
@@ -214,7 +219,7 @@ class AppScenarioTest {
     }
 
     @OptIn(UnstableApi::class)
-    private fun waitForRenderedVideoFrames() {
+    private fun waitForRenderedVideoFrames(): ExoPlayer {
         var attachedPlayer: ExoPlayer? = null
         composeRule.waitUntil(timeoutMillis = 15_000) {
             runCatching {
@@ -284,6 +289,32 @@ class AppScenarioTest {
         } finally {
             instrumentation.runOnMainSync { player.removeAnalyticsListener(listener) }
         }
+        return player
+    }
+
+    /**
+     * Deterministic visual evidence: seek to a known recognizable (non-dark) fixture
+     * position, wait until the player reports that position in READY, then pause so the
+     * Fit and Fill captures show the same frame. Early-clip frames are near-black, which
+     * made prior captures ambiguous (run 46104292921 fit capture).
+     */
+    private fun seekAndPauseForCapture(player: ExoPlayer) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { player.seekTo(CAPTURE_POSITION_MS) }
+        var atPosition = false
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
+        while (System.nanoTime() < deadline) {
+            instrumentation.runOnMainSync {
+                atPosition =
+                    player.currentPosition >= CAPTURE_POSITION_MS - SEEK_TOLERANCE_MS &&
+                    player.playbackState == Player.STATE_READY
+            }
+            if (atPosition) break
+            Thread.sleep(250)
+        }
+        assertTrue("Player did not reach the deterministic capture position", atPosition)
+        instrumentation.runOnMainSync { player.pause() }
+        Thread.sleep(1_200)
     }
 
     private fun rowInList(listTag: String): SemanticsMatcher = hasText("?t=", substring = true) and hasAnyAncestor(hasTestTag(listTag))
