@@ -7,6 +7,7 @@ data class DetectedStreamItem(
     val stream: StreamUrl,
     val sourcePageUrl: String,
     val sourceTabId: String,
+    val documentId: String? = null,
 )
 
 /** Callbacks for the current-page stream picker. */
