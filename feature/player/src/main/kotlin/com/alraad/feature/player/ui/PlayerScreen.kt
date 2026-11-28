@@ -49,9 +49,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import com.alraad.core.common.contracts.StreamUrl
+import androidx.media3.ui.TrackSelectionDialogBuilder
+import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.feature.player.impl.Media3PlayerController
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
@@ -76,13 +78,14 @@ internal fun seekTarget(
  * direction-aware under RTL) and a 0.5x-2x playback-speed menu. Releases the
  * player when the screen leaves composition.
  */
+@OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
     controller: Media3PlayerController,
-    stream: StreamUrl,
+    playbackRequest: PlaybackRequest,
     modifier: Modifier = Modifier,
-    drmLicenseUrl: String? = null,
 ) {
+    val context = LocalContext.current
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val gestures = rememberPlayerGestureController()
     var speed by remember { mutableFloatStateOf(1.0f) }
@@ -97,8 +100,8 @@ fun PlayerScreen(
     PauseOnStopEffect(controller)
     var fillScreen by rememberFillScreenState()
 
-    DisposableEffect(stream) {
-        controller.play(stream, drmLicenseUrl = drmLicenseUrl)
+    DisposableEffect(playbackRequest) {
+        controller.play(playbackRequest)
         player = controller.currentPlayer()
         onDispose {
             // release() frees resources but preserves the selection, so a recreate
@@ -128,6 +131,14 @@ fun PlayerScreen(
                         onToggleFill = { fillScreen = !fillScreen },
                     ),
                 onEnterPip = { gestures.enterPictureInPicture() },
+                player = player,
+                onSelectSubtitles = {
+                    player?.let { current ->
+                        TrackSelectionDialogBuilder(context, "الترجمة", current, C.TRACK_TYPE_TEXT)
+                            .build()
+                            .show()
+                    }
+                },
                 speed = speed,
                 onSelectSpeed = { option ->
                     speed = option
@@ -198,6 +209,8 @@ private fun PlayerControlsRow(
     controller: Media3PlayerController,
     display: DisplayControls,
     onEnterPip: () -> Unit,
+    player: Player?,
+    onSelectSubtitles: () -> Unit,
     speed: Float,
     onSelectSpeed: (Float) -> Unit,
 ) {
@@ -211,6 +224,9 @@ private fun PlayerControlsRow(
     }
     IconButton(onClick = onEnterPip) {
         Icon(Icons.Default.PictureInPictureAlt, contentDescription = "Picture in picture", tint = Color.White)
+    }
+    TextButton(onClick = onSelectSubtitles, enabled = player != null) {
+        Text("الترجمة", color = Color.White, style = MaterialTheme.typography.labelLarge)
     }
     IconButton(onClick = display.onToggleFill) {
         Icon(

@@ -108,6 +108,7 @@ private fun NavGraphBuilder.browserDestination(navController: NavHostController)
             webViewIntegration = viewModel.webViewIntegration,
             diagnosticsLogger = viewModel.diagnosticsLogger,
             sniffer = viewModel.sniffer,
+            subtitleSniffer = viewModel.subtitleSniffer,
             settings = settings,
             handlers =
                 com.alraad.feature.browser.ui.BrowserHandlers(
@@ -195,10 +196,10 @@ private fun NavGraphBuilder.historyBookmarksDestinations(navController: NavHostC
 private fun NavGraphBuilder.playerDestination() {
     composable(Routes.PLAYER) {
         val playerViewModel: PlayerViewModel = hiltViewModel()
-        val stream by playerViewModel.controller.currentStream.collectAsState()
-        val current = stream
+        val playbackRequest by playerViewModel.controller.currentPlaybackRequest.collectAsState()
+        val current = playbackRequest
         if (current != null) {
-            PlayerScreen(controller = playerViewModel.controller, stream = current)
+            PlayerScreen(controller = playerViewModel.controller, playbackRequest = current)
         } else {
             PlaceholderScreen("لم يتم اختيار بث بعد")
         }

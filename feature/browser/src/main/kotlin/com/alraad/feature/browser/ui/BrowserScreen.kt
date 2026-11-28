@@ -15,14 +15,17 @@ import com.alraad.core.adblocker.impl.WebViewIntegrationHelper
 import com.alraad.core.common.contracts.AppSettings
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.feature.browser.sniffer.StreamSniffer
+import com.alraad.feature.browser.sniffer.SubtitleSniffer
 import com.alraad.feature.browser.tabs.TabManager
 
+@Suppress("LongParameterList") // services forwarded into BrowserWebViewEnvironment below
 @Composable
 fun BrowserScreen(
     tabManager: TabManager,
     webViewIntegration: WebViewIntegrationHelper,
     diagnosticsLogger: DiagnosticsLogger,
     sniffer: StreamSniffer,
+    subtitleSniffer: SubtitleSniffer,
     settings: AppSettings,
     modifier: Modifier = Modifier,
     handlers: BrowserHandlers = BrowserHandlers(),
@@ -67,6 +70,7 @@ fun BrowserScreen(
                     webViewIntegration = webViewIntegration,
                     diagnosticsLogger = diagnosticsLogger,
                     sniffer = sniffer,
+                    subtitleSniffer = subtitleSniffer,
                     settings = settings,
                 ),
             backgroundColor = backgroundColor,
