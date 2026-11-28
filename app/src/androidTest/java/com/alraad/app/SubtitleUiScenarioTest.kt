@@ -119,6 +119,7 @@ class SubtitleUiScenarioTest {
         composeRule.waitForIdle()
         val trackDump = awaitTextTrack(player, 30_000)
         val boundaryDump = mediaItemDump(player)
+        recordEvidence("boundary", "$trackDump; $boundaryDump; sniffer=$snifferObservations; earlyListed=$earlyListed")
         assertTrue(
             "Player never exposed the page text track (early-open listed=$earlyListed). " +
                 "$trackDump; $boundaryDump; sniffer=$snifferObservations",
@@ -133,16 +134,16 @@ class SubtitleUiScenarioTest {
             trackItem,
         )
         trackItem.click()
+        confirmTrackDialog()
         // Playback-progress display proof: the cue must appear while playback is
         // actually advancing (not only at a paused seek position; the paused decode
         // check lives in SubtitlePlaybackRuntimeTest). The fixture cue spans
         // 88-120s, so playback has a wide window to cross after the subtitle loads.
         val pageCue = watchCues(player, "Caption at ninety seconds")
         resumePlaybackFrom(player, PLAYBACK_PROOF_START_MS)
-        assertTrue(
-            "Selected subtitle never displayed while playback progressed",
-            pageCue.await(90, TimeUnit.SECONDS),
-        )
+        val pageCueSeen = pageCue.await(90, TimeUnit.SECONDS)
+        recordEvidence("page-cue", "seen=$pageCueSeen ${playerState(player)}")
+        assertTrue("Selected subtitle never displayed while playback progressed: ${playerState(player)}", pageCueSeen)
         seekAndPauseAt(player)
         capture("scenario-subtitle-on.png")
 
@@ -153,6 +154,7 @@ class SubtitleUiScenarioTest {
                 ?: device.wait(Until.findObject(By.text("Disable")), 4_000)
         assertNotNull("No off entry in the real selection dialog", noneItem)
         noneItem.click()
+        confirmTrackDialog()
         composeRule.waitForIdle()
         Thread.sleep(800)
         capture("scenario-subtitle-off.png")
@@ -173,6 +175,7 @@ class SubtitleUiScenarioTest {
         val externalItem = device.wait(Until.findObject(By.textContains("ui-pick")), 10_000)
         assertNotNull("Attached external subtitle not listed in the real dialog", externalItem)
         externalItem.click()
+        confirmTrackDialog()
         val externalCue = watchCues(rebuilt, "External file caption")
         resumePlaybackFrom(rebuilt, PLAYBACK_PROOF_START_MS)
         assertTrue(
@@ -312,6 +315,32 @@ class SubtitleUiScenarioTest {
                 "]"
         }
         return dump
+    }
+
+    private fun playerState(player: ExoPlayer): String {
+        var out = "unread"
+        instrumentation.runOnMainSync {
+            val sel = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }.map { it.isSelected }
+            out = "state=${player.playbackState} pos=${player.currentPosition} playing=${player.isPlaying} textSelected=$sel"
+        }
+        return out
+    }
+
+    /** Media3's selection dialog applies a choice only on OK. */
+    private fun confirmTrackDialog() {
+        val ok = device.wait(Until.findObject(By.text("OK")), 5_000)
+        assertNotNull("Track dialog has no OK button", ok)
+        ok.click()
+        composeRule.waitForIdle()
+    }
+
+    /** Logs evidence and keeps it as a capture-dir file so passing runs keep it too. */
+    private fun recordEvidence(
+        tag: String,
+        text: String,
+    ) {
+        android.util.Log.i("SubtitleUiEvidence", "$tag: $text")
+        println("SUBTITLE-EVIDENCE $tag: $text")
     }
 
     /** The ExoPlayer currently attached to the on-screen PlayerView. */
