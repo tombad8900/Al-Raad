@@ -62,6 +62,7 @@ fun SettingsScreen(
             val status =
                 when {
                     item.awaitingRefresh -> "بانتظار تنزيل جديد، غير مطبّقة حاليًا"
+                    item.cosmeticOnly -> "قواعد تجميلية فقط، غير مطبّقة (الحجب على الشبكة فقط)"
                     item.lastUpdated > 0 -> "آخر تحديث ${formatTimestamp(item.lastUpdated)}"
                     else -> "النسخة المدمجة فقط"
                 }
