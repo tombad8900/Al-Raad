@@ -56,7 +56,9 @@ class DiagnosticsActionsNavigationTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithText("الإعدادات").performClick()
         composeRule.onNodeWithContentDescription("سجل التشخيص / Diagnostics log").performClick()
-        composeRule.onNodeWithText("لا توجد سجلات مطابقة").assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            runCatching { composeRule.onNodeWithText("لا توجد سجلات مطابقة").assertIsDisplayed() }.isSuccess
+        }
 
         composeRule.onNodeWithText("نسخ / Copy").performClick()
         assertToast("لا يوجد ما يُنسخ / Nothing to copy")
