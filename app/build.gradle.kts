@@ -72,4 +72,7 @@ dependencies {
     androidTestImplementation(libs.espresso.core)
     androidTestImplementation(libs.media3.common)
     androidTestImplementation(libs.mockwebserver)
+    androidTestImplementation(libs.media3.common)
+    androidTestImplementation(libs.media3.exoplayer)
+    androidTestImplementation(libs.media3.ui)
 }

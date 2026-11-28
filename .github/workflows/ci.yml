@@ -57,7 +57,7 @@ jobs:
           done
 
       - name: Run quality gates and build debug APK
-        run: ./gradlew --no-daemon ktlintCheck detekt test assembleDebug
+        run: ./gradlew --no-daemon ktlintCheck detekt test assembleDebug assembleDebugAndroidTest
 
       - name: Upload Wave 3 debug APK artifact
         if: (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') || github.event_name == 'workflow_dispatch'
@@ -104,6 +104,19 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      - name: Serve playback fixture from the runner
+        # Keeps the ~20MB fixture and its serving buffers out of the instrumented
+        # process (OOM root-cause experiment, runs 46100573832/46102894650): the app
+        # reaches the runner over the emulator's 10.0.2.2 host alias. Full 200
+        # responses are fine host-side; memory pressure was the in-process copies.
+        run: |
+          mkdir -p /tmp/fixture-serve
+          curl -fsSL --retry 3 -o /tmp/fixture-serve/fixture.mp4 https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4
+          printf '%s' "<html><body><video autoplay muted playsinline src='/fixture.mp4'></video></body></html>" > /tmp/fixture-serve/player.html
+          nohup python3 -m http.server 18080 --directory /tmp/fixture-serve > /tmp/fixture-serve.log 2>&1 &
+          sleep 2
+          curl -fsSI http://127.0.0.1:18080/player.html | head -1
+
       - name: Run instrumentation tests on API 35 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -123,7 +136,7 @@ jobs:
             adb shell settings put global cached_apps_freezer disabled || true
             adb shell rm -f /sdcard/Download/app-launch.png /sdcard/Download/diagnostics-export.txt /sdcard/Download/scenario-*.png || true
             mkdir -p scenario-captures
-            bash -c './gradlew --no-daemon :app:connectedDebugAndroidTest; code=$?; adb pull /sdcard/Download/app-launch.png app-launch.png || true; adb pull /sdcard/Download/diagnostics-export.txt diagnostics-export.txt || true; for f in $(adb shell ls /sdcard/Download/scenario-*.png 2>/dev/null | tr -d "\r"); do adb pull "$f" scenario-captures/ || true; done; adb logcat -d -t 2000 > scenario-captures/logcat-tail.txt || true; if [ "$code" -eq 0 ]; then test -s app-launch.png; test -s diagnostics-export.txt; [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d " \n")" = "89504e470d0a1a0a" ]; fi; exit $code' 
+            bash -c './gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.fixtureBaseUrl=http://10.0.2.2:18080; code=$?; adb pull /sdcard/Download/app-launch.png app-launch.png || true; adb pull /sdcard/Download/diagnostics-export.txt diagnostics-export.txt || true; for f in $(adb shell ls /sdcard/Download/scenario-*.png 2>/dev/null | tr -d "\r"); do adb pull "$f" scenario-captures/ || true; done; adb logcat -d -t 2000 > scenario-captures/logcat-tail.txt || true; if [ "$code" -eq 0 ]; then test -s app-launch.png; test -s diagnostics-export.txt; [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d " \n")" = "89504e470d0a1a0a" ]; fi; exit $code' 
 
       - name: Upload app-launch screenshot
         if: always()

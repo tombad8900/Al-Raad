@@ -58,10 +58,8 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.feature.player.impl.Media3PlayerController
-import com.alraad.feature.player.impl.addExternalSubtitle
 import com.alraad.feature.player.impl.externalSubtitleTrack
 import com.alraad.feature.player.impl.isActiveRequest
-import com.alraad.feature.player.impl.setQuality
 import com.alraad.feature.player.impl.switchSource
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
