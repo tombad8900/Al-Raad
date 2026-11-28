@@ -26,8 +26,7 @@ fun BrowserWebView(
         AndroidView(
             modifier = modifier.fillMaxSize(),
             factory = { context ->
-                environment.webViewPool.obtain(activeTab.id) {
-                    WebView(context).apply {
+                environment.webViewPool.obtain(activeTab.id).apply {
                         setBackgroundColor(backgroundColor.toArgb())
                         SafeWebViewConfig.apply(this, environment.settings)
                         webChromeClient = PopupBlockingWebChromeClient(environment.diagnosticsLogger)
