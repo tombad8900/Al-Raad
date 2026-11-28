@@ -79,11 +79,21 @@ class RuntimeBrowserBackTest {
         val state = tabManager.state.value
         assertEquals(
             "WebView url (tabs=${state.tabs.map { it.id.take(4) to it.url }} active=${state.activeTabId?.take(4)} " +
-                "viewExists=${onMain { activeWebView() != null }})",
+                "viewExists=${onMain { activeWebView() != null }} ${uiDiagnostics()})",
             expected,
             url(),
         )
     }
+
+    private fun uiDiagnostics(): String =
+        onMain {
+            val activity = composeRule.activity
+            fun count(v: android.view.View): Int =
+                (if (v is WebView) 1 else 0) +
+                    ((v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).sumOf { count(g.getChildAt(it)) } } ?: 0)
+            "activity=${activity.lifecycle.currentState} finishing=${activity.isFinishing} " +
+                "webViewsInWindow=${count(activity.window.decorView)} poolHasActive=${activeWebView() != null}"
+        }
 
     private fun back() {
         Espresso.pressBackUnconditionally()
