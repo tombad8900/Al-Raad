@@ -1,3 +1,5 @@
+@file:Suppress("TooManyFunctions")
+
 package com.alraad.feature.player.ui
 
 import android.app.Activity
