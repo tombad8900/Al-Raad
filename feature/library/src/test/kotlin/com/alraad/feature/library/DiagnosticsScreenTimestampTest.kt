@@ -57,7 +57,10 @@ class DiagnosticsScreenTimestampTest {
 
     @Test fun `diagnostics row displays the formatted timestamp`() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        val viewModel = SettingsDiagnosticsViewModel(fakeSettings, fakeLogger)
+        val viewModel =
+            testBlocklistDeps(fakeSettings, fakeLogger).let { (store, updater, adBlocker) ->
+                SettingsDiagnosticsViewModel(fakeSettings, fakeLogger, store, updater, adBlocker)
+            }
         composeRule.setContent { com.alraad.feature.library.settings.DiagnosticsScreen(viewModel = viewModel, onExport = {}) }
         composeRule.onNodeWithText(formatTimestamp(entry.timestamp)).assertIsDisplayed()
     }

@@ -53,6 +53,8 @@ class WebViewIntegrationHelper
         fun webViewClient(
             onPageFinished: (WebView) -> Unit = {},
             onRequestObserved: (url: String, headers: Map<String, String>, pageUrl: String?) -> Unit = { _, _, _ -> },
+            onPageStart: (WebView, String) -> Unit = { _, _ -> },
+            onNavigationRequested: (WebView, String) -> Unit = { _, _ -> },
         ): WebViewClient =
             object : WebViewClient() {
                 // Cached from UI-thread navigation callbacks: shouldInterceptRequest runs
@@ -66,6 +68,7 @@ class WebViewIntegrationHelper
                     favicon: android.graphics.Bitmap?,
                 ) {
                     currentPageUrl = url
+                    onPageStart(view, url)
                     super.onPageStarted(view, url, favicon)
                 }
 
@@ -76,6 +79,19 @@ class WebViewIntegrationHelper
                 ) {
                     currentPageUrl = url
                     super.doUpdateVisitedHistory(view, url, isReload)
+                }
+
+                override fun shouldOverrideUrlLoading(
+                    view: WebView,
+                    request: android.webkit.WebResourceRequest,
+                ): Boolean {
+                    val scheme = request.url.scheme
+                    if (request.isForMainFrame && !request.isRedirect) {
+                        if (scheme == "http" || scheme == "https") {
+                            onNavigationRequested(view, request.url.toString())
+                        }
+                    }
+                    return false
                 }
 
                 override fun shouldInterceptRequest(
