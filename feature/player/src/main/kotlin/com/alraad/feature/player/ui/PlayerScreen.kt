@@ -390,6 +390,8 @@ private fun PlayerSurface(
     speed: Float,
     fillScreen: Boolean,
 ) {
+    var playerView by remember { mutableStateOf<PlayerView?>(null) }
+    KeepScreenOnWhilePlaying(player, playerView)
     AndroidView(
         modifier =
             Modifier
@@ -419,6 +421,7 @@ private fun PlayerSurface(
                 // first frames never render zoomed/cropped while dimensions settle.
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 this.player = player
+                playerView = this
             }
         },
         update = { view ->
@@ -428,6 +431,37 @@ private fun PlayerSurface(
             player?.setPlaybackSpeed(speed)
         },
     )
+}
+
+/** True while the player is meant to be showing video: playing, or waiting for data to play. */
+internal fun shouldKeepScreenOn(
+    playWhenReady: Boolean,
+    playbackState: Int,
+): Boolean = playWhenReady && (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING)
+
+/** Keeps the screen awake only while video is playing; paused, ended or leaving the player clears it. */
+@Composable
+private fun KeepScreenOnWhilePlaying(
+    player: Player?,
+    view: PlayerView?,
+) {
+    DisposableEffect(player, view) {
+        val listener =
+            object : Player.Listener {
+                override fun onEvents(
+                    changed: Player,
+                    events: Player.Events,
+                ) {
+                    view?.keepScreenOn = shouldKeepScreenOn(changed.playWhenReady, changed.playbackState)
+                }
+            }
+        view?.keepScreenOn = player != null && shouldKeepScreenOn(player.playWhenReady, player.playbackState)
+        player?.addListener(listener)
+        onDispose {
+            player?.removeListener(listener)
+            view?.keepScreenOn = false
+        }
+    }
 }
 
 /** Pauses playback when the app is backgrounded so audio never keeps playing off-screen (owner directive item 3). Resume stays manual. */
