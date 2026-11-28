@@ -55,8 +55,8 @@ class RotanaRegressionTest {
         OfflineAdBlocker(ApplicationProvider.getApplicationContext(), logger, settings, store)
 
     private fun requireNative() {
-        // Match RuleEngineTest: local runs may lack the host library; CI must fail rather than silently skip.
-        assumeTrue(NativeAdblock.isAvailable() || System.getenv("CI") == null)
+        // Match RuleEngineTest locally, but make a missing host library a hard CI failure.
+        if (System.getenv("CI") == null) assumeTrue(NativeAdblock.isAvailable())
         assertTrue("native library missing in CI", NativeAdblock.isAvailable())
     }
 
@@ -129,6 +129,8 @@ class RotanaRegressionTest {
                     "d1rjxhevrfxjk0.cloudfront.net",
                     "cdnjs.cloudflare.com",
                     "rotana.net",
+                    "gstatic.com",
+                    "www.gstatic.com",
                 )
             val allowedRequests =
                 fixture.filter { request ->
@@ -162,8 +164,5 @@ class RotanaRegressionTest {
                 fixture.filter { request -> blocker.shouldBlock(request.url, pageUrl, request.type) }.map { it.url }.toSet()
             assertEquals("Only the explicitly pinned tracking requests may be blocked", trackingUrls, blockedFixtureUrls)
             assertEquals("Blocked fixture count must equal asserted tracker count", trackingUrls.size, blockedFixtureUrls.size)
-            assertFalse("Fixture unexpectedly contains a gstatic resource; add its observed URL before asserting it", fixture.any {
-                java.net.URI(it.url).host.lowercase().contains("gstatic")
-            })
         }
 }
