@@ -176,6 +176,26 @@ class BrowserViewModelStreamActionsTest {
     }
 
     @Test
+    fun `playStream passes every detected page stream as a switchable source`() {
+        val page = "https://page.example/watch"
+        val tab = tabManager.openTab(page)
+        viewModel.recordPageStarted(tab.id, page, startsNewNavigation = true)
+        sniffer.onRequestObserved("https://cdn.example/a.m3u8", pageUrl = page, tabId = tab.id)
+        sniffer.onRequestObserved("https://cdn.example/z.mpd", pageUrl = page, tabId = tab.id)
+
+        val hlsItem = viewModel.detectedStreams.value.first { it.stream.url.endsWith("a.m3u8") }
+        viewModel.playStream(hlsItem)
+
+        val request = requireNotNull(playerController.lastPlaybackRequest)
+        assertEquals(
+            listOf("https://cdn.example/z.mpd", "https://cdn.example/a.m3u8"),
+            request.sources.map { it.url },
+        )
+        assertEquals(1, request.selectedSourceIndex)
+        assertEquals("https://cdn.example/a.m3u8", request.selectedStream.url)
+    }
+
+    @Test
     fun `stream picker sorts formats and removes duplicate URLs`() {
         val tab = tabManager.openTab("https://page.example/watch")
         val dash =

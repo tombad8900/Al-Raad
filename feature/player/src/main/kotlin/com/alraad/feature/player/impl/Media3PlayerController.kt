@@ -58,6 +58,12 @@ class Media3PlayerController
             kotlinx.coroutines.flow.MutableStateFlow<PlaybackRequest?>(null)
         val currentPlaybackRequest: kotlinx.coroutines.flow.StateFlow<PlaybackRequest?> = _currentPlaybackRequest
 
+        /** Info-level PLAYER log entry, shared by the file-level playback extensions. */
+        internal fun logPlaybackEvent(
+            message: String,
+            details: Map<String, String>,
+        ) = logger.log(DiagCategory.PLAYER, DiagLevel.INFO, message, details)
+
         /** Exposed for PlayerScreen rendering. */
         fun currentPlayer(): Player? = player
 
@@ -220,6 +226,35 @@ class Media3PlayerController
             _currentPlaybackRequest.value = null
         }
     }
+
+/**
+ * Dispose decision for PlayerScreen: true only while [request] is still the active
+ * request, so a controller-side rebuild (source switch, subtitle attach) is never
+ * mistaken for leaving the screen.
+ */
+internal fun Media3PlayerController.isActiveRequest(request: PlaybackRequest): Boolean = currentPlaybackRequest.value == request
+
+/** Manual source switch (T5): rebuilds on another detected source, preserving position. */
+fun Media3PlayerController.switchSource(sourceIndex: Int) {
+    val request = currentPlaybackRequest.value ?: return
+    if (sourceIndex !in request.sources.indices || sourceIndex == request.selectedSourceIndex) return
+    logPlaybackEvent(
+        "Source switch",
+        mapOf("from" to request.selectedStream.url, "to" to request.sources[sourceIndex].url),
+    )
+    rebuildPreservingPlayback { it.copy(selectedSourceIndex = sourceIndex) }
+}
+
+private fun Media3PlayerController.rebuildPreservingPlayback(update: (PlaybackRequest) -> PlaybackRequest) {
+    val current = currentPlayer()
+    val position = current?.currentPosition ?: 0L
+    val wasPlaying = current?.playWhenReady == true
+    play(update(currentPlaybackRequest.value ?: return))
+    currentPlayer()?.let {
+        it.seekTo(position)
+        it.playWhenReady = wasPlaying
+    }
+}
 
 /**
  * Routes request headers per URL: subtitle requests receive only their own allowlisted

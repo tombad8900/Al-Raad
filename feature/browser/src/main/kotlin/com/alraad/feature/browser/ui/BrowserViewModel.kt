@@ -143,15 +143,28 @@ class BrowserViewModel
             }
         }
 
-        /** Starts playback of a selected stream with its captured request headers and page subtitles. */
+        /**
+         * Starts playback of a selected stream with its captured request headers and page
+         * subtitles. Every stream detected on the same page rides along as a manually
+         * switchable source (T5); the picked item starts selected.
+         */
         fun playStream(item: DetectedStreamItem) {
+            val pageStreams =
+                sortDetectedStreamItems(
+                    streamsByTab.value[item.sourceTabId].orEmpty().filter {
+                        it.sourcePageUrl == item.sourcePageUrl
+                    },
+                )
+            val selectedIndex = pageStreams.indexOfFirst { it.stream.url == item.stream.url }
+            val sources = pageStreams.map { it.stream }.ifEmpty { listOf(item.stream) }
             val pageSubtitles =
                 subtitlesByTab.value[item.sourceTabId].orEmpty().filter {
                     it.sourceTabId == item.sourceTabId && it.sourcePageUrl == item.sourcePageUrl
                 }
             streamActions.play(
                 PlaybackRequest(
-                    sources = listOf(item.stream),
+                    sources = sources,
+                    selectedSourceIndex = if (selectedIndex >= 0) selectedIndex else 0,
                     subtitles = pageSubtitles,
                     sourcePageUrl = item.sourcePageUrl,
                     sourceTabId = item.sourceTabId,
