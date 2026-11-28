@@ -1,6 +1,7 @@
 package com.alraad.feature.browser.tabs
 
 import androidx.annotation.VisibleForTesting
+import com.alraad.feature.browser.sniffer.SubtitleSniffer
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
@@ -15,4 +16,6 @@ import dagger.hilt.components.SingletonComponent
 @InstallIn(SingletonComponent::class)
 interface TabManagerTestEntryPoint {
     fun tabManager(): TabManager
+
+    fun subtitleSniffer(): SubtitleSniffer
 }

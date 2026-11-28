@@ -67,13 +67,24 @@ class SubtitleUiScenarioTest {
     private val device
         get() = UiDevice.getInstance(instrumentation)
 
+    /** Every subtitle observation the sniffer emitted this test, label|url|page|tab. */
+    private val snifferObservations = java.util.concurrent.CopyOnWriteArrayList<String>()
+
     @Before
     fun resetTabManager() {
         stagePickableSubtitle()
-        EntryPointAccessors.fromApplication(
-            instrumentation.targetContext.applicationContext,
-            TabManagerTestEntryPoint::class.java,
-        ).tabManager().reset()
+        snifferObservations.clear()
+        val entryPoint =
+            EntryPointAccessors.fromApplication(
+                instrumentation.targetContext.applicationContext,
+                TabManagerTestEntryPoint::class.java,
+            )
+        entryPoint.tabManager().reset()
+        entryPoint.subtitleSniffer().registerListener { track ->
+            snifferObservations.add(
+                "${track.label}|${track.url}|page=${track.sourcePageUrl}|tab=${track.sourceTabId}",
+            )
+        }
     }
 
     @Test
@@ -107,15 +118,18 @@ class SubtitleUiScenarioTest {
         device.pressBack()
         composeRule.waitForIdle()
         val trackDump = awaitTextTrack(player, 30_000)
+        val boundaryDump = mediaItemDump(player)
         assertTrue(
-            "Player never exposed the page text track (early-open listed=$earlyListed). $trackDump",
+            "Player never exposed the page text track (early-open listed=$earlyListed). " +
+                "$trackDump; $boundaryDump; sniffer=$snifferObservations",
             trackDump.contains("type=${C.TRACK_TYPE_TEXT}") && trackDump.contains("subs"),
         )
         composeRule.onNodeWithText("الترجمة").performClick()
         val trackItem = device.wait(Until.findObject(By.text("subs")), 10_000)
         capture("scenario-subtitle-dialog.png")
         assertNotNull(
-            "Page subtitle not listed in the reopened dialog (early-open listed=$earlyListed). $trackDump",
+            "Page subtitle not listed in the reopened dialog (early-open listed=$earlyListed). " +
+                "$trackDump; $boundaryDump; sniffer=$snifferObservations",
             trackItem,
         )
         trackItem.click()
@@ -270,18 +284,32 @@ class SubtitleUiScenarioTest {
         while (System.nanoTime() < deadline) {
             instrumentation.runOnMainSync {
                 dump =
-                    "state=${'$'}{player.playbackState} tracks=[" +
+                    "state=${player.playbackState} tracks=[" +
                     player.currentTracks.groups.joinToString("; ") { group ->
                         val labels =
                             (0 until group.mediaTrackGroup.length).joinToString(",") { i ->
                                 group.mediaTrackGroup.getFormat(i).label ?: "null"
                             }
-                        "type=${'$'}{group.type} labels=${'$'}labels"
+                        "type=${group.type} labels=$labels"
                     } +
                     "]"
             }
-            if (dump.contains("type=${'$'}{C.TRACK_TYPE_TEXT}")) break
+            if (dump.contains("type=${C.TRACK_TYPE_TEXT}")) break
             Thread.sleep(500)
+        }
+        return dump
+    }
+
+    /** What the player actually received: media item + sideloaded subtitle configs. */
+    private fun mediaItemDump(player: ExoPlayer): String {
+        var dump = "unread"
+        instrumentation.runOnMainSync {
+            val item = player.currentMediaItem?.localConfiguration
+            val configs = item?.subtitleConfigurations.orEmpty()
+            dump =
+                "mediaItemUri=${item?.uri} subtitleConfigs=[" +
+                configs.joinToString("; ") { "label=${it.label} uri=${it.uri}" } +
+                "]"
         }
         return dump
     }
