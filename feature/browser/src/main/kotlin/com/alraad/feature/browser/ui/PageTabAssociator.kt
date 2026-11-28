@@ -36,6 +36,7 @@ class PageTabAssociator {
     private val documentOwners = mutableMapOf<String, PageDocumentAssociation>()
     private var lastRequestedNavigation: Pair<String, String>? = null
     private var lastBoundDocument: PageDocumentAssociation? = null
+    private var loadingDocumentId: String? = null
 
     @Synchronized
     fun shouldLoad(
@@ -69,7 +70,10 @@ class PageTabAssociator {
         pendingNavigationTabs.removeAll { it.tabId !in activeTabIds }
         pageDocuments.entries.removeAll { it.value.tabId !in activeTabIds }
         documentOwners.entries.removeAll { it.value.tabId !in activeTabIds }
-        if (lastBoundDocument?.tabId !in activeTabIds) lastBoundDocument = null
+        if (lastBoundDocument?.tabId !in activeTabIds) {
+            lastBoundDocument = null
+            loadingDocumentId = null
+        }
         if (lastRequestedNavigation?.first !in activeTabIds) lastRequestedNavigation = null
     }
 
@@ -91,9 +95,12 @@ class PageTabAssociator {
                 previousDocument != null && previousDocument.tabId != activeTabId -> previousDocument.tabId
                 else -> activeTabId
             }
+        val isRedirectContinuation =
+            previousDocument != null && previousDocument.documentId == loadingDocumentId &&
+                ownerTabId == previousDocument.tabId
         val startsNewNavigation =
             pendingMatch != null || (pendingRedirect != null && !redirectBelongsToPrevious) ||
-                (previousDocument == null && ownerTabId != null && ownerTabId == activeTabId)
+                (ownerTabId != null && !isRedirectContinuation)
         val documentId =
             when {
                 pendingMatch != null -> pendingMatch.documentId
@@ -123,6 +130,7 @@ class PageTabAssociator {
             pageDocuments[url] = association
             documentOwners[documentId] = association
             lastBoundDocument = association
+            loadingDocumentId = documentId
         }
         return PageStartAssociation(ownerTabId, startsNewNavigation, documentId)
     }
@@ -161,7 +169,11 @@ class PageTabAssociator {
         } }
 
     @Synchronized
-    fun onPageFinished(url: String): String? = pageDocuments[url]?.tabId
+    fun onPageFinished(url: String): String? {
+        val association = pageDocuments[url] ?: return null
+        if (loadingDocumentId == association.documentId) loadingDocumentId = null
+        return association.tabId
+    }
 
     @Synchronized
     fun tabIdForPage(url: String?): String? = associationForPage(url)?.tabId
