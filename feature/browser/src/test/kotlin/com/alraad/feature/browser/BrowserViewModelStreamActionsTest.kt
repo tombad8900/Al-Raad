@@ -137,6 +137,66 @@ class BrowserViewModelStreamActionsTest {
     }
 
     @Test
+    fun `subtitle observed before page start is retained and attached to playback`() {
+        val page = "https://page.example/watch"
+        val tab = tabManager.openTab(page)
+        val subtitleUrl = "https://cdn.example/subs.vtt"
+
+        subtitleSniffer.onRequestObserved(
+            subtitleUrl,
+            mapOf("Accept" to "text/vtt", "Cookie" to "must-not-be-forwarded"),
+            page,
+            tab.id,
+        )
+        assertTrue(viewModel.detectedSubtitles.value.isEmpty())
+
+        viewModel.recordPageStarted(tab.id, page, startsNewNavigation = true)
+        assertEquals(listOf(subtitleUrl), viewModel.detectedSubtitles.value.map { it.url })
+
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example/movie.m3u8",
+                format = StreamFormat.HLS,
+                source = StreamSource.NETWORK,
+                headers = mapOf("Cookie" to "video-only"),
+            )
+        sniffer.onRequestObserved(stream.url, stream.headers, pageUrl = page, tabId = tab.id)
+        viewModel.playStream(viewModel.detectedStreams.value.single())
+
+        val request = requireNotNull(playerController.lastPlaybackRequest)
+        assertEquals(listOf(subtitleUrl), request.subtitles.map { it.url })
+        assertEquals(mapOf("Accept" to "text/vtt"), request.subtitles.single().requestHeaders)
+        assertEquals(mapOf("Cookie" to "video-only"), request.selectedStream.headers)
+    }
+
+    @Test
+    fun `redirect subtitle is retained when redirect page start arrives after request`() {
+        val page = "https://page.example/watch"
+        val redirectPage = "https://cdn-page.example/watch"
+        val tab = tabManager.openTab(page)
+        viewModel.recordPageStarted(tab.id, page, startsNewNavigation = true)
+
+        val subtitleUrl = "https://cdn.example/subs.vtt"
+        subtitleSniffer.onRequestObserved(subtitleUrl, emptyMap(), redirectPage, tab.id)
+        assertTrue(viewModel.detectedSubtitles.value.isEmpty())
+
+        viewModel.recordPageStarted(tab.id, redirectPage, startsNewNavigation = false)
+        assertEquals(listOf(subtitleUrl), viewModel.detectedSubtitles.value.map { it.url })
+    }
+
+    @Test
+    fun `pending subtitle from previous navigation is discarded on a new page`() {
+        val oldPage = "https://page.example/old"
+        val newPage = "https://page.example/new"
+        val tab = tabManager.openTab(oldPage)
+
+        subtitleSniffer.onRequestObserved("https://cdn.example/old.vtt", emptyMap(), oldPage, tab.id)
+        viewModel.recordPageStarted(tab.id, newPage, startsNewNavigation = true)
+
+        assertTrue(viewModel.detectedSubtitles.value.isEmpty())
+    }
+
+    @Test
     fun `playback receives only subtitles from the selected page and tab`() {
         val pageA = "https://page-a.example/watch"
         val pageB = "https://page-b.example/watch"
