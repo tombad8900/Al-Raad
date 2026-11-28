@@ -31,6 +31,7 @@ class BrowserWebViewPool(context: Context) {
     /** Resume only the visible tab; background tabs are paused independently. */
     fun activate(tabId: String?) {
         if (timersPaused) {
+            // This resumes the process-wide WebView timer queue, including retained background tabs.
             views.values.firstOrNull()?.resumeTimers()
             timersPaused = false
         }
@@ -72,6 +73,14 @@ class BrowserWebViewPool(context: Context) {
         if (activeTabId == tabId) activeTabId = null
     }
 
+    /** Drop screen-owned callbacks while retaining each WebView's document and history. */
+    fun detachCallbacks() {
+        views.values.forEach { webView ->
+            webView.webViewClient = WebViewClient()
+            webView.webChromeClient = WebChromeClient()
+        }
+    }
+
     /** Reserved for the actual owner (TabManager) when its lifetime is reset. */
     fun clear() {
         if (timersPaused) {
@@ -80,6 +89,11 @@ class BrowserWebViewPool(context: Context) {
         }
         views.keys.toList().forEach(::release)
         activeTabId = null
+    }
+
+    private fun detachCallbacksFor(webView: WebView) {
+        webView.webViewClient = WebViewClient()
+        webView.webChromeClient = WebChromeClient()
     }
 
     private fun pause(webView: WebView) {
@@ -95,8 +109,7 @@ class BrowserWebViewPool(context: Context) {
     private fun destroy(webView: WebView) {
         (webView.parent as? ViewGroup)?.removeView(webView)
         webView.stopLoading()
-        webView.webViewClient = WebViewClient()
-        webView.webChromeClient = WebChromeClient()
+        detachCallbacksFor(webView)
         webView.removeAllViews()
         webView.destroy()
     }
