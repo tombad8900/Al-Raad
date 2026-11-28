@@ -26,6 +26,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -33,9 +34,9 @@ import org.junit.Rule
 import org.junit.Test
 
 /**
- * Runtime acceptance for the browser back and tab behavior on a real WebView (emulator, not a phone):
- * back through page history, return to search at the history start, stay at the search screen,
- * keep a tab's WebView and history across a tab switch and a section switch, and leave only through Exit.
+ * Runtime acceptance for browser back, History-driven tab creation, and section retention.
+ * There is currently no user-facing tab strip or create/switch-tab control in BrowserScreen;
+ * this test deliberately does not call TabManager.openTab/switchTo as a substitute for UI.
  * Pages are served by a local MockWebServer, so no external network is involved.
  */
 class RuntimeBrowserBackTest {
@@ -48,13 +49,10 @@ class RuntimeBrowserBackTest {
             .tabManager()
     }
 
-    @Before fun resetTabs() {
+    @Before
+    fun resetTabs() {
+        // reset() destroys pooled WebViews and must run on the UI thread.
         instrumentation.runOnMainSync { tabManager.reset() }
-    }
-
-    private fun activeWebView(): WebView? {
-        val id = tabManager.state.value.activeTabId ?: return null
-        return tabManager.webViewPool(instrumentation.targetContext.applicationContext).get(id)
     }
 
     private fun <T> onMain(block: () -> T): T {
@@ -64,7 +62,16 @@ class RuntimeBrowserBackTest {
         return result as T
     }
 
-    private fun url(): String? = onMain { activeWebView()?.url }
+    /** Must only be called from onMain: obtaining the pool and reading WebViews are UI-thread work. */
+    private fun activeWebViewOnMain(): WebView? {
+        val id = tabManager.state.value.activeTabId ?: return null
+        return tabManager.webViewPool(instrumentation.targetContext.applicationContext).get(id)
+    }
+
+    private fun pooledWebViewOnMain(tabId: String): WebView? =
+        tabManager.webViewPool(instrumentation.targetContext.applicationContext).get(tabId)
+
+    private fun url(): String? = onMain { activeWebViewOnMain()?.url }
 
     private fun awaitUrl(
         expected: String,
@@ -79,21 +86,33 @@ class RuntimeBrowserBackTest {
         val state = tabManager.state.value
         assertEquals(
             "WebView url (tabs=${state.tabs.map { it.id.take(4) to it.url }} active=${state.activeTabId?.take(4)} " +
-                "viewExists=${onMain { activeWebView() != null }} ${uiDiagnostics()})",
+                "viewExists=${onMain { activeWebViewOnMain() != null }} ${uiDiagnostics()})",
             expected,
             url(),
         )
+    }
+
+    private fun waitForText(
+        text: String,
+        timeoutMs: Long = 20_000,
+    ) {
+        composeRule.waitUntil(timeoutMillis = timeoutMs) {
+            runCatching { composeRule.onNodeWithText(text).assertIsDisplayed() }.isSuccess
+        }
     }
 
     private fun uiDiagnostics(): String =
         onMain {
             val activity = composeRule.activity
 
-            fun count(v: android.view.View): Int =
-                (if (v is WebView) 1 else 0) +
-                    ((v as? android.view.ViewGroup)?.let { g -> (0 until g.childCount).sumOf { count(g.getChildAt(it)) } } ?: 0)
+            fun count(view: android.view.View): Int =
+                (if (view is WebView) 1 else 0) +
+                    ((view as? android.view.ViewGroup)?.let { group ->
+                        (0 until group.childCount).sumOf { count(group.getChildAt(it)) }
+                    } ?: 0)
             "activity=${activity.lifecycle.currentState} finishing=${activity.isFinishing} " +
-                "webViewsInWindow=${count(activity.window.decorView)} poolHasActive=${activeWebView() != null}"
+                "webViewsInWindow=${count(activity.window.decorView)} " +
+                "poolHasActive=${activeWebViewOnMain() != null}"
         }
 
     private fun back() {
@@ -108,7 +127,7 @@ class RuntimeBrowserBackTest {
 
     private fun capture(name: String) {
         val context = instrumentation.targetContext
-        val shot = instrumentation.uiAutomation.takeScreenshot() ?: return
+        val screenshot = instrumentation.uiAutomation.takeScreenshot() ?: return
         val values =
             ContentValues().apply {
                 put(MediaStore.Downloads.DISPLAY_NAME, "scenario-$name")
@@ -116,12 +135,14 @@ class RuntimeBrowserBackTest {
                 put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
             }
         val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return
-        context.contentResolver.openOutputStream(uri)?.use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        context.contentResolver.openOutputStream(uri)?.use {
+            screenshot.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
         println("BACKTEST-SCREENSHOT: scenario-$name")
     }
 
     @Test(timeout = 300_000)
-    fun backTabsSectionsAndExit() {
+    fun backHistoryCreatesTabAndSectionsRetainWebViews() {
         val server =
             MockWebServer().apply {
                 dispatcher =
@@ -137,19 +158,23 @@ class RuntimeBrowserBackTest {
                 start()
             }
         try {
-            val a = server.url("/a").toString()
+            val uniquePath = "/a-${System.currentTimeMillis()}"
+            val a = server.url(uniquePath).toString()
+            val aTitle = "page$uniquePath"
             val b = server.url("/b").toString()
             val c = server.url("/c").toString()
             composeRule.waitForIdle()
-            composeRule.waitUntil(
-                20_000,
-            ) { runCatching { composeRule.onAllNodes(hasSetTextAction()).onFirst().assertIsDisplayed() }.isSuccess }
+            composeRule.waitUntil(20_000) {
+                runCatching {
+                    composeRule.onAllNodes(hasSetTextAction()).onFirst().assertIsDisplayed()
+                }.isSuccess
+            }
 
             // Page history: a -> b -> c, then Back twice returns to b and a.
             typeAddress(a)
             awaitUrl(a)
-            val tab1 = tabManager.state.value.activeTabId!!
-            val view1 = onMain { activeWebView()!! }
+            val tab1 = checkNotNull(tabManager.state.value.activeTabId)
+            val view1 = checkNotNull(onMain { activeWebViewOnMain() })
             onMain { view1.loadUrl(b) }
             awaitUrl(b)
             onMain { view1.loadUrl(c) }
@@ -162,7 +187,7 @@ class RuntimeBrowserBackTest {
             capture("backtest-2-back-on-a.png")
             assertFalse("Back must not leave the app while history exists", composeRule.activity.isFinishing)
 
-            // History start: Back returns to the search screen (tab url cleared, blank page), app stays open.
+            // At the history start, Back returns to the search screen and does not exit.
             assertFalse(onMain { view1.canGoBack() })
             back()
             awaitUrl("about:blank")
@@ -171,36 +196,45 @@ class RuntimeBrowserBackTest {
             back()
             assertFalse("Back on the search screen must not exit", composeRule.activity.isFinishing)
 
-            // Tab switch keeps each tab's own WebView and history.
+            // Rebuild history in tab 1 so its WebView has a back stack to preserve.
             typeAddress(b)
             awaitUrl(b)
             onMain { view1.loadUrl(c) }
             awaitUrl(c)
-            val tab2 = tabManager.openTab(a).id
-            awaitUrl(a)
-            assertTrue("second tab has its own WebView", onMain { activeWebView() !== view1 })
-            tabManager.switchTo(tab1)
-            composeRule.waitForIdle()
-            awaitUrl(c)
-            assertSame("tab 1 keeps the same WebView", view1, onMain { activeWebView() })
-            assertTrue("tab 1 keeps its history", onMain { view1.canGoBack() })
             back()
             awaitUrl(b)
-            tabManager.switchTo(tab2)
+            assertTrue(onMain { view1.canGoBack() })
+
+            // Real user path: open History, tap the visited page row, and let the app
+            // create/navigate the new tab through HistoryBookmarkNavigationViewModel.
+            composeRule.onNodeWithText("السجل").performClick()
+            waitForText(aTitle)
+            composeRule.onNodeWithText(aTitle).performClick()
             composeRule.waitForIdle()
             awaitUrl(a)
 
-            // Section switch away and back keeps tab 1 and its WebView history.
-            tabManager.switchTo(tab1)
-            composeRule.waitForIdle()
-            awaitUrl(b)
-            composeRule.onNodeWithText("السجل").performClick()
+            val tab2 = checkNotNull(tabManager.state.value.activeTabId)
+            assertNotSame("History opens a distinct tab", tab1, tab2)
+            val view2 = checkNotNull(onMain { activeWebViewOnMain() })
+            assertNotSame("History tab owns a distinct WebView", view1, view2)
+            assertEquals("new tab opens the selected History URL", a, onMain { view2.url })
+
+            // The original tab remains in TabManager with the exact same WebView and history.
+            assertNotNull(tabManager.state.value.tabs.firstOrNull { it.id == tab1 })
+            assertSame("original WebView remains pooled", view1, onMain { pooledWebViewOnMain(tab1) })
+            assertEquals("original page remains at its prior URL", b, onMain { view1.url })
+            assertTrue("original WebView history survives History tab creation", onMain { view1.canGoBack() })
+
+            // Switching sections is a user-facing path; returning to Browser retains the active tab.
+            composeRule.onNodeWithText("المكتبة").performClick()
             composeRule.waitForIdle()
             composeRule.onNodeWithText("المتصفح").performClick()
             composeRule.waitForIdle()
-            assertNotNull(tabManager.state.value.tabs.firstOrNull { it.id == tab1 })
-            assertSame("WebView survives a section switch", view1, onMain { activeWebView() })
-            awaitUrl(b)
+            assertEquals(tab2, tabManager.state.value.activeTabId)
+            assertSame("active History-created WebView survives section navigation", view2, onMain { activeWebViewOnMain() })
+            assertSame("background original WebView is still retained", view1, onMain { pooledWebViewOnMain(tab1) })
+            assertTrue("background original WebView history is still retained", onMain { view1.canGoBack() })
+            awaitUrl(a)
             capture("backtest-4-after-section-switch.png")
 
             // Exit only through the explicit button.
