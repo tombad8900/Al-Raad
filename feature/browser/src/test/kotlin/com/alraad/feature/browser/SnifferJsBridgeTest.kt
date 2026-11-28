@@ -30,7 +30,10 @@ class SnifferJsBridgeTest {
         val token = bridge.bindPage(page, "tab-new")
         bridge.onRequestObserved(payload(oldToken, oldPage, "https://cdn.example/stale.m3u8"))
         bridge.onRequestObserved(payload(token, page, "https://cdn.example/live.m3u8"))
-        assertEquals(Triple(page, "tab-new", StreamSource.JS_BRIDGE), Triple(seen?.first, seen?.second, seen?.third?.source))
+        assertEquals(
+            Triple(page, "tab-new", StreamSource.JS_BRIDGE),
+            Triple(seen?.first, seen?.second, seen?.third?.source),
+        )
         val script = FetchXhrCaptureScript.build("12345678-1234-1234-1234-123456789abc")
         assertTrue(script.contains("window.fetch = function") && script.contains("XMLHttpRequest.prototype.send"))
         assertFalse(listOf("responseText", "response.body", "cookie").any(script::contains))
@@ -43,9 +46,12 @@ class SnifferJsBridgeTest {
         val bridge = SnifferJsBridge(sniffer)
         val page = "https://page.example/"
         val token = bridge.bindPage(page, "tab")
-        listOf("{", "x".repeat(16_385), payload(token, page, "file:///private/a.m3u8"),
-            payload(token, "https://other.example/", "https://cdn.example/a.m3u8"))
-            .forEach(bridge::onRequestObserved)
+        listOf(
+            "{",
+            "x".repeat(16_385),
+            payload(token, page, "file:///private/a.m3u8"),
+            payload(token, "https://other.example/", "https://cdn.example/a.m3u8"),
+        ).forEach(bridge::onRequestObserved)
         assertEquals(0, count)
     }
 
@@ -56,8 +62,9 @@ class SnifferJsBridgeTest {
         val bridge = SnifferJsBridge(sniffer)
         val page = "https://page.example/"
         val token = bridge.bindPage(page, "tab")
-        val headers = JSONObject().put("accept", "application/vnd.apple.mpegurl")
-            .put("authorization", "Bearer auth-secret").put("cookie", "cookie-secret")
+        val headers =
+            JSONObject().put("accept", "application/vnd.apple.mpegurl")
+                .put("authorization", "Bearer auth-secret").put("cookie", "cookie-secret")
         bridge.onRequestObserved(payload(token, page, "https://cdn.example/a.m3u8", headers))
         bridge.onRequestObserved(payload(token, page, "https://license.example/widevine", headers))
         assertEquals("Bearer auth-secret", stream?.headers?.get("Authorization"))
