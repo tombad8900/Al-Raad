@@ -17,6 +17,7 @@ import com.alraad.feature.browser.web.SafeWebViewConfig
 
 private const val SNIFFER_BRIDGE_NAME = "AlRaadSniffer"
 
+@Suppress("LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun BrowserWebView(
     activeTab: com.alraad.feature.browser.tabs.BrowserTab?,
