@@ -8,8 +8,6 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import java.io.File
 
-internal enum class ExportResult { SHARED, EMPTY, COPIED_INSTEAD, FAILED }
-
 private const val CLIP_LABEL = "diagnostics log"
 private const val TAG = "DiagnosticsShare"
 
@@ -17,13 +15,18 @@ private const val TAG = "DiagnosticsShare"
 internal fun copyDiagnostics(
     context: Context,
     text: String,
-): Boolean {
-    val copied = text.isNotBlank()
-    if (copied) {
+): CopyResult {
+    if (text.isBlank()) return CopyResult.EMPTY
+    return runCatching {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText(CLIP_LABEL, text))
-    }
-    return copied
+    }.fold(
+        onSuccess = { CopyResult.COPIED },
+        onFailure = {
+            Log.w(TAG, "clipboard copy failed: " + it.javaClass.simpleName)
+            CopyResult.FAILED
+        },
+    )
 }
 
 /**
@@ -53,7 +56,7 @@ internal fun exportDiagnostics(
         }.onFailure { Log.w(TAG, "export failed: " + it.javaClass.simpleName) }
     return when {
         shared.isSuccess -> ExportResult.SHARED
-        copyDiagnostics(context, text) -> ExportResult.COPIED_INSTEAD
+        copyDiagnostics(context, text) == CopyResult.COPIED -> ExportResult.COPIED_INSTEAD
         else -> ExportResult.FAILED
     }
 }
