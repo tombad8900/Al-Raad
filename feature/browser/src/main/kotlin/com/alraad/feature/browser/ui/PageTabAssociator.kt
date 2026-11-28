@@ -81,27 +81,31 @@ class PageTabAssociator {
         val pendingMatch = pendingNavigationTabs.lastOrNull { it.url == url }
         val pendingRedirect = if (pendingMatch == null) pendingNavigationTabs.lastOrNull() else null
         val previousDocument = lastBoundDocument
+        val redirectBelongsToPrevious =
+            pendingRedirect != null && previousDocument != null && previousDocument.tabId != activeTabId
         val ownerTabId =
             when {
                 pendingMatch != null -> pendingMatch.tabId
+                redirectBelongsToPrevious -> previousDocument?.tabId
                 pendingRedirect != null -> pendingRedirect.tabId
                 previousDocument != null && previousDocument.tabId != activeTabId -> previousDocument.tabId
                 else -> activeTabId
             }
         val startsNewNavigation =
-            pendingMatch != null || pendingRedirect != null ||
+            pendingMatch != null || (pendingRedirect != null && !redirectBelongsToPrevious) ||
                 (previousDocument == null && ownerTabId != null && ownerTabId == activeTabId)
         val documentId =
             when {
                 pendingMatch != null -> pendingMatch.documentId
-                pendingRedirect != null -> pendingRedirect.documentId
+                pendingRedirect != null && !redirectBelongsToPrevious -> pendingRedirect.documentId
                 !startsNewNavigation && ownerTabId != null && previousDocument?.tabId == ownerTabId ->
                     previousDocument.documentId
                 ownerTabId != null -> UUID.randomUUID().toString()
                 else -> null
             }
 
-        val resolvedNavigation = pendingMatch ?: pendingRedirect
+        val resolvedNavigation =
+            pendingMatch ?: pendingRedirect?.takeUnless { redirectBelongsToPrevious }
         if (resolvedNavigation != null) {
             pendingNavigationTabs.removeAll {
                 it.url == resolvedNavigation.url && it.tabId == resolvedNavigation.tabId &&
