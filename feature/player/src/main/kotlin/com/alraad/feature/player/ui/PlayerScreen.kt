@@ -3,6 +3,7 @@
 package com.alraad.feature.player.ui
 
 import android.app.Activity
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -241,14 +242,19 @@ private fun rememberSubtitleControls(
     return SubtitleControls(
         onSelect = {
             player?.let { current ->
-                TrackSelectionDialogBuilder(context, "الترجمة", current, C.TRACK_TYPE_TEXT)
-                    .build()
-                    .show()
+                subtitleDialogBuilder(context, current).build().show()
             }
         },
         onPickFile = { picker.launch(arrayOf("*/*")) },
     )
 }
+
+/** Embedded-subtitle chooser builder. Offers an explicit "None" entry so subtitles can be turned off again. */
+internal fun subtitleDialogBuilder(
+    context: Context,
+    player: Player,
+) = TrackSelectionDialogBuilder(context, "الترجمة", player, C.TRACK_TYPE_TEXT)
+    .setShowDisableOption(true)
 
 /** Subtitle actions: embedded-track dialog and local subtitle file picker. */
 private data class SubtitleControls(

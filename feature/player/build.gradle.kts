@@ -28,6 +28,11 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // The subtitle dialog test inflates Media3 UI resources (AppCompat theme, "None" label).
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
