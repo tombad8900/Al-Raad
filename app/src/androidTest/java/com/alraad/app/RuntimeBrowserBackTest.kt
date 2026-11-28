@@ -1,6 +1,9 @@
 package com.alraad.app
 
+import android.content.ContentValues
 import android.graphics.Bitmap
+import android.os.Environment
+import android.provider.MediaStore
 import android.webkit.WebView
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
@@ -16,8 +19,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.feature.browser.tabs.TabManager
 import com.alraad.feature.browser.tabs.TabManagerTestEntryPoint
 import dagger.hilt.android.EntryPointAccessors
-import java.io.File
-import java.io.FileOutputStream
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -89,10 +90,17 @@ class RuntimeBrowserBackTest {
     }
 
     private fun capture(name: String) {
+        val context = instrumentation.targetContext
         val shot = instrumentation.uiAutomation.takeScreenshot() ?: return
-        val dir = File(instrumentation.targetContext.getExternalFilesDir(null), "captures").apply { mkdirs() }
-        FileOutputStream(File(dir, name)).use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        println("BACKTEST-SCREENSHOT: ${File(dir, name).absolutePath}")
+        val values =
+            ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, "scenario-$name")
+                put(MediaStore.Downloads.MIME_TYPE, "image/png")
+                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+        val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return
+        context.contentResolver.openOutputStream(uri)?.use { shot.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        println("BACKTEST-SCREENSHOT: scenario-$name")
     }
 
     @Test(timeout = 300_000)
