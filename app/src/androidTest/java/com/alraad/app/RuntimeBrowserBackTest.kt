@@ -7,6 +7,7 @@ import android.provider.MediaStore
 import android.webkit.WebView
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithTag
@@ -105,7 +106,7 @@ class RuntimeBrowserBackTest {
         timeoutMs: Long = 20_000,
     ) {
         composeRule.waitUntil(timeoutMillis = timeoutMs) {
-            runCatching { composeRule.onNodeWithText(text).assertIsDisplayed() }.isSuccess
+            runCatching { composeRule.onAllNodes(hasText(text)).onFirst().assertIsDisplayed() }.isSuccess
         }
     }
 
@@ -243,7 +244,7 @@ class RuntimeBrowserBackTest {
             // create/navigate the new tab through HistoryBookmarkNavigationViewModel.
             composeRule.onNodeWithText("السجل").performClick()
             waitForText(aTitle)
-            composeRule.onNodeWithText(aTitle).performClick()
+            composeRule.onAllNodes(hasText(aTitle)).onFirst().performClick()
             composeRule.waitForIdle()
             awaitUrl(a)
 
