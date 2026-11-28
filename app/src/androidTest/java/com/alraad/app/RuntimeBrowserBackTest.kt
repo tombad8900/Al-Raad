@@ -168,6 +168,61 @@ class RuntimeBrowserBackTest {
         println("BACKTEST-SCREENSHOT: scenario-$name")
     }
 
+    @Test(timeout = 120_000)
+    fun historyTrashDeletesEntryWithoutOpeningIt() {
+        val server =
+            MockWebServer().apply {
+                dispatcher =
+                    object : Dispatcher() {
+                        override fun dispatch(request: RecordedRequest) =
+                            MockResponse()
+                                .setHeader("Content-Type", "text/html; charset=utf-8")
+                                .setBody("<html><head><title>trash-fixture</title></head><body>trash fixture</body></html>")
+                    }
+                start()
+            }
+        try {
+            val url = server.url("/trash-${System.currentTimeMillis()}").toString()
+            composeRule.waitForIdle()
+            composeRule.waitUntil(20_000) {
+                runCatching {
+                    composeRule.onAllNodes(hasSetTextAction()).onFirst().assertIsDisplayed()
+                }.isSuccess
+            }
+            typeAddress(url)
+            awaitUrl(url)
+            awaitLoadFinished()
+            val activeTabId = checkNotNull(tabManager.state.value.activeTabId)
+            val webView = checkNotNull(onMain { activeWebViewOnMain() })
+            assertEquals(url, onMain { webView.url })
+
+            composeRule.onNodeWithText("السجل").performClick()
+            val entryUrlTag = "history_list_entry_url_${url.hashCode()}"
+            composeRule.waitUntil(20_000) {
+                runCatching {
+                    composeRule.onNodeWithTag(entryUrlTag, useUnmergedTree = true).assertIsDisplayed()
+                }.isSuccess
+            }
+            composeRule.onNodeWithTag("history_list_delete_${url.hashCode()}").performClick()
+            composeRule.waitUntil(15_000) {
+                runCatching {
+                    composeRule.onNodeWithTag(entryUrlTag, useUnmergedTree = true).assertIsDisplayed()
+                }.isFailure
+            }
+
+            assertEquals("trash must not create or switch tabs", activeTabId, tabManager.state.value.activeTabId)
+            assertSame("trash must not replace the current WebView", webView, onMain { pooledWebViewOnMain(activeTabId) })
+            assertEquals("trash must not navigate the current WebView", url, onMain { webView.url })
+            composeRule.onNodeWithText("مسح السجل / Clear all").assertIsDisplayed()
+
+            composeRule.onNodeWithText("المتصفح").performClick()
+            waitForBrowserAddressBar()
+            assertEquals(url, onMain { webView.url })
+        } finally {
+            server.shutdown()
+        }
+    }
+
     @Test(timeout = 300_000)
     fun backHistoryCreatesTabAndSectionsRetainWebViews() {
         val server =
@@ -265,7 +320,6 @@ class RuntimeBrowserBackTest {
             val view2 = checkNotNull(onMain { activeWebViewOnMain() })
             assertNotSame("History tab owns a distinct WebView", view1, view2)
             assertEquals("new tab opens the selected History URL", a, onMain { view2.url })
-            assertEquals("History navigation loads the fixture document", aTitle, onMain { view2.title })
             assertEquals("History navigation loads the fixture document", aTitle, onMain { view2.title })
             assertFalse("new tab starts with independent one-page history", onMain { view2.canGoBack() })
 
