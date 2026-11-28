@@ -1,11 +1,21 @@
 package com.alraad.feature.browser
 
-import com.alraad.core.common.contracts.*
-import com.alraad.feature.browser.sniffer.*
+import com.alraad.core.common.contracts.DiagCategory
+import com.alraad.core.common.contracts.DiagEntry
+import com.alraad.core.common.contracts.DiagLevel
+import com.alraad.core.common.contracts.DiagnosticsLogger
+import com.alraad.core.common.contracts.StreamSource
+import com.alraad.core.common.contracts.StreamUrl
+import com.alraad.feature.browser.sniffer.FetchXhrCaptureScript
+import com.alraad.feature.browser.sniffer.SnifferJsBridge
+import com.alraad.feature.browser.sniffer.StreamObservationListener
+import com.alraad.feature.browser.sniffer.StreamSniffer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import org.json.JSONObject
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SnifferJsBridgeTest {
@@ -19,10 +29,12 @@ class SnifferJsBridgeTest {
         override suspend fun clear() = Unit
     }
 
-    @Test fun `observations retain the native page tab and reject stale document tokens`() {
+    @Test fun `observations retain native page tab and reject stale document tokens`() {
         val sniffer = StreamSniffer(logger)
         var seen: Triple<String?, String?, StreamUrl>? = null
-        sniffer.registerObservationListener(StreamObservationListener { stream, page, tab -> seen = Triple(page, tab, stream) })
+        sniffer.registerObservationListener(
+            StreamObservationListener { stream, page, tab -> seen = Triple(page, tab, stream) },
+        )
         val bridge = SnifferJsBridge(sniffer)
         val oldPage = "https://old.example/"
         val oldToken = bridge.bindPage(oldPage, "tab-old")
@@ -42,9 +54,12 @@ class SnifferJsBridgeTest {
         val bridge = SnifferJsBridge(sniffer)
         val page = "https://page.example/"
         val token = bridge.bindPage(page, "tab")
-        listOf("{", "x".repeat(16_385), payload(token, page, "file:///private/a.m3u8"),
-            payload(token, "https://other.example/", "https://cdn.example/a.m3u8"))
-            .forEach(bridge::onRequestObserved)
+        listOf(
+            "{",
+            "x".repeat(16_385),
+            payload(token, page, "file:///private/a.m3u8"),
+            payload(token, "https://other.example/", "https://cdn.example/a.m3u8"),
+        ).forEach(bridge::onRequestObserved)
         assertEquals(0, count)
     }
 
@@ -63,31 +78,32 @@ class SnifferJsBridgeTest {
         assertEquals("Bearer auth-secret", stream?.drmLicenseRequestHeaders?.get("Authorization"))
         assertFalse(stream?.headers?.containsKey("Cookie") == true)
         val diagnosticText = logs.toString()
-        assertFalse(diagnosticText.contains("auth-secret"))
-        assertFalse(diagnosticText.contains("cookie-secret"))
-        assertFalse(diagnosticText.contains("Authorization"))
-        assertFalse(diagnosticText.contains("Cookie"))
+        assertFalse(diagnosticText.contains("auth-secret") || diagnosticText.contains("cookie-secret"))
+        assertFalse(diagnosticText.contains("Authorization") || diagnosticText.contains("Cookie"))
     }
 
     @Test fun `oversized header values are dropped and script observes fetch xhr only`() {
-        val bridge = SnifferJsBridge(StreamSniffer(logger))
+        val sniffer = StreamSniffer(logger)
+        var stream: StreamUrl? = null
+        sniffer.registerObservationListener(StreamObservationListener { value, _, _ -> stream = value })
+        val bridge = SnifferJsBridge(sniffer)
         val page = "https://page.example/"
         val token = bridge.bindPage(page, "tab")
-        var stream: StreamUrl? = null
-        val sniffer = StreamSniffer(logger)
-        sniffer.registerObservationListener(StreamObservationListener { value, _, _ -> stream = value })
-        val boundedBridge = SnifferJsBridge(sniffer)
-        val boundedToken = boundedBridge.bindPage(page, "tab")
-        boundedBridge.onRequestObserved(payload(boundedToken, page, "https://cdn.example/a.m3u8",
-            JSONObject().put("accept", "text/plain").put("authorization", "x".repeat(1_025))))
+        val headers = JSONObject().put("accept", "text/plain").put("authorization", "x".repeat(1_025))
+        bridge.onRequestObserved(payload(token, page, "https://cdn.example/a.m3u8", headers))
         assertEquals(mapOf("Accept" to "text/plain"), stream?.headers)
-        assertTrue(token.isNotEmpty())
+        assertTrue(bridge.isBoundTo(page, "tab"))
         val script = FetchXhrCaptureScript.build("12345678-1234-1234-1234-123456789abc")
         assertTrue(script.contains("window.fetch = function") && script.contains("XMLHttpRequest.prototype.send"))
         assertFalse(script.contains("responseText") || script.contains("response.body") || script.contains("cookie"))
-        assertTrue(bridge.isBoundTo(page, "tab"))
     }
 
-    private fun payload(token: String, page: String, url: String, headers: JSONObject = JSONObject().put("accept", "application/vnd.apple.mpegurl")) =
-        JSONObject().put("token", token).put("pageUrl", page).put("url", url).put("method", "GET").put("headers", headers).toString()
+    private fun payload(
+        token: String,
+        page: String,
+        url: String,
+        headers: JSONObject = JSONObject().put("accept", "application/vnd.apple.mpegurl"),
+    ): String =
+        JSONObject().put("token", token).put("pageUrl", page).put("url", url)
+            .put("method", "GET").put("headers", headers).toString()
 }
