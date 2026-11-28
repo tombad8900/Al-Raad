@@ -67,7 +67,14 @@ class BrowserWebViewPool(context: Context) {
             removed.resumeTimers()
             timersPaused = false
         }
-        removed?.let(::destroy)
+        removed?.let { webView ->
+            (webView.parent as? ViewGroup)?.removeView(webView)
+            webView.stopLoading()
+            webView.webViewClient = WebViewClient()
+            webView.webChromeClient = WebChromeClient()
+            webView.removeAllViews()
+            webView.destroy()
+        }
         if (activeTabId == tabId) activeTabId = null
     }
 
@@ -88,11 +95,6 @@ class BrowserWebViewPool(context: Context) {
         activeTabId = null
     }
 
-    private fun detachCallbacksFor(webView: WebView) {
-        webView.webViewClient = WebViewClient()
-        webView.webChromeClient = WebChromeClient()
-    }
-
     private fun pause(webView: WebView) {
         // onPause is a focus/audio hint; it does NOT guarantee that page JavaScript or
         // timers stop. Pause media elements explicitly as a best-effort per-WebView action.
@@ -101,13 +103,5 @@ class BrowserWebViewPool(context: Context) {
             null,
         )
         webView.onPause()
-    }
-
-    private fun destroy(webView: WebView) {
-        (webView.parent as? ViewGroup)?.removeView(webView)
-        webView.stopLoading()
-        detachCallbacksFor(webView)
-        webView.removeAllViews()
-        webView.destroy()
     }
 }
