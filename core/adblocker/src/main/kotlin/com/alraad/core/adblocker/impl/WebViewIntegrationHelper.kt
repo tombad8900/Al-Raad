@@ -55,6 +55,10 @@ class WebViewIntegrationHelper
             onRequestObserved: (url: String, headers: Map<String, String>, pageUrl: String?) -> Unit = { _, _, _ -> },
             onPageStart: (WebView, String) -> Unit = { _, _ -> },
             onNavigationRequested: (WebView, String) -> Unit = { _, _ -> },
+            onPageDocumentStarted: (WebView, String) -> String? = { _, _ -> null },
+            onPageUrlChanged: (WebView, String?, String, Boolean) -> String? = { _, _, _, _ -> null },
+            onRequestObservedWithContext: (url: String, headers: Map<String, String>, pageUrl: String?, documentId: String?) -> Unit =
+                { _, _, _, _ -> },
         ): WebViewClient =
             object : WebViewClient() {
                 // Cached from UI-thread navigation callbacks: shouldInterceptRequest runs
