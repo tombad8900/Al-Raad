@@ -82,7 +82,12 @@ class PageTabAssociator {
         activeTabId: String?,
     ): PageStartAssociation {
         val pendingMatch = pendingNavigationTabs.lastOrNull { it.url == url }
-        val pendingRedirect = if (pendingMatch == null) pendingNavigationTabs.lastOrNull() else null
+        val pendingRedirect =
+            if (pendingMatch == null) {
+                pendingNavigationTabs.lastOrNull { it.tabId == activeTabId } ?: pendingNavigationTabs.singleOrNull()
+            } else {
+                null
+            }
         val previousDocument = lastBoundDocument
         val redirectBelongsToPrevious =
             pendingRedirect != null && previousDocument != null && previousDocument.tabId != activeTabId
