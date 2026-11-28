@@ -156,6 +156,36 @@ class RuleEngineTest {
         }
     }
 
+    @Test fun `upgrade fixture keeps lossy legacy ABP domains out of the engine but trusts hosts-format ones`() =
+        runTest {
+            requireNative()
+            val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+            val dir = java.io.File(context.filesDir, "blocklists").apply { mkdirs() }
+            // Pre-raw install: easylist cache once derived from a third-party-only rule on a normal site.
+            java.io.File(dir, "easylist.domains").writeText("google.com\nlegacy-ad.example.com")
+            java.io.File(dir, "stevenblack-hosts.domains").writeText("legacy-hosts-entry.example.com")
+            val blocker = newBlocker()
+            assertFalse(blocker.blocks("https://www.google.com/search", source = "https://www.google.com/", type = "document"))
+            assertFalse(blocker.blocks("https://legacy-ad.example.com/x.js"))
+            assertTrue(blocker.blocks("https://legacy-hosts-entry.example.com/x.js"))
+            assertEquals(listOf("easylist"), store.listsPendingRefresh())
+            // A fresh download supersedes the lossy cache.
+            check(store.promote("easylist", "||fresh-ad.example.com^"))
+            blocker.reload()
+            assertTrue(blocker.blocks("https://fresh-ad.example.com/x.js"))
+            assertFalse(blocker.blocks("https://www.google.com/search", source = "https://www.google.com/", type = "document"))
+            assertEquals(emptyList<String>(), store.listsPendingRefresh())
+        }
+
+    @Test fun `hosts-format raw lists are converted for the engine`() =
+        runTest {
+            requireNative()
+            check(store.promote("stevenblack-hosts", "127.0.0.1 localhost\n0.0.0.0 hostsfmt-ad.example.com\n"))
+            val blocker = newBlocker()
+            assertTrue(blocker.blocks("https://hostsfmt-ad.example.com/x.js"))
+            assertFalse(blocker.blocks("https://localhost/x.js"))
+        }
+
     @Test fun `without the native engine only the bundled hosts apply and the status says so`() =
         runTest {
             check(store.promote("easylist", "||tracker-only-in-list.example^"))

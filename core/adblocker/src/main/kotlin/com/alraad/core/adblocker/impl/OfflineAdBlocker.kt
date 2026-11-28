@@ -128,6 +128,15 @@ class OfflineAdBlocker
             val rules = StringBuilder()
             HostsParser.parse(baselineText()).forEach { rules.append("||").append(it).append("^\n") }
             rules.append(store.activeEngineRules())
+            val pending = store.listsPendingRefresh()
+            if (pending.isNotEmpty()) {
+                logger.log(
+                    DiagCategory.ADBLOCK,
+                    DiagLevel.WARN,
+                    "Lists awaiting a fresh download; their lossy legacy cache is not applied",
+                    mapOf("lists" to pending.joinToString(",")),
+                )
+            }
             val started = System.currentTimeMillis()
             val handle = runCatching { engineFactory(rules.toString()) }.getOrDefault(0L)
             if (handle != 0L) engine.replace(handle)

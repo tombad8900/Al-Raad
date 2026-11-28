@@ -96,22 +96,35 @@ class BlocklistStore
         }
 
         /**
-         * Rule text for the engine: raw text of every enabled list, or domain-anchored rules rebuilt from the
-         * stored domains for a list promoted before raw text was kept.
+         * Rule text for the engine. A stored raw list is used as is (hosts-format lists are converted to
+         * `||domain^`). A pre-raw install only has parsed domains: those are exact for hosts-format lists, but for
+         * Adblock Plus lists they are a lossy subset (they dropped rule options, so a `$third-party` or path-scoped
+         * rule on a normal site became a whole-domain block). That ABP cache is NOT fed to the engine; see
+         * [listsPendingRefresh].
          */
         fun activeEngineRules(): String {
             val out = StringBuilder()
             for (source in BlocklistCatalog.sources) {
                 if (!isEnabled(source.id)) continue
                 val raw = rawFile(source.id)
-                if (raw.isFile) {
-                    out.append(raw.readText()).append('\n')
-                } else {
-                    storedDomains(source.id)?.forEach { out.append("||").append(it).append("^\n") }
+                val legacy = legacyDomainsFile(source.id)
+                when {
+                    raw.isFile && source.hostsFormat ->
+                        HostsParser.parse(
+                            raw.readText(),
+                        ).forEach { out.append("||").append(it).append("^\n") }
+                    raw.isFile -> out.append(raw.readText()).append('\n')
+                    legacy.isFile && source.hostsFormat -> storedDomains(source.id)?.forEach { out.append("||").append(it).append("^\n") }
                 }
             }
             return out.toString()
         }
+
+        /** Enabled Adblock Plus lists that only have the lossy legacy copy and wait for a fresh download. */
+        fun listsPendingRefresh(): List<String> =
+            BlocklistCatalog.sources
+                .filter { isEnabled(it.id) && !it.hostsFormat && !rawFile(it.id).isFile && legacyDomainsFile(it.id).isFile }
+                .map { it.id }
 
         fun lastUpdated(id: String): Long =
             (rawFile(id).takeIf { it.isFile } ?: legacyDomainsFile(id).takeIf { it.isFile })?.lastModified() ?: 0L

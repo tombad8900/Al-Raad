@@ -61,7 +61,8 @@ class BlocklistStoreTest {
         java.io.File(dir, "easyprivacy.raw").delete()
         java.io.File(dir, "easyprivacy.domains").writeText("legacy1.example.com\nlegacy2.example.com")
         assertEquals(setOf("legacy1.example.com", "legacy2.example.com"), store.storedDomains("easyprivacy"))
-        assertTrue(store.activeEngineRules().contains("||legacy1.example.com^"))
+        assertFalse(store.activeEngineRules().contains("legacy1.example.com"))
+        assertTrue(store.listsPendingRefresh().contains("easyprivacy"))
         assertTrue(store.promote("easyprivacy", goodList("fresh")))
         assertTrue(store.storedDomains("easyprivacy").orEmpty().all { it.startsWith("fresh") })
     }
