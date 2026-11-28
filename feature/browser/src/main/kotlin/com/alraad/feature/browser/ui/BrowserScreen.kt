@@ -122,8 +122,8 @@ private fun BrowserTabLifecycle(
         val observer =
             LifecycleEventObserver { _, event ->
                 when (event) {
-                Lifecycle.Event.ON_PAUSE -> webViewPool.pauseAll()
-                Lifecycle.Event.ON_RESUME -> webViewPool.activate(tabManager.state.value.activeTabId)
+                    Lifecycle.Event.ON_PAUSE -> webViewPool.pauseAll()
+                    Lifecycle.Event.ON_RESUME -> webViewPool.activate(tabManager.state.value.activeTabId)
                     else -> Unit
                 }
             }
