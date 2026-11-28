@@ -54,6 +54,13 @@ class BrowserStreamCardCorrelationTest {
         }
         assertNotNull("Browser WebView must be attached", browserWebView)
         val webView = requireNotNull(browserWebView)
+        composeRule.waitUntil(timeoutMillis = 10_000) {
+            var ready = false
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                ready = webView.progress == 100
+            }
+            ready
+        }
 
         val baseUrl = "https://top.fixture.invalid/watch"
         val mediaUrl = "https://cdn.fixture.invalid/media/synthetic.m3u8"
