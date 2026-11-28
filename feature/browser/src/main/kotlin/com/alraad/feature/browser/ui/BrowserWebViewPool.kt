@@ -13,12 +13,10 @@ class BrowserWebViewPool {
     }
 
     fun get(tabId: String): WebView? = views[tabId]
-
     fun retainTabs(tabIds: Set<String>) {
         val removed = views.keys.filterNot { it in tabIds }
         removed.forEach { id -> views.remove(id)?.let(::destroy) }
     }
-
     fun clear() {
         views.values.toList().forEach(::destroy)
         views.clear()
