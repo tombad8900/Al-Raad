@@ -1,9 +1,11 @@
 package com.alraad.feature.browser.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,7 +20,7 @@ import com.alraad.feature.browser.sniffer.StreamSniffer
 import com.alraad.feature.browser.sniffer.SubtitleSniffer
 import com.alraad.feature.browser.tabs.TabManager
 
-@Suppress("LongParameterList") // services forwarded into BrowserWebViewEnvironment below
+@Suppress("LongParameterList")
 @Composable
 fun BrowserScreen(
     tabManager: TabManager,
@@ -29,21 +31,45 @@ fun BrowserScreen(
     settings: AppSettings,
     modifier: Modifier = Modifier,
     handlers: BrowserHandlers = BrowserHandlers(),
+    onExit: () -> Unit = {},
 ) {
     val tabState by tabManager.state.collectAsState()
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
     var isLoading by remember { mutableStateOf(false) }
     val backgroundColor = MaterialTheme.colorScheme.background
-
-    val pageTabAssociator = remember { PageTabAssociator() }
+    val webViewPool = remember { BrowserWebViewPool() }
+    val pageTabAssociators = remember { mutableMapOf<String, PageTabAssociator>() }
+    val fallbackAssociator = remember { PageTabAssociator() }
+    val pageTabAssociator =
+        activeTab?.let { pageTabAssociators.getOrPut(it.id) { PageTabAssociator() } } ?: fallbackAssociator
     val liveTabIds = tabState.tabs.map { it.id }.toSet()
 
+    DisposableEffect(webViewPool) {
+        onDispose { webViewPool.clear() }
+    }
+
     LaunchedEffect(liveTabIds) {
-        pageTabAssociator.retainTabs(liveTabIds)
+        pageTabAssociators.keys.retainAll(liveTabIds)
+        webViewPool.retainTabs(liveTabIds)
     }
 
     LaunchedEffect(Unit) {
         if (tabState.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
+    }
+
+    BackHandler {
+        val tab = activeTab ?: return@BackHandler
+        val webView = webViewPool.get(tab.id)
+        when {
+            webView?.canGoBack() == true -> webView.goBack()
+            tab.url.isNotBlank() && tab.url != "about:blank" -> {
+                webView?.loadUrl("about:blank")
+                tabManager.updateTab(tab.id, url = "")
+                isLoading = false
+            }
+            // The search screen is the browser's root. Consume Back here; exiting is explicit.
+            else -> Unit
+        }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -55,6 +81,7 @@ fun BrowserScreen(
                 tabManager.updateTab(id, url = url)
             },
             onBookmarkClick = handlers.actions.onBookmark,
+            onExitClick = onExit,
         )
         DetectedStreamPicker(
             items = handlers.detectedStreams.streams,
@@ -76,6 +103,7 @@ fun BrowserScreen(
             backgroundColor = backgroundColor,
             handlers = handlers,
             pageTabAssociator = pageTabAssociator,
+            webViewPool = webViewPool,
             onLoadingChange = { isLoading = it },
         )
     }
