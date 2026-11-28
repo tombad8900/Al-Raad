@@ -42,8 +42,8 @@ fun BrowserWebView(
                             }
                             page.documentId
                         },
-                        onPageUrlChanged = { _, previousUrl, url, _ ->
-                            pageTabAssociator.onPageUrlChanged(previousUrl, url)?.also { association ->
+                        onPageUrlChanged = { _, previousUrl, previousDocumentId, url, _ ->
+                            pageTabAssociator.onPageUrlChanged(previousUrl, url, previousDocumentId)?.also { association ->
                                 handlers.actions.onPageUrlChanged(
                                     association.tabId,
                                     url,
