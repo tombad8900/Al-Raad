@@ -75,7 +75,12 @@ class SnifferJsBridgeTest {
         assertFalse(diagnosticText.contains("Authorization") || diagnosticText.contains("Cookie"))
     }
 
-    private fun payload(token: String, page: String, url: String, headers: JSONObject? = null): String =
+    private fun payload(
+        token: String,
+        page: String,
+        url: String,
+        headers: JSONObject? = null,
+    ): String =
         JSONObject().put("token", token).put("pageUrl", page).put("url", url)
             .put("headers", headers ?: JSONObject().put("accept", "application/vnd.apple.mpegurl")).toString()
 }
