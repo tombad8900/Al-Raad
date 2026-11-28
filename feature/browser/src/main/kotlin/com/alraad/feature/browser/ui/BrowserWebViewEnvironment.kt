@@ -14,4 +14,5 @@ data class BrowserWebViewEnvironment(
     val sniffer: com.alraad.feature.browser.sniffer.StreamSniffer,
     val subtitleSniffer: SubtitleSniffer,
     val settings: AppSettings,
+    val webViewPool: BrowserWebViewPool,
 )

@@ -39,6 +39,7 @@ dependencies {
     implementation(projects.core.adblocker)
     implementation(projects.core.designsystem)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.kotlinx.coroutines.android)

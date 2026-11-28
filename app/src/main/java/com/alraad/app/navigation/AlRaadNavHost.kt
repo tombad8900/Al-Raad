@@ -1,5 +1,8 @@
 package com.alraad.app.navigation
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -101,6 +104,7 @@ fun AlRaadNavHost(navController: NavHostController) {
 private fun NavGraphBuilder.browserDestination(navController: NavHostController) {
     composable(Routes.BROWSER) {
         val viewModel: BrowserViewModel = hiltViewModel()
+        val context = LocalContext.current
         val settings by viewModel.settings.collectAsState()
         val detectedStreams by viewModel.detectedStreams.collectAsState()
         BrowserScreen(
@@ -110,6 +114,7 @@ private fun NavGraphBuilder.browserDestination(navController: NavHostController)
             sniffer = viewModel.sniffer,
             subtitleSniffer = viewModel.subtitleSniffer,
             settings = settings,
+            onExit = { context.findActivity()?.finish() },
             handlers =
                 com.alraad.feature.browser.ui.BrowserHandlers(
                     detectedStreams =
@@ -247,6 +252,13 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
         )
     }
 }
+
+private tailrec fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }
 
 @Composable
 private fun PlaceholderScreen(label: String) {
