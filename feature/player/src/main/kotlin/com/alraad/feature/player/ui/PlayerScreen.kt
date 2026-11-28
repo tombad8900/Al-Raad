@@ -2,6 +2,9 @@ package com.alraad.feature.player.ui
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -55,6 +58,7 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.feature.player.impl.Media3PlayerController
+import com.alraad.feature.player.impl.externalSubtitleTrack
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 private const val SEEK_STEP_MS = 10_000L
@@ -132,13 +136,7 @@ fun PlayerScreen(
                     ),
                 onEnterPip = { gestures.enterPictureInPicture() },
                 player = player,
-                onSelectSubtitles = {
-                    player?.let { current ->
-                        TrackSelectionDialogBuilder(context, "الترجمة", current, C.TRACK_TYPE_TEXT)
-                            .build()
-                            .show()
-                    }
-                },
+                subtitles = rememberSubtitleControls(controller, player),
                 speed = speed,
                 onSelectSpeed = { option ->
                     speed = option
@@ -205,12 +203,46 @@ private data class DisplayControls(
 )
 
 @Composable
+private fun rememberSubtitleControls(
+    controller: Media3PlayerController,
+    player: Player?,
+): SubtitleControls {
+    val context = LocalContext.current
+    val picker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri ?: return@rememberLauncherForActivityResult
+            val displayName =
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+                }
+            externalSubtitleTrack(uri.toString(), displayName)?.let(controller::addExternalSubtitle)
+        }
+    return SubtitleControls(
+        onSelect = {
+            player?.let { current ->
+                TrackSelectionDialogBuilder(context, "الترجمة", current, C.TRACK_TYPE_TEXT)
+                    .build()
+                    .show()
+            }
+        },
+        onPickFile = { picker.launch(arrayOf("*/*")) },
+    )
+}
+
+/** Subtitle actions: embedded-track dialog and local subtitle file picker. */
+private data class SubtitleControls(
+    val onSelect: () -> Unit,
+    val onPickFile: () -> Unit,
+)
+
+@Composable
 private fun PlayerControlsRow(
     controller: Media3PlayerController,
     display: DisplayControls,
     onEnterPip: () -> Unit,
     player: Player?,
-    onSelectSubtitles: () -> Unit,
+    subtitles: SubtitleControls,
     speed: Float,
     onSelectSpeed: (Float) -> Unit,
 ) {
@@ -225,8 +257,11 @@ private fun PlayerControlsRow(
     IconButton(onClick = onEnterPip) {
         Icon(Icons.Default.PictureInPictureAlt, contentDescription = "Picture in picture", tint = Color.White)
     }
-    TextButton(onClick = onSelectSubtitles, enabled = player != null) {
+    TextButton(onClick = subtitles.onSelect, enabled = player != null) {
         Text("الترجمة", color = Color.White, style = MaterialTheme.typography.labelLarge)
+    }
+    TextButton(onClick = subtitles.onPickFile, enabled = player != null) {
+        Text("ملف ترجمة", color = Color.White, style = MaterialTheme.typography.labelLarge)
     }
     IconButton(onClick = display.onToggleFill) {
         Icon(

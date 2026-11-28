@@ -32,6 +32,7 @@ import javax.inject.Singleton
  * exactly what the sniffer saw; external subtitle URLs receive only their own
  * allowlisted headers, never video credentials. Raw URL/headers logged unredacted.
  */
+@Suppress("TooManyFunctions") // playback surface + quality + subtitle attach are one frozen contract; splitting would obscure it
 @Singleton
 class Media3PlayerController
     @Inject
@@ -162,6 +163,28 @@ class Media3PlayerController
                 )
                 _playbackError.value = t.message ?: t.javaClass.simpleName
                 player = null
+            }
+        }
+
+        /**
+         * Attaches a user-picked local subtitle file to the active playback. The request
+         * is rebuilt with the track appended; position and play state carry over.
+         */
+        fun addExternalSubtitle(track: SubtitleTrack) {
+            val request = _currentPlaybackRequest.value ?: return
+            if (request.subtitles.any { it.url == track.url }) return
+            logger.log(
+                DiagCategory.PLAYER,
+                DiagLevel.INFO,
+                "External subtitle attached",
+                mapOf("url" to track.url, "mimeType" to track.mimeType),
+            )
+            val position = player?.currentPosition ?: 0L
+            val wasPlaying = player?.playWhenReady == true
+            play(request.copy(subtitles = request.subtitles + track))
+            player?.let {
+                it.seekTo(position)
+                it.playWhenReady = wasPlaying
             }
         }
 

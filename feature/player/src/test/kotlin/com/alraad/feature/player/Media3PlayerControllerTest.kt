@@ -12,6 +12,7 @@ import com.alraad.core.common.contracts.StreamUrl
 import com.alraad.core.common.contracts.SubtitleTrack
 import com.alraad.feature.player.impl.Media3PlayerController
 import com.alraad.feature.player.impl.PlaybackRequestHeaderRouter
+import com.alraad.feature.player.impl.externalSubtitleTrack
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.After
@@ -19,6 +20,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -44,6 +46,47 @@ class Media3PlayerControllerTest {
     private val controller = Media3PlayerController(ApplicationProvider.getApplicationContext(), noopLogger)
 
     @After fun tearDown() = controller.release()
+
+    @Test fun `addExternalSubtitle attaches the track to the active request without leaking headers`() {
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example.com/v.mp4",
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+                headers = mapOf("Cookie" to "video-session-secret"),
+            )
+        controller.play(stream)
+        val track = externalSubtitleTrack("content://docs/9", "movie.ar.vtt")!!
+        controller.addExternalSubtitle(track)
+
+        val request = requireNotNull(controller.currentPlaybackRequest.value)
+        assertEquals(listOf(track), request.subtitles)
+        val routed =
+            PlaybackRequestHeaderRouter.headersForRequest(
+                Uri.parse(track.url),
+                stream.headers,
+                request.subtitles,
+            )
+        assertFalse(routed.containsKey("Cookie"))
+        assertTrue(routed.isEmpty())
+    }
+
+    @Test fun `addExternalSubtitle is a no-op without playback and ignores duplicate urls`() {
+        val track = externalSubtitleTrack("content://docs/10", "a.srt")!!
+        controller.addExternalSubtitle(track)
+        assertNull(controller.currentPlaybackRequest.value)
+
+        val stream =
+            StreamUrl(
+                url = "https://cdn.example.com/v.mp4",
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+                headers = emptyMap(),
+            )
+        controller.play(PlaybackRequest(sources = listOf(stream), subtitles = listOf(track)))
+        controller.addExternalSubtitle(track)
+        assertEquals(1, controller.currentPlaybackRequest.value!!.subtitles.size)
+    }
 
     @Test fun `play creates a player with headers, pause seek release work`() {
         val stream =
