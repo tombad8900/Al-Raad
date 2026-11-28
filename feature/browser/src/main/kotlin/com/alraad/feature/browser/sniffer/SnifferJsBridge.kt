@@ -86,7 +86,13 @@ class SnifferJsBridge
             const val MAX_HEADERS = 12
             const val MAX_HEADER_NAME_LENGTH = 64
             const val MAX_HEADER_VALUE_LENGTH = 1_024
-            val SAFE_HEADERS = setOf("accept", "content-type", "range")
-            val HEADER_NAMES = mapOf("accept" to "Accept", "content-type" to "Content-Type", "range" to "Range")
+            val SAFE_HEADERS = setOf("accept", "authorization", "content-type", "range")
+            val HEADER_NAMES =
+                mapOf(
+                    "accept" to "Accept",
+                    "authorization" to "Authorization",
+                    "content-type" to "Content-Type",
+                    "range" to "Range",
+                )
         }
     }
