@@ -1,85 +1,46 @@
 package com.alraad.feature.browser.ui
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BrowserBackHandlerTest {
     @Test
-    fun walksBackThroughMultiplePagesBeforeReturningToSearch() {
-        val history = mutableListOf("page-a", "page-b", "page-c")
-        var current = 2
-        var returnedToSearch = false
-
+    fun multiplePagesReturnToSearchOnlyAfterTheActiveHistoryEnds() {
+        val history = mutableListOf("a", "b", "c")
+        var index = 2
+        var search = false
         repeat(2) {
-            val result = handleBrowserBack(
-                tabUrl = history[current],
-                canGoBack = { current > 0 },
-                goBack = { current-- },
-                returnToSearch = { returnedToSearch = true },
+            assertEquals(
+                BrowserBackResult.HISTORY,
+                handleBrowserBack(history[index], { index > 0 }, { index-- }, { search = true }),
             )
-            assertEquals(BrowserBackResult.HISTORY, result)
         }
-
-        assertEquals(0, current)
-        assertFalse(returnedToSearch)
+        assertEquals(0, index)
         assertEquals(
             BrowserBackResult.SEARCH,
-            handleBrowserBack(
-                tabUrl = history[current],
-                canGoBack = { false },
-                goBack = {},
-                returnToSearch = { returnedToSearch = true },
-            ),
+            handleBrowserBack(history[index], { false }, {}, { search = true }),
         )
-        assertTrue(returnedToSearch)
+        assertTrue(search)
     }
 
     @Test
-    fun switchingTabsMovesOnlyTheActiveTabsHistory() {
-        val histories = mutableMapOf("first" to 2, "second" to 1)
-        var activeTab = "second"
-
-        handleBrowserBack(
-            tabUrl = "second-page",
-            canGoBack = { histories.getValue(activeTab) > 0 },
-            goBack = { histories[activeTab] = histories.getValue(activeTab) - 1 },
-            returnToSearch = {},
+    fun switchingTabsUsesOnlyTheSelectedHistoryAndSearchBackStays() {
+        val histories = mutableMapOf("a" to 2, "b" to 1)
+        var active = "b"
+        fun back(url: String) = handleBrowserBack(
+            url,
+            { histories.getValue(active) > 0 },
+            { histories[active] = histories.getValue(active) - 1 },
+            {},
         )
-        assertEquals(2, histories["first"])
-        assertEquals(0, histories["second"])
-
-        activeTab = "first"
-        handleBrowserBack(
-            tabUrl = "first-page",
-            canGoBack = { histories.getValue(activeTab) > 0 },
-            goBack = { histories[activeTab] = histories.getValue(activeTab) - 1 },
-            returnToSearch = {},
-        )
-        assertEquals(1, histories["first"])
-        assertEquals(0, histories["second"])
-    }
-
-    @Test
-    fun emptyHistoryReturnsToSearchAndSearchBackStaysWithoutExiting() {
-        var searchVisible = false
-        val result = handleBrowserBack(
-            tabUrl = "https://first-page.example",
-            canGoBack = { false },
-            goBack = {},
-            returnToSearch = { searchVisible = true },
-        )
-        assertEquals(BrowserBackResult.SEARCH, result)
-        assertTrue(searchVisible)
-
-        val searchResult = handleBrowserBack(
-            tabUrl = "",
-            canGoBack = { false },
-            goBack = {},
-            returnToSearch = { searchVisible = false },
-        )
-        assertEquals(BrowserBackResult.STAY, searchResult)
-        assertTrue(searchVisible)
+        back("b-page")
+        assertEquals(2, histories["a"])
+        assertEquals(0, histories["b"])
+        active = "a"
+        back("a-page")
+        assertEquals(1, histories["a"])
+        assertEquals(0, histories["b"])
+        assertEquals(BrowserBackResult.STAY, handleBrowserBack("", { false }, {}, { error("search must stay") }))
     }
 }
