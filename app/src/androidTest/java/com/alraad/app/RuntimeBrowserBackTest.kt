@@ -252,15 +252,20 @@ class RuntimeBrowserBackTest {
             // create/navigate the new tab through HistoryBookmarkNavigationViewModel.
             composeRule.onNodeWithText("السجل").performClick()
             waitForText(aTitle)
-            composeRule.onAllNodes(hasText(aTitle)).onFirst().performClick()
+            composeRule
+                .onNodeWithTag("history_list_entry_url_${a.hashCode()}", useUnmergedTree = true)
+                .performClick()
             composeRule.waitForIdle()
+            waitForBrowserAddressBar()
             awaitUrl(a)
+            awaitLoadFinished()
 
             val tab2 = checkNotNull(tabManager.state.value.activeTabId)
             assertNotEquals("History opens a distinct tab", tab1, tab2)
             val view2 = checkNotNull(onMain { activeWebViewOnMain() })
             assertNotSame("History tab owns a distinct WebView", view1, view2)
             assertEquals("new tab opens the selected History URL", a, onMain { view2.url })
+            assertEquals("History navigation loads the fixture document", aTitle, onMain { view2.title })
             assertEquals("History navigation loads the fixture document", aTitle, onMain { view2.title })
             assertFalse("new tab starts with independent one-page history", onMain { view2.canGoBack() })
 
