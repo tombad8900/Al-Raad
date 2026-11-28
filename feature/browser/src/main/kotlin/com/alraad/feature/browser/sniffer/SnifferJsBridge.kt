@@ -46,6 +46,7 @@ class SnifferJsBridge(
         )
     }
 
+    @Suppress("ComplexCondition")
     private fun safeHeaders(source: JSONObject): Map<String, String> =
         buildMap {
             val keys = source.keys()
