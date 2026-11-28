@@ -229,7 +229,11 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
             },
             onCopy = { text ->
                 val message =
-                    if (copyDiagnostics(context, text)) "تم النسخ / Copied" else "لا يوجد ما يُنسخ / Nothing to copy"
+                    when (copyDiagnostics(context, text)) {
+                        CopyResult.COPIED -> "تم النسخ / Copied"
+                        CopyResult.EMPTY -> "لا يوجد ما يُنسخ / Nothing to copy"
+                        CopyResult.FAILED -> "تعذر النسخ / Copy failed"
+                    }
                 android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
             },
         )
