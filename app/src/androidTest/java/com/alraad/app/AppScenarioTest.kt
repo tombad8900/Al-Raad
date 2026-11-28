@@ -177,16 +177,36 @@ class AppScenarioTest {
                                 .setBody(
                                     "<html><body><video autoplay muted playsinline src='/fixture.mp4'></video></body></html>",
                                 )
-                        "/fixture.mp4" ->
-                            MockResponse()
-                                .setHeader("Content-Type", "video/mp4")
-                                .setHeader("Accept-Ranges", "bytes")
-                                .setBody(Buffer().write(fixture))
+                        "/fixture.mp4" -> fixtureResponse(request, fixture)
                         else -> MockResponse().setResponseCode(404)
                     }
             }
         server.start()
         return server
+    }
+
+    /**
+     * Serves the fixture with Range support: the ~20MB clip held in memory is copied per
+     * request body, and concurrent full-body copies OOM the shared app/test process (seen
+     * on main run 46100573832). Range replies copy only the requested window.
+     */
+    private fun fixtureResponse(
+        request: RecordedRequest,
+        fixture: ByteArray,
+    ): MockResponse {
+        val base =
+            MockResponse()
+                .setHeader("Content-Type", "video/mp4")
+                .setHeader("Accept-Ranges", "bytes")
+        val range = request.getHeader("Range")?.takeIf { it.startsWith("bytes=") } ?: return base.setBody(Buffer().write(fixture))
+        val parts = range.removePrefix("bytes=").split("-")
+        val start = (parts[0].toLongOrNull() ?: 0L).coerceIn(0L, (fixture.size - 1).toLong())
+        val requestedEnd = parts.getOrNull(1)?.takeIf { it.isNotEmpty() }?.toLongOrNull() ?: (fixture.size - 1).toLong()
+        val end = requestedEnd.coerceIn(start, (fixture.size - 1).toLong())
+        return base
+            .setResponseCode(206)
+            .setHeader("Content-Range", "bytes $start-$end/${fixture.size}")
+            .setBody(Buffer().write(fixture.copyOfRange(start.toInt(), end.toInt() + 1)))
     }
 
     @OptIn(UnstableApi::class)
