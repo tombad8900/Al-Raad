@@ -11,7 +11,7 @@ import java.io.File
 private const val CLIP_LABEL = "diagnostics log"
 private const val TAG = "DiagnosticsShare"
 
-/** Copies the already redacted visible log text. Returns false when there is nothing to copy. */
+/** Copies the already redacted visible log text and distinguishes empty input from clipboard failure. */
 internal fun copyDiagnostics(
     context: Context,
     text: String,
