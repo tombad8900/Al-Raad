@@ -104,6 +104,7 @@ class RuntimePageLoadTest {
         val finished = CountDownLatch(1)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         lateinit var web: WebView
+        note("$label step=create-webview")
         instrumentation.runOnMainSync {
             web = WebView(composeRule.activity)
             web.settings.javaScriptEnabled = true
@@ -111,9 +112,12 @@ class RuntimePageLoadTest {
             val base = helper.webViewClient(onPageFinished = { finished.countDown() })
             web.webViewClient = base
             composeRule.activity.setContentView(web)
+            note("$label step=webview-created")
             web.loadUrl(pageUrl)
+            note("$label step=loadUrl-issued")
         }
         val done = finished.await(45, TimeUnit.SECONDS)
+        note("$label step=await-done finished=$done")
         Thread.sleep(SETTLE_MS)
         val title = StringBuilder()
         val textLen = CountDownLatch(1)

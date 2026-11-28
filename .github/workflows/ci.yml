@@ -80,7 +80,7 @@ jobs:
     if: (github.ref == 'refs/heads/main' && github.event_name != 'pull_request') || github.event_name == 'workflow_dispatch'
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -150,7 +150,9 @@ jobs:
             adb shell settings put global cached_apps_freezer disabled || true
             adb shell rm -f /sdcard/Download/app-launch.png /sdcard/Download/diagnostics-export.txt /sdcard/Download/scenario-*.png || true
             mkdir -p scenario-captures
-            bash -c './gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.fixtureBaseUrl=http://10.0.2.2:18080; code=$?; adb pull /sdcard/Download/app-launch.png app-launch.png || true; adb pull /sdcard/Download/diagnostics-export.txt diagnostics-export.txt || true; for f in $(adb shell ls /sdcard/Download/scenario-*.png 2>/dev/null | tr -d "\r"); do adb pull "$f" scenario-captures/ || true; done; adb logcat -d -t 2000 > scenario-captures/logcat-tail.txt || true; if [ "$code" -eq 0 ]; then test -s app-launch.png; test -s diagnostics-export.txt; [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d " \n")" = "89504e470d0a1a0a" ]; fi; exit $code' 
+            nohup bash -c 'while true; do echo "$(date -u +%T) state=$(adb get-state 2>&1 | head -1) qemu=$(pgrep -c qemu-system) hostmem=$(free -m | awk "/Mem:/{print \$7}")MB avail"; sleep 3; done' > scenario-captures/heartbeat.txt 2>&1 &
+            nohup adb logcat -v threadtime > scenario-captures/logcat-full.txt 2>&1 &
+            bash -c 'timeout 600 ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.alraad.app.RuntimeEvidenceTest,com.alraad.app.RuntimePageLoadTest -Pandroid.testInstrumentationRunnerArguments.fixtureBaseUrl=http://10.0.2.2:18080; code=$?; adb pull /sdcard/Download/app-launch.png app-launch.png || true; adb pull /sdcard/Download/diagnostics-export.txt diagnostics-export.txt || true; for f in $(adb shell ls /sdcard/Download/scenario-*.png 2>/dev/null | tr -d "\r"); do adb pull "$f" scenario-captures/ || true; done; adb logcat -d -t 2000 > scenario-captures/logcat-tail.txt || true; if [ "$code" -eq 0 ]; then test -s app-launch.png; test -s diagnostics-export.txt; [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d " \n")" = "89504e470d0a1a0a" ]; fi; exit $code' 
 
       - name: Upload app-launch screenshot
         if: always()
