@@ -217,8 +217,11 @@ class RuntimeBrowserBackTest {
             back()
             assertFalse("Back on the search screen must not exit", composeRule.activity.isFinishing)
 
-            // Rebuild history in tab 1 so its WebView has a back stack to preserve.
-            typeAddress(b)
+            // Rebuild a -> b -> c in tab 1 so its own history has a known previous entry.
+            typeAddress(a)
+            awaitUrl(a)
+            awaitLoadFinished()
+            onMain { view1.loadUrl(b) }
             awaitUrl(b)
             awaitLoadFinished()
             onMain { view1.loadUrl(c) }
@@ -227,6 +230,14 @@ class RuntimeBrowserBackTest {
             back()
             awaitUrl(b)
             assertTrue(onMain { view1.canGoBack() })
+            assertEquals(
+                "tab 1 retains its own previous page",
+                a,
+                onMain {
+                    val history = view1.copyBackForwardList()
+                    history.getItemAtIndex(history.currentIndex - 1).url
+                },
+            )
 
             // Real user path: open History, tap the visited page row, and let the app
             // create/navigate the new tab through HistoryBookmarkNavigationViewModel.
@@ -241,6 +252,7 @@ class RuntimeBrowserBackTest {
             val view2 = checkNotNull(onMain { activeWebViewOnMain() })
             assertNotSame("History tab owns a distinct WebView", view1, view2)
             assertEquals("new tab opens the selected History URL", a, onMain { view2.url })
+            assertFalse("new tab starts with independent one-page history", onMain { view2.canGoBack() })
 
             // The original tab remains in TabManager with the exact same WebView and history.
             assertNotNull(tabManager.state.value.tabs.firstOrNull { it.id == tab1 })
