@@ -27,6 +27,7 @@ class TabManager
     @Inject
     constructor() {
         private val _state = MutableStateFlow(TabState())
+
         @Volatile
         private var retainedWebViewPool: BrowserWebViewPool? = null
 
