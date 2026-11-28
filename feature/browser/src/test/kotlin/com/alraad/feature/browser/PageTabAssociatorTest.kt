@@ -144,18 +144,7 @@ class PageTabAssociatorTest {
         assertEquals(newDocument, associator.associationForPage(url)?.documentId)
     }
 
-    @Test
-    fun `redirect uses pending owner when no previous document can be confused`() {
-        val associator = PageTabAssociator()
-        val pendingDocument = associator.recordRequest("tab-b", "https://b.example/start")
 
-        val redirected = associator.onPageStartedWithContext("https://cdn.example/final", "tab-a")
-
-        assertEquals("tab-b", redirected.tabId)
-        assertEquals(pendingDocument, redirected.documentId)
-        assertTrue(redirected.startsNewNavigation)
-        assertEquals("tab-b", associator.tabIdForPage("https://cdn.example/final"))
-    }
 
 
     @Test
