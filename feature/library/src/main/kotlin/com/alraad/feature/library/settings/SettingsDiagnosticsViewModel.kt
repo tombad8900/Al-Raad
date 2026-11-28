@@ -32,6 +32,8 @@ data class BlocklistUi(
     val lastUpdated: Long,
     /** Enabled Adblock Plus list with only the lossy legacy cache: not applied until a fresh download. */
     val awaitingRefresh: Boolean = false,
+    /** The list holds only cosmetic or scriptlet rules; this engine blocks network requests only, so none apply. */
+    val cosmeticOnly: Boolean = false,
 )
 
 /** What the ad blocker is actually doing, as opposed to which toggles are on. */
@@ -128,6 +130,7 @@ class SettingsDiagnosticsViewModel
                     blocklistStore.isEnabled(it.id),
                     blocklistStore.lastUpdated(it.id),
                     it.id in blocklistStore.listsPendingRefresh(),
+                    blocklistStore.isCosmeticOnly(it.id),
                 )
             }
 

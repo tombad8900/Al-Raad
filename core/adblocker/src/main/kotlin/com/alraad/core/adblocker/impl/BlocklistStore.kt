@@ -29,6 +29,15 @@ class BlocklistStore
         private fun effectiveMin(id: String): Int = minDomains ?: BlocklistCatalog.byId(id)?.minDomains ?: DEFAULT_MIN_DOMAINS
 
         private companion object {
+            val COSMETIC_MARKERS = listOf("##", "#@#", "#?#", "#$#")
+
+            fun isCosmeticRule(line: String) = COSMETIC_MARKERS.any { line.contains(it) }
+
+            /** Anchored network rules (`||host^...`, `|http...`, `/path/...`, `@@` exceptions); HTML or prose never matches. */
+            val NETWORK_RULE = Regex("^(@@)?(\\|\\||\\||/)[^\\s<>]+$")
+
+            fun networkRuleCount(text: String): Int = text.lineSequence().count { NETWORK_RULE.matches(it.trim()) && !isCosmeticRule(it) }
+
             const val DEFAULT_MIN_DOMAINS = 100
             const val MIN_KEPT_FRACTION = 0.5
         }
@@ -52,22 +61,39 @@ class BlocklistStore
             prefs.edit().putStringSet("exceptions", updated).apply()
         }
 
-        /** Enough domains, and not far smaller than the stored copy (that looks like a cut-off download). */
+        /**
+         * What a download is judged by. Hosts lists are domain-for-domain. Adblock Plus lists count network rules, not
+         * plain domains: lists such as brave-social are made of option-scoped network rules (`$third-party`, `domain=`)
+         * that the domain parser cannot count, and cosmetic-only lists have none at all.
+         */
+        private fun acceptCount(
+            id: String,
+            text: String,
+        ): Int = if (BlocklistCatalog.byId(id)?.hostsFormat == true) AdblockPlusDomainParser.parse(text).size else networkRuleCount(text)
+
+        private fun storedCount(id: String): Int =
+            rawFile(id).takeIf { it.isFile }?.let { acceptCount(id, it.readText()) } ?: (storedDomains(id)?.size ?: 0)
+
+        /** Enough rules, and not far smaller than the stored copy (that looks like a cut-off download). */
         private fun plausibleUpdate(
             id: String,
             count: Int,
         ): Boolean {
-            val previous = storedDomains(id)?.size ?: 0
+            val previous = storedCount(id)
             return count >= effectiveMin(id) && (previous == 0 || count >= previous * MIN_KEPT_FRACTION)
         }
+
+        /** True when the last download held cosmetic or scriptlet rules but no network rule: nothing this engine can apply. */
+        fun isCosmeticOnly(id: String): Boolean = prefs.getBoolean("cosmetic_only_$id", false)
 
         /** Parses candidate text and promotes it only when it yields enough domains. */
         fun promote(
             id: String,
             text: String,
         ): Boolean {
-            val domains = AdblockPlusDomainParser.parse(text)
-            if (!plausibleUpdate(id, domains.size)) return false
+            val count = acceptCount(id, text)
+            prefs.edit().putBoolean("cosmetic_only_$id", count == 0 && text.lineSequence().any { isCosmeticRule(it.trim()) }).apply()
+            if (!plausibleUpdate(id, count)) return false
             dir.mkdirs()
             val rawTmp = File(dir, "$id.raw.tmp")
             // One file per list, replaced by a single rename: the stored copy is either entirely the old list or
