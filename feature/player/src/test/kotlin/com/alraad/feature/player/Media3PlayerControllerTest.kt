@@ -12,7 +12,6 @@ import com.alraad.core.common.contracts.StreamUrl
 import com.alraad.core.common.contracts.SubtitleTrack
 import com.alraad.feature.player.impl.Media3PlayerController
 import com.alraad.feature.player.impl.PlaybackRequestHeaderRouter
-import com.alraad.feature.player.impl.addExternalSubtitle
 import com.alraad.feature.player.impl.externalSubtitleTrack
 import com.alraad.feature.player.impl.isActiveRequest
 import com.alraad.feature.player.impl.switchSource

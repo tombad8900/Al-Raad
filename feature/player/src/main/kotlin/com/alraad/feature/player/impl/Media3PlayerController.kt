@@ -32,6 +32,7 @@ import javax.inject.Singleton
  * exactly what the sniffer saw; external subtitle URLs receive only their own
  * allowlisted headers, never video credentials. Raw URL/headers logged unredacted.
  */
+@Suppress("TooManyFunctions") // playback surface + quality + subtitle attach are one frozen contract; splitting would obscure it
 @Singleton
 class Media3PlayerController
     @Inject
@@ -171,6 +172,41 @@ class Media3PlayerController
             }
         }
 
+        /**
+         * Attaches a user-picked local subtitle file to the active playback. The request
+         * is rebuilt with the track appended; position and play state carry over.
+         */
+        fun addExternalSubtitle(track: SubtitleTrack) {
+            val request = _currentPlaybackRequest.value ?: return
+            if (request.subtitles.any { it.url == track.url }) return
+            logger.log(
+                DiagCategory.PLAYER,
+                DiagLevel.INFO,
+                "External subtitle attached",
+                mapOf("url" to track.url, "mimeType" to track.mimeType),
+            )
+            val position = player?.currentPosition ?: 0L
+            val wasPlaying = player?.playWhenReady == true
+            play(request.copy(subtitles = request.subtitles + track))
+            player?.let {
+                it.seekTo(position)
+                it.playWhenReady = wasPlaying
+            }
+        }
+
+        /** Live quality change: applies (or clears) the rendition cap on the active player. */
+        fun setQuality(quality: QualityLimit?) {
+            val current = player ?: return
+            current.trackSelectionParameters =
+                if (quality == null) {
+                    TrackSelectionParameters.Builder(context).build()
+                } else {
+                    TrackSelectionParameters.Builder(context)
+                        .setMaxVideoSize(Int.MAX_VALUE, quality.maxHeight)
+                        .build()
+                }
+        }
+
         override fun pause() {
             player?.pause()
         }
@@ -190,20 +226,6 @@ class Media3PlayerController
             _currentPlaybackRequest.value = null
         }
     }
-
-/**
- * Attaches a user-picked local subtitle file to the active playback. The request
- * is rebuilt with the track appended; position and play state carry over.
- */
-fun Media3PlayerController.addExternalSubtitle(track: SubtitleTrack) {
-    val request = currentPlaybackRequest.value ?: return
-    if (request.subtitles.any { it.url == track.url }) return
-    logPlaybackEvent(
-        "External subtitle attached",
-        mapOf("url" to track.url, "mimeType" to track.mimeType),
-    )
-    rebuildPreservingPlayback { it.copy(subtitles = it.subtitles + track) }
-}
 
 /**
  * Dispose decision for PlayerScreen: true only while [request] is still the active
@@ -232,16 +254,6 @@ private fun Media3PlayerController.rebuildPreservingPlayback(update: (PlaybackRe
         it.seekTo(position)
         it.playWhenReady = wasPlaying
     }
-}
-
-/** Live quality change: applies (or clears) the rendition cap on the active player. */
-fun Media3PlayerController.setQuality(quality: Media3PlayerController.QualityLimit?) {
-    val current = currentPlayer() ?: return
-    current.trackSelectionParameters =
-        current.trackSelectionParameters
-            .buildUpon()
-            .setMaxVideoSize(Int.MAX_VALUE, quality?.maxHeight ?: Int.MAX_VALUE)
-            .build()
 }
 
 /**
