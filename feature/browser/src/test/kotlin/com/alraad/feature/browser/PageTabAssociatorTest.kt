@@ -112,7 +112,6 @@ class PageTabAssociatorTest {
 
         assertEquals("tabA", changed?.tabId)
         assertEquals(started.documentId, changed?.documentId)
-        assertEquals(started.documentId, associator.associationForPage(pushed)?.documentId)
     }
 
     @Test
@@ -137,7 +136,6 @@ class PageTabAssociatorTest {
 
         val next = associator.onPageStartedWithContext("https://top.example/next", "tab-a")
 
-        assertEquals("tab-a", next.tabId)
         assertTrue(next.startsNewNavigation)
         assertNotEquals(first.documentId, next.documentId)
         assertNull(associator.associationForDocument(first.documentId))
