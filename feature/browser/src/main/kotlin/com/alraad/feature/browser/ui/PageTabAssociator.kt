@@ -79,30 +79,33 @@ class PageTabAssociator {
         activeTabId: String?,
     ): PageStartAssociation {
         val pendingMatch = pendingNavigationTabs.lastOrNull { it.url == url }
-        val displacedRedirect = pendingMatch == null && pendingNavigationTabs.isNotEmpty()
+        val pendingRedirect = if (pendingMatch == null) pendingNavigationTabs.lastOrNull() else null
         val previousDocument = lastBoundDocument
         val ownerTabId =
             when {
                 pendingMatch != null -> pendingMatch.tabId
-                displacedRedirect -> previousDocument?.tabId
+                pendingRedirect != null -> pendingRedirect.tabId
                 previousDocument != null && previousDocument.tabId != activeTabId -> previousDocument.tabId
                 else -> activeTabId
             }
         val startsNewNavigation =
-            pendingMatch != null || (previousDocument == null && ownerTabId != null && ownerTabId == activeTabId)
+            pendingMatch != null || pendingRedirect != null ||
+                (previousDocument == null && ownerTabId != null && ownerTabId == activeTabId)
         val documentId =
             when {
                 pendingMatch != null -> pendingMatch.documentId
+                pendingRedirect != null -> pendingRedirect.documentId
                 !startsNewNavigation && ownerTabId != null && previousDocument?.tabId == ownerTabId ->
                     previousDocument.documentId
                 ownerTabId != null -> UUID.randomUUID().toString()
                 else -> null
             }
 
-        if (pendingMatch != null) {
+        val resolvedNavigation = pendingMatch ?: pendingRedirect
+        if (resolvedNavigation != null) {
             pendingNavigationTabs.removeAll {
-                it.url == pendingMatch.url && it.tabId == pendingMatch.tabId &&
-                    it.documentId == pendingMatch.documentId
+                it.url == resolvedNavigation.url && it.tabId == resolvedNavigation.tabId &&
+                    it.documentId == resolvedNavigation.documentId
             }
         }
 
