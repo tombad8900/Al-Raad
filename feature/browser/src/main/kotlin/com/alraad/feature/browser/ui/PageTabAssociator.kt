@@ -76,7 +76,7 @@ class PageTabAssociator {
 
     @Synchronized
     fun tabIdForPage(url: String?): String? =
-        url?.let { pageTabIds[it] ?: pendingNavigationTabs.lastOrNull { pending -> pending.first == it }?.second }
+        url?.let { pendingNavigationTabs.lastOrNull { pending -> pending.first == it }?.second ?: pageTabIds[it] }
 
     private companion object {
         const val MAX_PAGE_MAPPINGS = 256
