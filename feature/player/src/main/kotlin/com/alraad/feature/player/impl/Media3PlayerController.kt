@@ -57,6 +57,12 @@ class Media3PlayerController
             kotlinx.coroutines.flow.MutableStateFlow<PlaybackRequest?>(null)
         val currentPlaybackRequest: kotlinx.coroutines.flow.StateFlow<PlaybackRequest?> = _currentPlaybackRequest
 
+        /** Info-level PLAYER log entry, shared by the file-level playback extensions. */
+        internal fun logPlaybackEvent(
+            message: String,
+            details: Map<String, String>,
+        ) = logger.log(DiagCategory.PLAYER, DiagLevel.INFO, message, details)
+
         /** Exposed for PlayerScreen rendering. */
         fun currentPlayer(): Player? = player
 
@@ -165,28 +171,6 @@ class Media3PlayerController
             }
         }
 
-        /**
-         * Attaches a user-picked local subtitle file to the active playback. The request
-         * is rebuilt with the track appended; position and play state carry over.
-         */
-        fun addExternalSubtitle(track: SubtitleTrack) {
-            val request = _currentPlaybackRequest.value ?: return
-            if (request.subtitles.any { it.url == track.url }) return
-            logger.log(
-                DiagCategory.PLAYER,
-                DiagLevel.INFO,
-                "External subtitle attached",
-                mapOf("url" to track.url, "mimeType" to track.mimeType),
-            )
-            val position = player?.currentPosition ?: 0L
-            val wasPlaying = player?.playWhenReady == true
-            play(request.copy(subtitles = request.subtitles + track))
-            player?.let {
-                it.seekTo(position)
-                it.playWhenReady = wasPlaying
-            }
-        }
-
         override fun pause() {
             player?.pause()
         }
@@ -206,6 +190,42 @@ class Media3PlayerController
             _currentPlaybackRequest.value = null
         }
     }
+
+/**
+ * Attaches a user-picked local subtitle file to the active playback. The request
+ * is rebuilt with the track appended; position and play state carry over.
+ */
+fun Media3PlayerController.addExternalSubtitle(track: SubtitleTrack) {
+    val request = currentPlaybackRequest.value ?: return
+    if (request.subtitles.any { it.url == track.url }) return
+    logPlaybackEvent(
+        "External subtitle attached",
+        mapOf("url" to track.url, "mimeType" to track.mimeType),
+    )
+    rebuildPreservingPlayback { it.copy(subtitles = it.subtitles + track) }
+}
+
+/** Manual source switch (T5): rebuilds on another detected source, preserving position. */
+fun Media3PlayerController.switchSource(sourceIndex: Int) {
+    val request = currentPlaybackRequest.value ?: return
+    if (sourceIndex !in request.sources.indices || sourceIndex == request.selectedSourceIndex) return
+    logPlaybackEvent(
+        "Source switch",
+        mapOf("from" to request.selectedStream.url, "to" to request.sources[sourceIndex].url),
+    )
+    rebuildPreservingPlayback { it.copy(selectedSourceIndex = sourceIndex) }
+}
+
+private fun Media3PlayerController.rebuildPreservingPlayback(update: (PlaybackRequest) -> PlaybackRequest) {
+    val current = currentPlayer()
+    val position = current?.currentPosition ?: 0L
+    val wasPlaying = current?.playWhenReady == true
+    play(update(currentPlaybackRequest.value ?: return))
+    currentPlayer()?.let {
+        it.seekTo(position)
+        it.playWhenReady = wasPlaying
+    }
+}
 
 /** Live quality change: applies (or clears) the rendition cap on the active player. */
 fun Media3PlayerController.setQuality(quality: Media3PlayerController.QualityLimit?) {

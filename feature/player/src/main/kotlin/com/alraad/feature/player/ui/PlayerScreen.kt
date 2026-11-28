@@ -58,8 +58,10 @@ import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TrackSelectionDialogBuilder
 import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.feature.player.impl.Media3PlayerController
+import com.alraad.feature.player.impl.addExternalSubtitle
 import com.alraad.feature.player.impl.externalSubtitleTrack
 import com.alraad.feature.player.impl.setQuality
+import com.alraad.feature.player.impl.switchSource
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 private const val SEEK_STEP_MS = 10_000L
@@ -109,11 +111,13 @@ fun PlayerScreen(
         controller.play(playbackRequest)
         player = controller.currentPlayer()
         onDispose {
-            // release() frees resources but preserves the selection, so a recreate
-            // or back-stack restore rebuilds playback instead of landing on the
-            // no-stream placeholder (owner real-device finding).
-            controller.release()
-            player = null
+            // A source switch (T5) or external subtitle attach swaps the request while
+            // the controller's own rebuild already preserved playback; releasing here
+            // would destroy that fresh player. Release only when truly leaving.
+            if (controller.currentPlaybackRequest.value == playbackRequest) {
+                controller.release()
+                player = null
+            }
         }
     }
 
@@ -138,11 +142,17 @@ fun PlayerScreen(
                 onEnterPip = { gestures.enterPictureInPicture() },
                 player = player,
                 subtitles = rememberSubtitleControls(controller, player),
-                speed = speed,
-                onSelectSpeed = { option ->
-                    speed = option
-                    player?.setPlaybackSpeed(option)
-                },
+                menus =
+                    PlaybackMenus(
+                        speed = speed,
+                        onSelectSpeed = { option ->
+                            speed = option
+                            player?.setPlaybackSpeed(option)
+                        },
+                        sources = playbackRequest.sources,
+                        selectedSourceIndex = playbackRequest.selectedSourceIndex,
+                        onSelectSource = controller::switchSource,
+                    ),
             )
         }
         playbackError?.let { PlaybackErrorOverlay(message = it, isRtl = isRtl) }
@@ -244,8 +254,7 @@ private fun PlayerControlsRow(
     onEnterPip: () -> Unit,
     player: Player?,
     subtitles: SubtitleControls,
-    speed: Float,
-    onSelectSpeed: (Float) -> Unit,
+    menus: PlaybackMenus,
 ) {
     var qualityMenuOpen by remember { mutableStateOf(false) }
     IconButton(onClick = display.onToggleFullscreen) {
@@ -287,7 +296,8 @@ private fun PlayerControlsRow(
             }
         }
     }
-    SpeedMenu(speed = speed, onSelect = onSelectSpeed)
+    SpeedMenu(speed = menus.speed, onSelect = menus.onSelectSpeed)
+    SourceMenu(menus)
 }
 
 @Composable
