@@ -125,10 +125,18 @@ class AppScenarioTest {
         try {
             composeRule.onNode(hasSetTextAction()).performTextInput(server.url("/wrapper.html").toString())
             composeRule.onNode(hasSetTextAction()).performImeAction()
-            waitForNode(hasText("\u25b6", substring = true), 45_000)
-            capture("scenario-06-stream-bar.png")
+            // T2 picker UI (post #73): a detected stream shows the picker section with
+            // a Play button instead of the old minimal bar.
+            waitForNode(
+                hasText(
+                    "\u0631\u0648\u0627\u0628\u0637 \u0627\u0644\u0628\u062b \u0627\u0644\u0645\u0643\u062a\u0634\u0641\u0629",
+                    substring = true,
+                ),
+                45_000,
+            )
+            capture("scenario-06-stream-picker.png")
 
-            composeRule.onNodeWithText("\u25b6", substring = true).performClick()
+            composeRule.onNodeWithText("\u062a\u0634\u063a\u064a\u0644").performClick()
             // The player route shows its controls; the no-stream placeholder must be absent.
             waitForNode(hasContentDescription("Fullscreen"), 15_000)
             composeRule
