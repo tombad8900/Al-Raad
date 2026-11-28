@@ -28,6 +28,42 @@ data class SavedStream(
     val createdAt: Long,
 )
 
+/** A page/tab-scoped external subtitle captured from a WebView request. */
+data class SubtitleTrack(
+    val id: String,
+    val url: String,
+    val mimeType: String,
+    val language: String?,
+    val label: String,
+    val sourcePageUrl: String,
+    val sourceTabId: String,
+    /** Allowlisted, non-credential headers scoped only to this subtitle URL. */
+    val requestHeaders: Map<String, String> = emptyMap(),
+)
+
+/** Immutable playback selection and only the subtitles belonging to its page/tab. */
+data class PlaybackRequest(
+    val sources: List<StreamUrl>,
+    val selectedSourceIndex: Int = 0,
+    val subtitles: List<SubtitleTrack> = emptyList(),
+    val sourcePageUrl: String? = null,
+    val sourceTabId: String? = null,
+) {
+    init {
+        require(sources.isNotEmpty()) { "PlaybackRequest requires at least one source" }
+        require(selectedSourceIndex in sources.indices) { "Selected source index is out of range" }
+    }
+
+    val selectedStream: StreamUrl
+        get() = sources[selectedSourceIndex]
+
+    fun selectSource(index: Int): PlaybackRequest = copy(selectedSourceIndex = index)
+
+    companion object {
+        fun single(stream: StreamUrl): PlaybackRequest = PlaybackRequest(sources = listOf(stream))
+    }
+}
+
 interface StreamListener {
     fun onStreamDetected(stream: StreamUrl)
 
@@ -43,6 +79,11 @@ interface AdBlocker {
 
 interface PlayerController {
     fun play(stream: StreamUrl)
+
+    /** Rich page-scoped request; legacy implementations remain source-compatible. */
+    fun play(request: PlaybackRequest) {
+        play(request.selectedStream)
+    }
 
     fun pause()
 
