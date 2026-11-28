@@ -1,5 +1,8 @@
 package com.alraad.feature.browser.tabs
 
+import android.content.Context
+import com.alraad.feature.browser.ui.BrowserWebViewPool
+
 import androidx.annotation.VisibleForTesting
 import java.util.UUID
 import javax.inject.Inject
@@ -25,11 +28,21 @@ class TabManager
     @Inject
     constructor() {
         private val _state = MutableStateFlow(TabState())
+        @Volatile private var retainedWebViewPool: BrowserWebViewPool? = null
+
+        /** Process-scoped pool: survives BrowserScreen disposal while section navigation occurs. */
+        fun webViewPool(context: Context): BrowserWebViewPool =
+            retainedWebViewPool ?: synchronized(this) {
+                retainedWebViewPool ?: BrowserWebViewPool(context.applicationContext).also {
+                    retainedWebViewPool = it
+                }
+            }
         val state: StateFlow<TabState> = _state.asStateFlow()
 
         /** androidTest isolation: clears all tabs between instrumented tests. */
         @VisibleForTesting
         fun reset() {
+            retainedWebViewPool?.clear()
             _state.value = TabState()
         }
 
@@ -40,6 +53,7 @@ class TabManager
         }
 
         fun closeTab(id: String) {
+            retainedWebViewPool?.release(id)
             _state.update { state ->
                 val remaining = state.tabs.filterNot { it.id == id }
                 val newActive =
