@@ -74,6 +74,18 @@ interface StreamListener {
 interface AdBlocker {
     suspend fun shouldBlock(url: String): Boolean
 
+    /**
+     * Context-aware decision. [sourceUrl] is the page that issued the request ("" when unknown) and
+     * [resourceType] is an adblock request type (document, subdocument, script, image, stylesheet,
+     * xmlhttprequest, media, font, websocket, other). Engines that only know hosts keep this default;
+     * rule engines must override it and must not rely on the URL-only overload.
+     */
+    suspend fun shouldBlock(
+        url: String,
+        sourceUrl: String,
+        resourceType: String,
+    ): Boolean = shouldBlock(url)
+
     suspend fun cosmeticCss(host: String): String
 }
 

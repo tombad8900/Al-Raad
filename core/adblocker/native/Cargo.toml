@@ -1,0 +1,21 @@
+[package]
+name = "alraad_adblock"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MPL-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Official Brave engine (MPL-2.0), unmodified, from crates.io.
+adblock = { version = "=0.13.6", default-features = false, features = ["embedded-domain-resolver"] }
+jni = "0.21"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
+codegen-units = 1
+panic = "abort"

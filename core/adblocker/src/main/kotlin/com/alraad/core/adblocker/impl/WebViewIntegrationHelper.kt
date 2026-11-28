@@ -103,7 +103,15 @@ class WebViewIntegrationHelper
                         currentPageUrl = url
                     }
                     onRequestObserved(url, request.requestHeaders ?: emptyMap(), currentPageUrl)
-                    val blocked = runBlocking(Dispatchers.IO) { adBlocker.shouldBlock(url) }
+                    val headers = request.requestHeaders.orEmpty()
+                    val type =
+                        RequestTypeMapper.from(
+                            url,
+                            request.isForMainFrame,
+                            headers.entries.firstOrNull { it.key.equals("Accept", true) }?.value,
+                            headers.entries.firstOrNull { it.key.equals("X-Requested-With", true) }?.value,
+                        )
+                    val blocked = runBlocking(Dispatchers.IO) { adBlocker.shouldBlock(url, currentPageUrl.orEmpty(), type) }
                     if (blocked) {
                         logger.log(DiagCategory.ADBLOCK, DiagLevel.DEBUG, "Intercepted", mapOf("url" to url))
                         return WebResourceResponse(
