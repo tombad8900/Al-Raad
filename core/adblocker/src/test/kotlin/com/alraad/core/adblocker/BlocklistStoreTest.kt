@@ -35,7 +35,7 @@ class BlocklistStoreTest {
         assertEquals(before, store.storedDomains("easylist"))
     }
 
-    @Test fun `a failed raw write keeps the last-known-good domains and raw text and does not throw`() {
+    @Test fun `a failed write keeps the last-known-good list and does not throw`() {
         assertTrue(store.promote("easylist", goodList("good")))
         val domainsBefore = store.storedDomains("easylist")
         val rulesBefore = store.activeEngineRules()
@@ -47,12 +47,23 @@ class BlocklistStoreTest {
             assertFalse(store.promote("easylist", goodList("new")))
             assertEquals(domainsBefore, store.storedDomains("easylist"))
             assertEquals(rulesBefore, store.activeEngineRules())
-            assertFalse(java.io.File(context.filesDir, "blocklists/easylist.tmp").exists())
+            assertFalse(java.io.File(context.filesDir, "blocklists/easylist.raw.tmp").isFile)
         } finally {
             blocker.delete()
         }
         assertTrue(store.promote("easylist", goodList("recovered")))
         assertTrue(store.storedDomains("easylist").orEmpty().any { it.startsWith("recovered") })
+    }
+
+    @Test fun `a legacy domains-only copy is used until the next promote replaces it`() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val dir = java.io.File(context.filesDir, "blocklists").apply { mkdirs() }
+        java.io.File(dir, "easyprivacy.raw").delete()
+        java.io.File(dir, "easyprivacy.domains").writeText("legacy1.example.com\nlegacy2.example.com")
+        assertEquals(setOf("legacy1.example.com", "legacy2.example.com"), store.storedDomains("easyprivacy"))
+        assertTrue(store.activeEngineRules().contains("||legacy1.example.com^"))
+        assertTrue(store.promote("easyprivacy", goodList("fresh")))
+        assertTrue(store.storedDomains("easyprivacy").orEmpty().all { it.startsWith("fresh") })
     }
 
     @Test fun `disabled list contributes nothing to active domains`() {

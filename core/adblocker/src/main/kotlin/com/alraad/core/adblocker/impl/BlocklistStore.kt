@@ -13,6 +13,7 @@ import javax.inject.Singleton
  * per-site exceptions live in SharedPreferences (frozen AppSettings contract is
  * not extended here).
  */
+@Suppress("TooManyFunctions") // one store for list files, toggles and exceptions; the file helpers are tiny
 @Singleton
 class BlocklistStore
     @Inject
@@ -58,28 +59,31 @@ class BlocklistStore
             val domains = AdblockPlusDomainParser.parse(text)
             if (domains.size < effectiveMin(id)) return false
             dir.mkdirs()
-            val domainsTmp = File(dir, "$id.tmp")
             val rawTmp = File(dir, "$id.raw.tmp")
-            // Stage both files first: a failure here leaves the last-known-good pair untouched. Then promote the
-            // raw text (the engine's source) before the domains; a crash between the two renames leaves new raw plus
-            // old domains, which is still a usable list, never a missing or half-written one.
+            // One file per list, replaced by a single rename: the stored copy is either entirely the old list or
+            // entirely the new one. Domains are derived from this same text, so the two can never disagree.
             val promoted =
                 runCatching {
-                    domainsTmp.writeText(domains.sorted().joinToString("\n"))
                     rawTmp.writeText(text)
-                    check(rawTmp.renameTo(File(dir, "$id.raw"))) { "atomic raw promote failed for $id" }
-                    check(domainsTmp.renameTo(File(dir, "$id.domains"))) { "atomic promote failed for $id" }
+                    check(rawTmp.renameTo(rawFile(id))) { "atomic promote failed for $id" }
                 }.isSuccess
-            if (!promoted) {
-                domainsTmp.delete()
-                rawTmp.delete()
-            }
+            if (!promoted) rawTmp.delete()
             return promoted
         }
 
+        private fun rawFile(id: String) = File(dir, "$id.raw")
+
+        /** Pre-raw installs kept only a parsed domain list; it is used until the next successful update. */
+        private fun legacyDomainsFile(id: String) = File(dir, "$id.domains")
+
         fun storedDomains(id: String): Set<String>? {
-            val file = File(dir, "$id.domains")
-            return if (file.isFile) file.readLines().filterTo(HashSet()) { it.isNotBlank() } else null
+            val raw = rawFile(id)
+            val legacy = legacyDomainsFile(id)
+            return when {
+                raw.isFile -> AdblockPlusDomainParser.parse(raw.readText())
+                legacy.isFile -> legacy.readLines().filterTo(HashSet()) { it.isNotBlank() }
+                else -> null
+            }
         }
 
         /** Domains from every enabled list that has a stored copy; empty when none downloaded yet. */
@@ -99,7 +103,7 @@ class BlocklistStore
             val out = StringBuilder()
             for (source in BlocklistCatalog.sources) {
                 if (!isEnabled(source.id)) continue
-                val raw = File(dir, "${source.id}.raw")
+                val raw = rawFile(source.id)
                 if (raw.isFile) {
                     out.append(raw.readText()).append('\n')
                 } else {
@@ -109,5 +113,6 @@ class BlocklistStore
             return out.toString()
         }
 
-        fun lastUpdated(id: String): Long = File(dir, "$id.domains").takeIf { it.isFile }?.lastModified() ?: 0L
+        fun lastUpdated(id: String): Long =
+            (rawFile(id).takeIf { it.isFile } ?: legacyDomainsFile(id).takeIf { it.isFile })?.lastModified() ?: 0L
     }
