@@ -111,7 +111,9 @@ class WebViewIntegrationHelper
                 ): WebResourceResponse? {
                     val url = request.url.toString()
                     if (request.isForMainFrame) {
-                        currentPageContext = currentPageContext.copy(url = url)
+                        // A new main-frame request must not inherit the previous document token.
+                        // BrowserWebView can resolve the exact pending navigation by this URL.
+                        currentPageContext = CachedPageContext(url, null)
                     }
                     // Snapshot the owning document before any asynchronous work or navigation
                     // can replace the WebView's current page context.
