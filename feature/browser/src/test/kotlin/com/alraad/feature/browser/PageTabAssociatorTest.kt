@@ -34,6 +34,18 @@ class PageTabAssociatorTest {
     }
 
     @Test
+    fun `pending tab takes precedence over an older mapping for the same page URL`() {
+        val associator = PageTabAssociator()
+        val page = "https://same.example/watch"
+        associator.recordRequest("tabA", page)
+        associator.onPageStartedWithContext(page, "tabA")
+        associator.recordRequest("tabB", page)
+
+        assertEquals("tabB", associator.tabIdForPage(page))
+        assertEquals("tabB", associator.onPageStartedWithContext(page, "tabB").tabId)
+    }
+
+    @Test
     fun `new request retires stale pending ownership for the same tab`() {
         val associator = PageTabAssociator()
         associator.recordRequest("tabA", "https://a.example/")
