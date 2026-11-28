@@ -62,7 +62,7 @@ class DiagnosticsEntryNewlineTest {
             testBlocklistDeps(settings, logger).let { (store, updater, adBlocker) ->
                 SettingsDiagnosticsViewModel(settings, logger, store, updater, adBlocker)
             }
-        composeRule.setContent { DiagnosticsScreen(viewModel = viewModel, onExport = {}) }
+        composeRule.setContent { DiagnosticsScreen(viewModel = viewModel, onExport = {}, onCopy = {}) }
         composeRule.onNodeWithText("url=https://example.test/a\nstatus=503").assertIsDisplayed()
     }
 }
