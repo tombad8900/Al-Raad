@@ -7,6 +7,7 @@ import android.provider.MediaStore
 import android.webkit.WebView
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onFirst
@@ -339,7 +340,8 @@ class RuntimeBrowserBackTest {
             composeRule.onNodeWithText("السجل").performClick()
             waitForText(aTitle)
             composeRule
-                .onNodeWithTag("history_list_entry_url_${a.hashCode()}", useUnmergedTree = true)
+                .onAllNodes(hasTestTag("history_list_entry_url_${a.hashCode()}"), useUnmergedTree = true)
+                .onFirst()
                 .performClick()
             composeRule.waitForIdle()
             waitForBrowserAddressBar()
