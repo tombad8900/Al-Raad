@@ -119,9 +119,13 @@ class AppScenarioTest {
     fun localVideoRendersInPlayerAndFitFillCaptures() {
         composeRule.waitForIdle()
         waitForNode(hasSetTextAction(), 20_000)
-        val server = localPlaybackServer(downloadPlaybackFixture())
+        // Prefer a host-served fixture (CI passes fixtureBaseUrl): keeps the ~20MB clip
+        // and its serving buffers OUT of the instrumented process. The in-process
+        // MockWebServer path remains as the local fallback, with bounded range copies.
+        val hostBase = InstrumentationRegistry.getArguments().getString("fixtureBaseUrl")
+        val server = if (hostBase == null) localPlaybackServer(downloadPlaybackFixture()) else null
         try {
-            val pageUrl = server.url("/player.html").toString()
+            val pageUrl = hostBase?.let { "$it/player.html" } ?: server!!.url("/player.html").toString()
             composeRule.onNode(hasSetTextAction()).performTextInput(pageUrl)
             composeRule.onNode(hasSetTextAction()).performImeAction()
             // T2 picker UI (post #73): a detected stream shows the picker section with
@@ -148,7 +152,7 @@ class AppScenarioTest {
             Thread.sleep(500)
             capture("scenario-player-fill-frames.png")
         } finally {
-            server.shutdown()
+            server?.shutdown()
         }
     }
 
