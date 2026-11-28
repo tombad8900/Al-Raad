@@ -124,11 +124,11 @@ class RuntimeBrowserBackTest {
         onMain {
             val activity = composeRule.activity
 
-            fun count(view: android.view.View): Int =
-                (if (view is WebView) 1 else 0) +
-                    ((view as? android.view.ViewGroup)?.let { group ->
-                        (0 until group.childCount).sumOf { count(group.getChildAt(it)) }
-                    } ?: 0)
+            fun count(view: android.view.View): Int {
+                val ownView = if (view is WebView) 1 else 0
+                val group = view as? android.view.ViewGroup ?: return ownView
+                return ownView + (0 until group.childCount).sumOf { count(group.getChildAt(it)) }
+            }
             "activity=${activity.lifecycle.currentState} finishing=${activity.isFinishing} " +
                 "webViewsInWindow=${count(activity.window.decorView)} " +
                 "poolHasActive=${activeWebViewOnMain() != null}"
