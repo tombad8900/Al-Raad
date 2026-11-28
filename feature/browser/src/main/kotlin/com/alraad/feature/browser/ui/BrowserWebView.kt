@@ -4,6 +4,7 @@ import android.webkit.WebView
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -28,13 +29,14 @@ fun BrowserWebView(
 ) {
     val tabs = environment.tabManager
     val jsBridge = remember(environment.sniffer) { SnifferJsBridge(environment.sniffer) }
+    val javaScriptEnabled = rememberUpdatedState(environment.settings.javaScriptEnabled)
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
             WebView(context).apply {
                 setBackgroundColor(backgroundColor.toArgb())
                 SafeWebViewConfig.apply(this, environment.settings)
-                if (environment.settings.javaScriptEnabled) {
+                if (javaScriptEnabled.value) {
                     runCatching { addJavascriptInterface(jsBridge, SNIFFER_BRIDGE_NAME) }
                 }
                 webChromeClient = PopupBlockingWebChromeClient(environment.diagnosticsLogger)
