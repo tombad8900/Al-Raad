@@ -158,6 +158,14 @@ jobs:
           path: diagnostics-export.txt
           if-no-files-found: warn
 
+      - name: Upload fixture server access log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fixture-server-log
+          path: /tmp/fixture-serve.log
+          if-no-files-found: ignore
+
       - name: Upload scenario captures
         if: always()
         uses: actions/upload-artifact@v7

@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.text.CueGroup
 import androidx.media3.exoplayer.ExoPlayer
@@ -93,11 +94,30 @@ class SubtitleUiScenarioTest {
         waitForNode(hasContentDescription("Fullscreen"), 15_000)
         val player = findAttachedPlayer()
 
-        // 1. Select the page subtitle through the real dialog.
+        // 1. Select the page subtitle through the real dialog. The early-open
+        // observation runs first and stays separate on purpose: open the dialog
+        // immediately, as a fast user would, and record whether the already-open
+        // dialog lists the track once it arrives (Media3's
+        // TrackSelectionDialogBuilder snapshots tracks at build time). An
+        // early-open miss is evidence about the shipped UI, never masked: the
+        // proof below reopens the dialog on the ready path.
         composeRule.onNodeWithText("الترجمة").performClick()
-        capture("scenario-subtitle-dialog.png")
+        val earlyListed = device.wait(Until.findObject(By.text("subs")), 12_000) != null
+        capture("scenario-subtitle-dialog-early.png")
+        device.pressBack()
+        composeRule.waitForIdle()
+        val trackDump = awaitTextTrack(player, 30_000)
+        assertTrue(
+            "Player never exposed the page text track (early-open listed=$earlyListed). $trackDump",
+            trackDump.contains("type=${C.TRACK_TYPE_TEXT}") && trackDump.contains("subs"),
+        )
+        composeRule.onNodeWithText("الترجمة").performClick()
         val trackItem = device.wait(Until.findObject(By.text("subs")), 10_000)
-        assertNotNull("Page subtitle not listed in the real selection dialog", trackItem)
+        capture("scenario-subtitle-dialog.png")
+        assertNotNull(
+            "Page subtitle not listed in the reopened dialog (early-open listed=$earlyListed). $trackDump",
+            trackItem,
+        )
         trackItem.click()
         // Playback-progress display proof: the cue must appear while playback is
         // actually advancing (not only at a paused seek position; the paused decode
@@ -238,6 +258,32 @@ class SubtitleUiScenarioTest {
         assertTrue("Player did not reach the deterministic capture position", atPosition)
         instrumentation.runOnMainSync { player.pause() }
         Thread.sleep(1_200)
+    }
+
+    /** Polls currentTracks for a TEXT group; returns a state/track dump either way. */
+    private fun awaitTextTrack(
+        player: ExoPlayer,
+        timeoutMs: Long,
+    ): String {
+        var dump = "unread"
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        while (System.nanoTime() < deadline) {
+            instrumentation.runOnMainSync {
+                dump =
+                    "state=${'$'}{player.playbackState} tracks=[" +
+                    player.currentTracks.groups.joinToString("; ") { group ->
+                        val labels =
+                            (0 until group.mediaTrackGroup.length).joinToString(",") { i ->
+                                group.mediaTrackGroup.getFormat(i).label ?: "null"
+                            }
+                        "type=${'$'}{group.type} labels=${'$'}labels"
+                    } +
+                    "]"
+            }
+            if (dump.contains("type=${'$'}{C.TRACK_TYPE_TEXT}")) break
+            Thread.sleep(500)
+        }
+        return dump
     }
 
     /** The ExoPlayer currently attached to the on-screen PlayerView. */
