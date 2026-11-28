@@ -125,7 +125,6 @@ class PageTabAssociatorTest {
         )
     }
 
-
     @Test
     fun `page start after completed document creates a new generation`() {
         val associator = PageTabAssociator()
@@ -140,5 +139,4 @@ class PageTabAssociatorTest {
         assertNotEquals(first.documentId, next.documentId)
         assertNull(associator.associationForDocument(first.documentId))
     }
-
 }
