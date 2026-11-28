@@ -1,10 +1,10 @@
 package com.alraad.feature.library.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -101,12 +102,12 @@ private fun EntryList(
                         Modifier
                             .weight(1f)
                             .clickable { onOpen(url) }
-                            .testTag("history_entry_body_$id"),
+                            .testTag("${listTag}_entry_body_$id"),
                 ) {
                     Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         url,
-                        modifier = Modifier.testTag("history_entry_url_${url.hashCode()}"),
+                        modifier = Modifier.testTag("${listTag}_entry_url_${url.hashCode()}"),
                         style = MaterialTheme.typography.bodySmall,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -118,7 +119,7 @@ private fun EntryList(
                 }
                 IconButton(
                     onClick = { onDelete(id) },
-                    modifier = Modifier.testTag("history_delete_${url.hashCode()}"),
+                    modifier = Modifier.testTag("${listTag}_delete_${url.hashCode()}"),
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete")
                 }
