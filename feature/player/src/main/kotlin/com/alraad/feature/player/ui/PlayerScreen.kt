@@ -59,7 +59,6 @@ import androidx.media3.ui.TrackSelectionDialogBuilder
 import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.feature.player.impl.Media3PlayerController
 import com.alraad.feature.player.impl.externalSubtitleTrack
-import com.alraad.feature.player.impl.setQuality
 
 private val SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 private const val SEEK_STEP_MS = 10_000L

@@ -32,6 +32,7 @@ import javax.inject.Singleton
  * exactly what the sniffer saw; external subtitle URLs receive only their own
  * allowlisted headers, never video credentials. Raw URL/headers logged unredacted.
  */
+@Suppress("TooManyFunctions") // playback surface + quality + subtitle attach are one frozen contract; splitting would obscure it
 @Singleton
 class Media3PlayerController
     @Inject
@@ -187,6 +188,19 @@ class Media3PlayerController
             }
         }
 
+        /** Live quality change: applies (or clears) the rendition cap on the active player. */
+        fun setQuality(quality: QualityLimit?) {
+            val current = player ?: return
+            current.trackSelectionParameters =
+                if (quality == null) {
+                    TrackSelectionParameters.Builder(context).build()
+                } else {
+                    TrackSelectionParameters.Builder(context)
+                        .setMaxVideoSize(Int.MAX_VALUE, quality.maxHeight)
+                        .build()
+                }
+        }
+
         override fun pause() {
             player?.pause()
         }
@@ -206,16 +220,6 @@ class Media3PlayerController
             _currentPlaybackRequest.value = null
         }
     }
-
-/** Live quality change: applies (or clears) the rendition cap on the active player. */
-fun Media3PlayerController.setQuality(quality: Media3PlayerController.QualityLimit?) {
-    val current = currentPlayer() ?: return
-    current.trackSelectionParameters =
-        current.trackSelectionParameters
-            .buildUpon()
-            .setMaxVideoSize(Int.MAX_VALUE, quality?.maxHeight ?: Int.MAX_VALUE)
-            .build()
-}
 
 /**
  * Routes request headers per URL: subtitle requests receive only their own allowlisted
