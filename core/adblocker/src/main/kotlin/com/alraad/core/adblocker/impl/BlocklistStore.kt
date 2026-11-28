@@ -92,8 +92,12 @@ class BlocklistStore
             text: String,
         ): Boolean {
             val count = acceptCount(id, text)
-            prefs.edit().putBoolean("cosmetic_only_$id", count == 0 && text.lineSequence().any { isCosmeticRule(it.trim()) }).apply()
-            if (!plausibleUpdate(id, count)) return false
+            val cosmeticOnly = count == 0 && text.lineSequence().any { isCosmeticRule(it.trim()) }
+            if (!plausibleUpdate(id, count)) {
+                // A rejected update must not relabel a list whose previous copy is still active.
+                if (!rawFile(id).isFile && !legacyDomainsFile(id).isFile) setCosmeticOnly(id, cosmeticOnly)
+                return false
+            }
             dir.mkdirs()
             val rawTmp = File(dir, "$id.raw.tmp")
             // One file per list, replaced by a single rename: the stored copy is either entirely the old list or
@@ -103,9 +107,14 @@ class BlocklistStore
                     rawTmp.writeText(text)
                     check(rawTmp.renameTo(rawFile(id))) { "atomic promote failed for $id" }
                 }.isSuccess
-            if (!promoted) rawTmp.delete()
+            if (promoted) setCosmeticOnly(id, cosmeticOnly) else rawTmp.delete()
             return promoted
         }
+
+        private fun setCosmeticOnly(
+            id: String,
+            value: Boolean,
+        ) = prefs.edit().putBoolean("cosmetic_only_$id", value).apply()
 
         private fun rawFile(id: String) = File(dir, "$id.raw")
 
