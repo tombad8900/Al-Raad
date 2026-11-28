@@ -28,7 +28,6 @@ class SnifferJsBridgeTest {
         override suspend fun exportAsText() = ""
         override suspend fun clear() = Unit
     }
-
     @Test fun `observations retain native page tab and reject stale document tokens`() {
         val sniffer = StreamSniffer(logger)
         var seen: Triple<String?, String?, StreamUrl>? = null
@@ -49,7 +48,6 @@ class SnifferJsBridgeTest {
         assertTrue(script.contains("window.fetch = function") && script.contains("XMLHttpRequest.prototype.send"))
         assertFalse(script.contains("responseText") || script.contains("response.body") || script.contains("cookie"))
     }
-
     @Test fun `malformed oversized mismatched and non-http inputs are ignored`() {
         val sniffer = StreamSniffer(logger)
         var count = 0
@@ -65,7 +63,6 @@ class SnifferJsBridgeTest {
         ).forEach(bridge::onRequestObserved)
         assertEquals(0, count)
     }
-
     @Test fun `credentials remain available to playback but never enter diagnostics`() {
         val sniffer = StreamSniffer(logger)
         var stream: StreamUrl? = null
@@ -84,7 +81,6 @@ class SnifferJsBridgeTest {
         assertFalse(diagnosticText.contains("auth-secret") || diagnosticText.contains("cookie-secret"))
         assertFalse(diagnosticText.contains("Authorization") || diagnosticText.contains("Cookie"))
     }
-
     private fun payload(
         token: String,
         page: String,
