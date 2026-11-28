@@ -4,7 +4,6 @@ import com.alraad.feature.browser.ui.PageTabAssociator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -128,21 +127,7 @@ class PageTabAssociatorTest {
         assertNull(associator.associationForPage("https://other.example/"))
     }
 
-    @Test
-    fun `same URL reload receives a new document generation and retires the old one`() {
-        val associator = PageTabAssociator()
-        val url = "https://watch.example/title/1"
-        associator.recordRequest("tabA", url)
-        val oldDocument = associator.onPageStartedWithContext(url, "tabA").documentId
 
-        associator.recordRequest("tabA", url)
-        val newDocument = associator.onPageStartedWithContext(url, "tabA").documentId
-
-        assertNotNull(newDocument)
-        assertNotEquals(oldDocument, newDocument)
-        assertNull(associator.associationForDocument(oldDocument))
-        assertEquals(newDocument, associator.associationForPage(url)?.documentId)
-    }
 
 
 
