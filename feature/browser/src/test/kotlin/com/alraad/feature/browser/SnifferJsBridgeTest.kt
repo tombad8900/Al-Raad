@@ -19,9 +19,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SnifferJsBridgeTest {
+    private val loggedDetails = mutableListOf<Map<String, String>>()
     private val logger =
         object : DiagnosticsLogger {
-            override fun log(category: DiagCategory, level: DiagLevel, message: String, details: Map<String, String>) = Unit
+            override fun log(category: DiagCategory, level: DiagLevel, message: String, details: Map<String, String>) {
+                loggedDetails += details
+            }
+
             override fun observeLogs(): Flow<List<DiagEntry>> = flowOf(emptyList())
             override suspend fun exportAsText() = ""
             override suspend fun clear() = Unit
@@ -81,7 +85,7 @@ class SnifferJsBridgeTest {
     }
 
     @Test
-    fun `credential headers are excluded and safe headers remain bounded`() {
+    fun `credential headers stay in memory but are excluded from diagnostics`() {
         val sniffer = StreamSniffer(logger)
         var captured: StreamUrl? = null
         sniffer.registerObservationListener(StreamObservationListener { stream, _, _ -> captured = stream })
@@ -92,17 +96,47 @@ class SnifferJsBridgeTest {
             JSONObject()
                 .put("accept", "application/vnd.apple.mpegurl")
                 .put("range", "bytes=0-")
-                .put("cookie", "session=secret")
-                .put("authorization", "Bearer secret")
-                .put("x-api-key", "secret")
+                .put("cookie", "session=cookie-secret")
+                .put("authorization", "Bearer auth-secret")
+                .put("x-api-key", "ignored-secret")
                 .put("content-type", "application/json")
                 .put("accept-language", "ar")
                 .put("range-extra", "ignored")
 
         bridge.onRequestObserved(payload(token, page, "https://cdn.example/video.m3u8", headers))
 
-        assertEquals(mapOf("Accept" to "application/vnd.apple.mpegurl", "Range" to "bytes=0-", "Content-Type" to "application/json"), captured?.headers)
-        assertFalse(captured?.headers?.keys?.any { it.equals("Cookie", true) || it.equals("Authorization", true) } == true)
+        assertEquals(
+            mapOf(
+                "Accept" to "application/vnd.apple.mpegurl",
+                "Range" to "bytes=0-",
+                "Authorization" to "Bearer auth-secret",
+                "Content-Type" to "application/json",
+            ),
+            captured?.headers,
+        )
+        val diagnosticText = loggedDetails.toString()
+        assertFalse(diagnosticText.contains("cookie-secret"))
+        assertFalse(diagnosticText.contains("auth-secret"))
+        assertFalse(diagnosticText.contains("Cookie"))
+        assertFalse(diagnosticText.contains("Authorization"))
+    }
+
+    @Test
+    fun `oversized header values are discarded without rejecting the request`() {
+        val sniffer = StreamSniffer(logger)
+        var captured: StreamUrl? = null
+        sniffer.registerObservationListener(StreamObservationListener { stream, _, _ -> captured = stream })
+        val bridge = SnifferJsBridge(sniffer)
+        val page = "https://page.example/"
+        val token = bridge.bindPage(page, "tab-1")
+        val headers =
+            JSONObject()
+                .put("accept", "text/plain")
+                .put("authorization", "x".repeat(1_025))
+
+        bridge.onRequestObserved(payload(token, page, "https://cdn.example/video.m3u8", headers))
+
+        assertEquals(mapOf("Accept" to "text/plain"), captured?.headers)
     }
 
     @Test
@@ -112,9 +146,9 @@ class SnifferJsBridgeTest {
         assertTrue(script.contains("window.fetch = function"))
         assertTrue(script.contains("XMLHttpRequest.prototype.send"))
         assertTrue(script.contains("window.AlRaadSniffer.onRequestObserved"))
+        assertTrue(script.contains("authorization: true"))
         assertFalse(script.contains("responseText"))
         assertFalse(script.contains("response.body"))
-        assertFalse(script.contains("authorization"))
         assertFalse(script.contains("cookie"))
     }
 
