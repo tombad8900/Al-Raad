@@ -30,6 +30,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -53,6 +54,12 @@ class RuntimeBrowserBackTest {
     @Before
     fun resetTabs() {
         // reset() destroys pooled WebViews and must run on the UI thread.
+        instrumentation.runOnMainSync { tabManager.reset() }
+    }
+
+    @After
+    fun cleanTabs() {
+        // Also clean up after assertion failures so pooled WebViews cannot leak into the next test.
         instrumentation.runOnMainSync { tabManager.reset() }
     }
 
