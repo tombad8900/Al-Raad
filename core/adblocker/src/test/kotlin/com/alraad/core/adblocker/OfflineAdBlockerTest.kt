@@ -203,5 +203,6 @@ class OfflineAdBlockerSettingCacheTest {
             state.value = AppSettings(adBlockEnabled = true)
             now += 2_001
             assertTrue("ON applies after expiry (1-arg)", blocker.shouldBlock(ad))
+            assertTrue("ON applies on context-aware overload", blocker.shouldBlock(ad, "https://example.com/", "script"))
         }
 }
