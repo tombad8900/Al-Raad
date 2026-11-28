@@ -53,8 +53,10 @@ private const val PLAYBACK_PROOF_START_MS = 85_000L
  * them off, and "ملف ترجمة" attaches a file picked in the actual system picker.
  * Controller-level decode proof lives in SubtitlePlaybackRuntimeTest; this class
  * proves the interaction path. Every step captures full-screen PNG evidence.
- * Requires the host-served fixture (fixtureBaseUrl): the page subtitle (subs.vtt)
- * and the pickable file (ui-pick.vtt) are staged by ci.yml.
+ * Requires the host-served fixture (fixtureBaseUrl) for the page subtitle
+ * (subs.vtt); the pickable file (ui-pick.vtt) is staged into MediaStore Downloads
+ * by the test itself (adb push to /sdcard/Download is not permitted on the API 35
+ * image: run 46126039748).
  */
 class SubtitleUiScenarioTest {
     @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
@@ -66,6 +68,7 @@ class SubtitleUiScenarioTest {
 
     @Before
     fun resetTabManager() {
+        stagePickableSubtitle()
         EntryPointAccessors.fromApplication(
             instrumentation.targetContext.applicationContext,
             TabManagerTestEntryPoint::class.java,
@@ -144,6 +147,34 @@ class SubtitleUiScenarioTest {
         )
         seekAndPauseAt(rebuilt)
         capture("scenario-subtitle-external.png")
+    }
+
+    /** Stages ui-pick.vtt into MediaStore Downloads so the real DocumentsUI picker lists it. */
+    private fun stagePickableSubtitle() {
+        val resolver = instrumentation.targetContext.contentResolver
+        val existing =
+            resolver.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Downloads._ID),
+                MediaStore.Downloads.DISPLAY_NAME + " = 'ui-pick.vtt'",
+                null,
+                null,
+            )
+        if (existing != null && existing.moveToFirst()) {
+            existing.close()
+            return
+        }
+        existing?.close()
+        val values =
+            ContentValues().apply {
+                put(MediaStore.Downloads.DISPLAY_NAME, "ui-pick.vtt")
+                put(MediaStore.Downloads.MIME_TYPE, "text/vtt")
+            }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        checkNotNull(uri) { "Could not stage ui-pick.vtt into Downloads" }
+        resolver.openOutputStream(uri)!!.use {
+            it.write("WEBVTT\n\n00:01:28.000 --> 00:02:00.000\nExternal file caption\n".toByteArray())
+        }
     }
 
     /** Clicks a file in the system DocumentsUI picker: Recent first, then the Downloads root. */
