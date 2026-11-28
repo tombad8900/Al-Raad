@@ -27,6 +27,7 @@ class SnifferJsBridge(
 
     fun clearPage() = pageContext.set(null)
 
+    @Suppress("ReturnCount")
     @JavascriptInterface
     fun onRequestObserved(payload: String) {
         if (payload.isEmpty() || payload.length > MAX_PAYLOAD_LENGTH) return
@@ -52,21 +53,24 @@ class SnifferJsBridge(
             while (keys.hasNext() && count < MAX_HEADERS) {
                 val rawName = keys.next()
                 val name = rawName.lowercase()
-                if (name !in SAFE_HEADERS || rawName.length > MAX_HEADER_NAME_LENGTH) continue
                 val value = source.optString(rawName)
-                if (value.isBlank() || value.length > MAX_HEADER_VALUE_LENGTH) continue
-                if (value.any { it.code < 0x20 || it.code == 0x7f }) continue
-                put(HEADER_NAMES.getValue(name), value)
-                count++
+                if (
+                    name in SAFE_HEADERS && rawName.length <= MAX_HEADER_NAME_LENGTH &&
+                    value.isNotBlank() && value.length <= MAX_HEADER_VALUE_LENGTH &&
+                    value.none { it.code < 0x20 || it.code == 0x7f }
+                ) {
+                    put(HEADER_NAMES.getValue(name), value)
+                    count++
+                }
             }
         }
 
-    private fun isHttpUrl(value: String): Boolean {
-        if (value.isBlank() || value.length > MAX_URL_LENGTH) return false
-        val uri = runCatching { URI(value) }.getOrNull() ?: return false
-        return (uri.scheme.equals("http", true) || uri.scheme.equals("https", true)) &&
-            !uri.host.isNullOrBlank() && uri.userInfo == null
-    }
+    private fun isHttpUrl(value: String): Boolean =
+        value.isNotBlank() && value.length <= MAX_URL_LENGTH &&
+            runCatching { URI(value) }.getOrNull()?.let { uri ->
+                (uri.scheme.equals("http", true) || uri.scheme.equals("https", true)) &&
+                    !uri.host.isNullOrBlank() && uri.userInfo == null
+            } == true
 
     private data class PageContext(val pageUrl: String, val tabId: String, val token: String)
 
