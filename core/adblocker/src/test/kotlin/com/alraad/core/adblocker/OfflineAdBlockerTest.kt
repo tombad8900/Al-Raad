@@ -83,9 +83,23 @@ class OfflineAdBlockerTest {
             assertFalse(off.shouldBlock("https://ad.doubleclick.net/track"))
         }
 
-    @Test fun `cosmetic css hides generic ad selectors`() {
-        assertTrue(blocker.cosmeticCss("example.com").contains("display: none"))
-    }
+    @Test fun `cosmetic css hides generic ad selectors`() =
+        runTest {
+            assertTrue(blocker.cosmeticCss("example.com").contains("display: none"))
+        }
+
+    @Test fun `global off disables cosmetic css as well as blocking`() =
+        runTest {
+            val off =
+                OfflineAdBlocker(
+                    ApplicationProvider.getApplicationContext(),
+                    noopLogger,
+                    settingsRepo(enabled = false),
+                    BlocklistStore(ApplicationProvider.getApplicationContext()),
+                )
+            assertFalse(off.shouldBlock("https://ad.doubleclick.net/track"))
+            assertTrue(off.cosmeticCss("example.com").isEmpty())
+        }
 }
 
 @RunWith(RobolectricTestRunner::class)

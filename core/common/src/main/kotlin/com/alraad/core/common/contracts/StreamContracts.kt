@@ -74,7 +74,7 @@ interface StreamListener {
 interface AdBlocker {
     suspend fun shouldBlock(url: String): Boolean
 
-    fun cosmeticCss(host: String): String
+    suspend fun cosmeticCss(host: String): String
 }
 
 interface PlayerController {

@@ -43,7 +43,7 @@ class WebViewSnifferDeliveryTest {
         object : AdBlocker {
             override suspend fun shouldBlock(url: String) = false
 
-            override fun cosmeticCss(host: String) = ""
+            override suspend fun cosmeticCss(host: String) = ""
         }
 
     private fun request(

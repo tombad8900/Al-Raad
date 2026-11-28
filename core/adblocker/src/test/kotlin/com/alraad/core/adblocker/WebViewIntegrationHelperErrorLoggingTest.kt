@@ -39,7 +39,7 @@ class WebViewIntegrationHelperErrorLoggingTest {
         object : AdBlocker {
             override suspend fun shouldBlock(url: String): Boolean = false
 
-            override fun cosmeticCss(host: String): String = ""
+            override suspend fun cosmeticCss(host: String): String = ""
         }
 
     @Test fun `subresource load failures are logged, not dropped`() {
