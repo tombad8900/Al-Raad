@@ -138,15 +138,29 @@ class RuntimeBrowserBackTest {
     /** Wait until the expected URL has a completed document in the actual pooled WebView. */
     private fun awaitLoadFinished(
         expectedUrl: String,
+        expectedTitle: String,
         timeoutMs: Long = 30_000,
     ) {
         composeRule.waitUntil(timeoutMillis = timeoutMs) {
             onMain {
                 activeWebViewOnMain()?.let { webView ->
-                    webView.url == expectedUrl && webView.progress == 100 && !webView.title.isNullOrBlank()
+                    webView.url == expectedUrl && webView.progress == 100 && webView.title == expectedTitle
                 } == true
             }
         }
+    }
+
+    private fun webViewBodyText(webView: WebView): String {
+        val completed = CountDownLatch(1)
+        var result: String? = null
+        onMain {
+            webView.evaluateJavascript("document.body.innerText") {
+                result = it
+                completed.countDown()
+            }
+        }
+        check(completed.await(5, TimeUnit.SECONDS)) { "WebView body text evaluation timed out" }
+        return checkNotNull(result)
     }
 
     private fun uiDiagnostics(): String =
@@ -215,10 +229,11 @@ class RuntimeBrowserBackTest {
             }
             typeAddress(url)
             awaitUrl(url)
-            awaitLoadFinished(url)
+            awaitLoadFinished(url, "trash-fixture")
             val activeTabId = checkNotNull(tabManager.state.value.activeTabId)
             val webView = checkNotNull(onMain { activeWebViewOnMain() })
             assertEquals(url, onMain { webView.url })
+            assertTrue(webViewBodyText(webView).contains("trash fixture"))
 
             composeRule.onNodeWithText("السجل").performClick()
             val entryUrlTag = "history_list_entry_url_${url.hashCode()}"
@@ -287,15 +302,15 @@ class RuntimeBrowserBackTest {
             // Page history: a -> b -> c, then Back twice returns to b and a.
             typeAddress(a)
             awaitUrl(a)
-            awaitLoadFinished(a)
+            awaitLoadFinished(a, aTitle)
             val tab1 = checkNotNull(tabManager.state.value.activeTabId)
             val view1 = checkNotNull(onMain { activeWebViewOnMain() })
             onMain { view1.loadUrl(b) }
             awaitUrl(b)
-            awaitLoadFinished(b)
+            awaitLoadFinished(b, "page/b")
             onMain { view1.loadUrl(c) }
             awaitUrl(c)
-            awaitLoadFinished(c)
+            awaitLoadFinished(c, "page/c")
             capture("backtest-1-on-c.png")
             back()
             awaitUrl(b)
@@ -354,6 +369,7 @@ class RuntimeBrowserBackTest {
             assertNotSame("History tab owns a distinct WebView", view1, view2)
             assertEquals("new tab opens the selected History URL", a, onMain { view2.url })
             assertEquals("History navigation loads the fixture document", aTitle, onMain { view2.title })
+            assertTrue(webViewBodyText(view2).contains("page$uniquePath"))
             assertFalse("new tab starts with independent one-page history", onMain { view2.canGoBack() })
 
             // The original tab remains in TabManager with the exact same WebView and history.
