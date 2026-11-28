@@ -45,9 +45,7 @@ fun SettingsScreen(
     val protection by viewModel.protection.collectAsState()
     androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refreshProtection() }
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
-        TextButton(onClick = onOpenDiagnostics, modifier = Modifier.fillMaxWidth()) {
-            Text("سجل التشخيص / Diagnostics log")
-        }
+        DiagnosticsEntryCard(onClick = onOpenDiagnostics)
         SettingToggle("حظر الإعلانات / Ad blocking", settings.adBlockEnabled) { on ->
             viewModel.update { it.copy(adBlockEnabled = on) }
         }
