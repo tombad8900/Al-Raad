@@ -34,6 +34,13 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+
+      - name: Set up Rust and NDK for the adblock engine
+        # Builds core/adblocker/native for the Android ABIs (via Gradle) and for the host (native-load smoke test).
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+          test -n "$ANDROID_NDK_LATEST_HOME" && echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          cargo build --release --locked --manifest-path core/adblocker/native/Cargo.toml
       - name: Cache Robolectric android-all jars
         uses: actions/cache@v4
         with:
@@ -89,6 +96,13 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+
+      - name: Set up Rust and NDK for the adblock engine
+        # Builds core/adblocker/native for the Android ABIs (via Gradle) and for the host (native-load smoke test).
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+          test -n "$ANDROID_NDK_LATEST_HOME" && echo "ANDROID_NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          cargo build --release --locked --manifest-path core/adblocker/native/Cargo.toml
       - name: Cache Robolectric android-all jars
         uses: actions/cache@v4
         with:
