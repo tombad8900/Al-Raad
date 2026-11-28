@@ -95,7 +95,9 @@ class BrowserViewModel
                         // WebView's shouldInterceptRequest can race the UI-thread page-start
                         // callback. Hold the page-scoped track briefly instead of dropping it.
                         pendingSubtitlesByTab.update { current ->
-                            current + (track.sourceTabId to mergeSubtitleTracks(current[track.sourceTabId].orEmpty(), listOf(track)))
+                            current +
+                                (track.sourceTabId to
+                                    mergeSubtitleTracks(current[track.sourceTabId].orEmpty(), listOf(track)))
                         }
                     }
                 }
