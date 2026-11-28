@@ -85,12 +85,13 @@ fun AddressBar(
                 }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(
-                onGo = {
-                    keyboardController?.hide()
-                    onNavigate(normalizeAddress(text))
-                },
-            ),
+            keyboardActions =
+                KeyboardActions(
+                    onGo = {
+                        keyboardController?.hide()
+                        onNavigate(normalizeAddress(text))
+                    },
+                ),
         )
         if (onBookmarkClick != null) {
             IconButton(onClick = onBookmarkClick, modifier = Modifier.testTag("bookmark_action")) {
