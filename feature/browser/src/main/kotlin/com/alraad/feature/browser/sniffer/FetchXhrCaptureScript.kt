@@ -1,6 +1,5 @@
 package com.alraad.feature.browser.sniffer
 
-/** Installs best-effort fetch/XHR observers; never reads response bodies or response headers. */
 internal object FetchXhrCaptureScript {
     fun build(token: String): String {
         require(token.matches(Regex("[0-9a-f-]{36}")))
@@ -61,6 +60,6 @@ internal object FetchXhrCaptureScript {
                 };
               }
             })("$token");
-        """.trimIndent()
+            """.trimIndent()
     }
 }
