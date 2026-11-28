@@ -76,7 +76,13 @@ class RuntimeBrowserBackTest {
             Thread.sleep(250)
         }
         capture("backtest-timeout-${System.currentTimeMillis()}.png")
-        assertEquals("WebView url", expected, url())
+        val state = tabManager.state.value
+        assertEquals(
+            "WebView url (tabs=${state.tabs.map { it.id.take(4) to it.url }} active=${state.activeTabId?.take(4)} " +
+                "viewExists=${onMain { activeWebView() != null }})",
+            expected,
+            url(),
+        )
     }
 
     private fun back() {
@@ -129,7 +135,7 @@ class RuntimeBrowserBackTest {
             ) { runCatching { composeRule.onAllNodes(hasSetTextAction()).onFirst().assertIsDisplayed() }.isSuccess }
 
             // Page history: a -> b -> c, then Back twice returns to b and a.
-            typeAddress(a)
+            onMain { tabManager.openTab(a) }
             awaitUrl(a)
             val tab1 = tabManager.state.value.activeTabId!!
             val view1 = onMain { activeWebView()!! }
