@@ -1,10 +1,11 @@
 package com.alraad.feature.browser.ui
 
+import android.content.Context
 import android.webkit.WebView
 import androidx.test.core.app.ApplicationProvider
-import android.content.Context
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -30,11 +31,12 @@ class BrowserWebViewPoolTest {
         val pool = BrowserWebViewPool()
         val firstTab = pool.obtain("first") { WebView(context) }
         val secondTab = pool.obtain("second") { WebView(context) }
+        assertNotSame(firstTab, secondTab)
 
         pool.retainTabs(setOf("second"))
 
         assertSame(secondTab, pool.get("second"))
-        assertSame(null, pool.get("first"))
+        assertNull(pool.get("first"))
         pool.clear()
     }
 }
