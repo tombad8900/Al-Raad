@@ -50,13 +50,14 @@ class BlocklistStore
             prefs.edit().putStringSet("exceptions", updated).apply()
         }
 
-        /** Parses candidate text and promotes it only when it yields enough domains. */
+        /** Parses candidate text and promotes it only when it yields enough domains. ABP-syntax lists are never promoted. */
         fun promote(
             id: String,
             text: String,
         ): Boolean {
-            val domains = AdblockPlusDomainParser.parse(text)
-            if (domains.size < effectiveMin(id)) return false
+            val inactive = BlocklistCatalog.byId(id)?.let(BlocklistCatalog::isActiveFormat) == false
+            val domains = if (inactive) emptySet() else AdblockPlusDomainParser.parse(text)
+            if (inactive || domains.size < effectiveMin(id)) return false
             val target = File(dir, "$id.domains")
             val tmp = File(dir, "$id.tmp")
             dir.mkdirs()
@@ -74,7 +75,7 @@ class BlocklistStore
         fun activeDomains(): Set<String> {
             val merged = HashSet<String>()
             for (source in BlocklistCatalog.sources) {
-                if (isEnabled(source.id)) storedDomains(source.id)?.let(merged::addAll)
+                if (BlocklistCatalog.isActiveFormat(source) && isEnabled(source.id)) storedDomains(source.id)?.let(merged::addAll)
             }
             return merged
         }
