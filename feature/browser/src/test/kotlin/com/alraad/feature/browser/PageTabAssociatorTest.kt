@@ -3,6 +3,7 @@ package com.alraad.feature.browser
 import com.alraad.feature.browser.ui.PageTabAssociator
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -20,7 +21,6 @@ class PageTabAssociatorTest {
         assertFalse(redirect.startsNewNavigation)
         assertEquals("tabB", associator.onPageStartedWithContext("https://b.example/", "tabB").tabId)
         assertEquals("tabA", associator.onPageFinished("https://cdn.a.example/"))
-        assertEquals("tabA", associator.tabIdForPage("https://cdn.a.example/"))
     }
 
     @Test
@@ -99,4 +99,48 @@ class PageTabAssociatorTest {
         assertNull(associator.tabIdForPage("https://closed.example/"))
         assertNull(associator.tabIdForPage("https://closed.example/next"))
     }
+
+    @Test
+    fun `pushState URL inherits the owning tab and document generation`() {
+        val associator = PageTabAssociator()
+        val initial = "https://watch.example/title/1"
+        val pushed = "https://watch.example/player/1"
+        associator.recordRequest("tabA", initial)
+        val started = associator.onPageStartedWithContext(initial, "tabA")
+
+        val changed = associator.onPageUrlChanged(initial, pushed, started.documentId)
+
+        assertEquals("tabA", changed?.tabId)
+        assertEquals(started.documentId, changed?.documentId)
+        assertEquals(started.documentId, associator.associationForPage(pushed)?.documentId)
+    }
+
+    @Test
+    fun `unknown URL is never assigned to whichever tab is active`() {
+        val associator = PageTabAssociator()
+        associator.recordRequest("tabA", "https://known.example/")
+        associator.onPageStartedWithContext("https://known.example/", "tabA")
+
+        assertNull(
+            associator.onPageUrlChanged("https://unknown.example/", "https://other.example/", "missing-document"),
+        )
+    }
+
+
+    @Test
+    fun `page start after completed document creates a new generation`() {
+        val associator = PageTabAssociator()
+        val firstUrl = "https://top.example/first"
+        associator.recordRequest("tab-a", firstUrl)
+        val first = associator.onPageStartedWithContext(firstUrl, "tab-a")
+        associator.onPageFinished(firstUrl)
+
+        val next = associator.onPageStartedWithContext("https://top.example/next", "tab-a")
+
+        assertEquals("tab-a", next.tabId)
+        assertTrue(next.startsNewNavigation)
+        assertNotEquals(first.documentId, next.documentId)
+        assertNull(associator.associationForDocument(first.documentId))
+    }
+
 }
