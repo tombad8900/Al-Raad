@@ -24,11 +24,9 @@ class BrowserWebViewPoolTest {
         val pool = tabManager.webViewPool(context)
         val first = pool.obtain(firstTab.id)
         val second = pool.obtain(secondTab.id)
-
         assertNotSame(first, second)
         assertSame(first, pool.obtain(firstTab.id))
         assertSame(pool, tabManager.webViewPool(context))
-
         pool.activate(secondTab.id)
         assertEquals(secondTab.id, pool.activeTabId)
         pool.pauseAll()
@@ -36,7 +34,6 @@ class BrowserWebViewPoolTest {
         assertTrue(pool.timersPaused)
         assertSame(first, pool.get(firstTab.id))
         assertSame(second, pool.get(secondTab.id))
-
         pool.activate(firstTab.id)
         assertFalse(pool.timersPaused)
         tabManager.closeTab(firstTab.id)
