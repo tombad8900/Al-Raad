@@ -212,7 +212,6 @@ class WebViewIntegrationHelper
         private fun jsQuote(value: String): String = value.replace("\\", "\\\\").replace("'", "\\'").let { "'$it'" }
     }
 
-
 private data class CachedPageContext(
     val url: String?,
     val documentId: String?,
