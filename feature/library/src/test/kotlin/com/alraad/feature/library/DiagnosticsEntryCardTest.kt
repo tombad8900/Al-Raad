@@ -2,13 +2,13 @@ package com.alraad.feature.library
 
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.SemanticsMatcher
 import com.alraad.feature.library.settings.DiagnosticsEntryCard
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
