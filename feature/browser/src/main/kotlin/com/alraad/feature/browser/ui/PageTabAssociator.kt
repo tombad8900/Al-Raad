@@ -13,12 +13,7 @@ data class PageStartAssociation(
     val documentId: String? = null,
 )
 
-/**
- * Associates top-level document URLs with the tab and navigation generation that owns them.
- *
- * Resource URLs (including cross-origin iframe hosts) are deliberately not compared with the
- * top-level hostname. Their owner comes from the WebView document context.
- */
+/** Associates top-level URLs with their document owner; iframe hostnames are not compared. */
 class PageTabAssociator {
     private data class PendingNavigation(
         val url: String,
