@@ -324,7 +324,14 @@ class SubtitlePlaybackRuntimeTest {
             }
         instrumentation.runOnMainSync {
             controller.play(PlaybackRequest(sources = listOf(stream), subtitles = subtitles))
-            selectTextTrack(checkNotNull(controller.currentPlayer()) { "Player build failed" })
+            val player = checkNotNull(controller.currentPlayer()) { "Player build failed" }
+            selectTextTrack(player)
+            // Deterministic cue emission: pause inside the cue window instead of racing
+            // the subtitle fetch against playback crossing 4s (the flaky "no cue"
+            // failure mode, runs 46112042274/46114354695). onCues fires on the paused
+            // seek position once the subtitle finishes loading.
+            player.playWhenReady = false
+            player.seekTo(CUE_WINDOW_MS)
         }
         watchCues(expectedCue, cueLatch)
         return cueLatch
@@ -389,8 +396,9 @@ class SubtitlePlaybackRuntimeTest {
                     }
                 },
             )
-            // Re-seek to the cue window so cues that fired before listener attach re-emit.
-            player.seekTo(1)
+            // Re-seek into the paused cue window so cues that fired before listener
+            // attach re-emit.
+            player.seekTo(CUE_WINDOW_MS)
         }
     }
 
@@ -433,6 +441,9 @@ class SubtitlePlaybackRuntimeTest {
                 "Dialogue: 0,0:00:00.00,0:00:04.00,Default,,0,0,0,,Hello from ASS\n"
 
         const val POSITION_SETTLE_MS = 800L
+
+        /** Mid-window position inside the 0-4s fixture cue, used for paused deterministic emission. */
+        const val CUE_WINDOW_MS = 2_000L
 
         /** Shared download of the same clip the player-runtime scenario uses. */
         val videoFixture: ByteArray by lazy {
