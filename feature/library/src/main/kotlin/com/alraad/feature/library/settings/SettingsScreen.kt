@@ -99,7 +99,7 @@ private fun SettingToggle(
 fun DiagnosticsScreen(
     viewModel: SettingsDiagnosticsViewModel,
     onExport: (String) -> Unit,
-    onCopy: (String) -> Unit = {},
+    onCopy: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val logs by viewModel.logs.collectAsState()
