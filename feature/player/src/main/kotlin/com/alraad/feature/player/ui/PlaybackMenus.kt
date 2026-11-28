@@ -33,7 +33,13 @@ internal fun SourceMenu(menus: PlaybackMenus) {
     var sourceMenuOpen by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { sourceMenuOpen = true }) {
-            Text("مصدر", color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
+            Text(
+                "مصدر",
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
         DropdownMenu(expanded = sourceMenuOpen, onDismissRequest = { sourceMenuOpen = false }) {
             menus.sources.forEachIndexed { index, source ->
