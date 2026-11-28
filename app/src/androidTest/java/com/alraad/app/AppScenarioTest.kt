@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.view.View
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
@@ -221,24 +222,32 @@ class AppScenarioTest {
     @OptIn(UnstableApi::class)
     private fun waitForRenderedVideoFrames(): ExoPlayer {
         var attachedPlayer: ExoPlayer? = null
-        composeRule.waitUntil(timeoutMillis = 15_000) {
-            runCatching {
-                onView(isAssignableFrom(PlayerView::class.java)).check(
-                    matches(
-                        object : TypeSafeMatcher<View>() {
-                            override fun matchesSafely(view: View): Boolean {
-                                val player = (view as PlayerView).player as? ExoPlayer ?: return false
-                                attachedPlayer = player
-                                return true
-                            }
+        var lastMatcherFailure: Throwable? = null
+        try {
+            composeRule.waitUntil(timeoutMillis = 15_000) {
+                runCatching {
+                    onView(isAssignableFrom(PlayerView::class.java)).check(
+                        matches(
+                            object : TypeSafeMatcher<View>() {
+                                override fun matchesSafely(view: View): Boolean {
+                                    val player = (view as PlayerView).player as? ExoPlayer ?: return false
+                                    attachedPlayer = player
+                                    return true
+                                }
 
-                            override fun describeTo(description: Description) {
-                                description.appendText("PlayerView with an attached ExoPlayer")
-                            }
-                        },
-                    ),
-                )
-            }.isSuccess
+                                override fun describeTo(description: Description) {
+                                    description.appendText("PlayerView with an attached ExoPlayer")
+                                }
+                            },
+                        ),
+                    )
+                }.onFailure { lastMatcherFailure = it }.isSuccess
+            }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError(
+                "No PlayerView with an attached ExoPlayer within 15 s. Last matcher failure: $lastMatcherFailure",
+                timeout,
+            )
         }
 
         val player = checkNotNull(attachedPlayer) { "PlayerView did not attach an ExoPlayer" }
