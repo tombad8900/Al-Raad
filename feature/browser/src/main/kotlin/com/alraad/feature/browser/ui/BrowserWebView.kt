@@ -26,6 +26,7 @@ fun BrowserWebView(
             modifier = modifier.fillMaxSize(),
             factory = { _ ->
                 environment.webViewPool.obtain(activeTab.id).apply {
+                    url?.let { pageTabAssociator.restoreCurrentPage(activeTab.id, it) }
                     setBackgroundColor(backgroundColor.toArgb())
                     SafeWebViewConfig.apply(this, environment.settings)
                     webChromeClient = PopupBlockingWebChromeClient(environment.diagnosticsLogger)
