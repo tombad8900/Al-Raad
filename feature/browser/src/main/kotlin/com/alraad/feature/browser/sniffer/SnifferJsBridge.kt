@@ -5,14 +5,11 @@ import com.alraad.core.common.contracts.StreamSource
 import java.net.URI
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
-import javax.inject.Inject
 import org.json.JSONObject
 
-class SnifferJsBridge
-    @Inject
-    constructor(
-        private val sniffer: StreamSniffer,
-    ) {
+class SnifferJsBridge(
+    private val sniffer: StreamSniffer,
+) {
         private val pageContext = AtomicReference<PageContext?>(null)
         fun bindPage(
             pageUrl: String,
