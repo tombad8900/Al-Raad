@@ -16,6 +16,9 @@ class BlocklistUpdater
         private val store: BlocklistStore,
         private val logger: DiagnosticsLogger,
     ) {
+        /** Test seam: replaces the network fetch; the default opens a real HTTP connection. */
+        internal var fetcher: (String) -> String = ::download
+
         data class Result(val updated: List<String>, val keptLastGood: List<String>)
 
         suspend fun updateAll(): Result =
@@ -24,7 +27,7 @@ class BlocklistUpdater
                 val kept = mutableListOf<String>()
                 for (source in BlocklistCatalog.sources) {
                     if (!store.isEnabled(source.id)) continue
-                    val ok = runCatching { download(source.url) }.getOrNull()?.let { store.promote(source.id, it) } ?: false
+                    val ok = runCatching { fetcher(source.url) }.getOrNull()?.let { store.promote(source.id, it) } ?: false
                     (if (ok) updated else kept) += source.id
                     if (!ok) {
                         logger.log(DiagCategory.ADBLOCK, DiagLevel.WARN, "List update kept last-known-good", mapOf("list" to source.id))
