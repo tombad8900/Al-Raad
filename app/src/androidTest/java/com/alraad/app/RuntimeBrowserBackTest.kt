@@ -32,9 +32,12 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.rules.TestRule
+import org.junit.runner.Description
+import org.junit.runners.model.Statement
 
 /**
  * Runtime acceptance for browser back, History-driven tab creation, and section retention.
@@ -43,19 +46,31 @@ import org.junit.Test
  * Pages are served by a local MockWebServer, so no external network is involved.
  */
 class RuntimeBrowserBackTest {
-    @get:Rule val composeRule = createAndroidComposeRule<MainActivity>()
+    private val composeRule = createAndroidComposeRule<MainActivity>()
+
+    private val resetTabsBeforeActivity =
+        TestRule { base, _ ->
+            object : Statement() {
+                override fun evaluate() {
+                    val instrumentation = InstrumentationRegistry.getInstrumentation()
+                    val tabManager =
+                        EntryPointAccessors.fromApplication(
+                            instrumentation.targetContext.applicationContext,
+                            TabManagerTestEntryPoint::class.java,
+                        ).tabManager()
+                    instrumentation.runOnMainSync { tabManager.reset() }
+                    base.evaluate()
+                }
+            }
+        }
+
+    @get:Rule val ruleChain: RuleChain = RuleChain.outerRule(resetTabsBeforeActivity).around(composeRule)
 
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val tabManager: TabManager by lazy {
         EntryPointAccessors
             .fromApplication(instrumentation.targetContext.applicationContext, TabManagerTestEntryPoint::class.java)
             .tabManager()
-    }
-
-    @Before
-    fun resetTabs() {
-        // reset() destroys pooled WebViews and must run on the UI thread.
-        instrumentation.runOnMainSync { tabManager.reset() }
     }
 
     @After
