@@ -55,11 +55,15 @@ class BlocklistStore
             id: String,
             text: String,
         ): Boolean {
-            val domains = AdblockPlusDomainParser.parse(text)
+            val parsed = AdblockPlusDomainParser.parseDetailed(text)
+            val domains = parsed.domains
             if (domains.size < effectiveMin(id)) return false
             val target = File(dir, "$id.domains")
             val tmp = File(dir, "$id.tmp")
             dir.mkdirs()
+            val guardsTmp = File(dir, "$id.guards.tmp")
+            guardsTmp.writeText(parsed.guardHosts.sorted().joinToString("\n"))
+            check(guardsTmp.renameTo(File(dir, "$id.guards"))) { "guard promote failed for $id" }
             tmp.writeText(domains.sorted().joinToString("\n"))
             check(tmp.renameTo(target)) { "atomic promote failed for $id" }
             return true
@@ -75,6 +79,17 @@ class BlocklistStore
             val merged = HashSet<String>()
             for (source in BlocklistCatalog.sources) {
                 if (isEnabled(source.id)) storedDomains(source.id)?.let(merged::addAll)
+            }
+            return merged
+        }
+
+        /** Exception/badfilter hosts from every enabled list with a stored copy; they guard blocks across lists. */
+        fun activeGuardHosts(): Set<String> {
+            val merged = HashSet<String>()
+            for (source in BlocklistCatalog.sources) {
+                if (!isEnabled(source.id)) continue
+                val file = File(dir, "${source.id}.guards")
+                if (file.isFile) file.readLines().filterTo(merged) { it.isNotBlank() }
             }
             return merged
         }

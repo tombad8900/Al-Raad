@@ -64,7 +64,8 @@ class OfflineAdBlocker
             return loadMutex.withLock {
                 index ?: withContext(Dispatchers.IO) {
                     val text = context.assets.open("blocklist.txt").bufferedReader().use { it.readText() }
-                    val merged = HostsParser.parse(text) + store.activeDomains()
+                    val merged =
+                        AdblockPlusDomainParser.withoutGuarded(HostsParser.parse(text) + store.activeDomains(), store.activeGuardHosts())
                     DomainIndex(merged).also { loaded ->
                         logger.log(DiagCategory.ADBLOCK, DiagLevel.INFO, "Blocklist loaded", mapOf("domains" to loaded.size.toString()))
                     }
