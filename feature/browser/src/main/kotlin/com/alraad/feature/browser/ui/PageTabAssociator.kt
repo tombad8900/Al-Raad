@@ -168,10 +168,13 @@ class PageTabAssociator {
         documentId?.let(documentOwners::get)
 
     @Synchronized
-    fun associationForPage(url: String?): PageDocumentAssociation? =
-        url?.let { pageDocuments[it] ?: pendingNavigationTabs.lastOrNull { pending -> pending.url == it }?.let { pending ->
-            PageDocumentAssociation(pending.tabId, pending.documentId)
-        } }
+    fun associationForPage(url: String?): PageDocumentAssociation? {
+        if (url == null) return null
+        return pageDocuments[url]
+            ?: pendingNavigationTabs.lastOrNull { it.url == url }?.let {
+                PageDocumentAssociation(it.tabId, it.documentId)
+            }
+    }
 
     @Synchronized
     fun onPageFinished(url: String): String? {
