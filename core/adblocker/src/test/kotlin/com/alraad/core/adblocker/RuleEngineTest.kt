@@ -57,8 +57,8 @@ class RuleEngineTest {
     private fun newBlocker() = OfflineAdBlocker(ApplicationProvider.getApplicationContext(), logger, settings, store)
 
     private fun requireNative() {
-        // Local runs without the host build skip; CI builds the host library first, so a missing one must fail there.
-        assumeTrue(NativeAdblock.isAvailable() || System.getenv("CI") == null)
+        // Local runs without the host build skip; in CI a missing library fails the test instead of skipping it.
+        if (System.getenv("CI") == null) assumeTrue(NativeAdblock.isAvailable())
         assertTrue("native library missing in CI", NativeAdblock.isAvailable())
     }
 
