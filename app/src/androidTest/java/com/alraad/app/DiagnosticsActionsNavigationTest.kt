@@ -1,5 +1,6 @@
 package com.alraad.app
 
+import android.app.Instrumentation.ActivityResult
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -9,7 +10,6 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.test.core.app.ActivityResult
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.intent.Intents
