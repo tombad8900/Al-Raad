@@ -60,16 +60,19 @@ fun BrowserScreen(
     BackHandler {
         val tab = activeTab ?: return@BackHandler
         val webView = webViewPool.get(tab.id)
-        when {
-            webView?.canGoBack() == true -> webView.goBack()
-            tab.url.isNotBlank() && tab.url != "about:blank" -> {
-                webView?.loadUrl("about:blank")
+        handleBrowserBack(
+            tabUrl = tab.url,
+            canGoBack = { webView?.canGoBack() == true },
+            goBack = { webView?.goBack() },
+            returnToSearch = {
+                webView?.apply {
+                    loadUrl("about:blank")
+                    clearHistory()
+                }
                 tabManager.updateTab(tab.id, url = "")
                 isLoading = false
-            }
-            // The search screen is the browser's root. Consume Back here; exiting is explicit.
-            else -> Unit
-        }
+            },
+        )
     }
 
     Column(modifier = modifier.fillMaxSize()) {
