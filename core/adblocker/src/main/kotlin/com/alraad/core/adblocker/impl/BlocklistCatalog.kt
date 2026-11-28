@@ -7,12 +7,16 @@ data class BlocklistSource(
     val url: String,
     val license: String,
     val enabledByDefault: Boolean,
+    /** A download below this many parsed domains never promotes (last-known-good kept). */
+    val minDomains: Int = 100,
 )
 
 /**
- * The upstream lists Brave ships (EasyList family), plus the bundled asset as the
- * always-available baseline. Only the `||domain^` subset is consumed today; see
- * docs/adblock-lists.md for exact scope and licenses.
+ * Brave's official lists: the upstream EasyList family Brave builds on, plus
+ * Brave's own lists from brave/adblock-lists (MPL-2.0), and the bundled asset as
+ * the always-available baseline. Only the `||domain^` subset is consumed today;
+ * Brave lists carry many @@ / cosmetic / scriptlet rules this engine ignores.
+ * See docs/adblock-lists.md for exact scope and licenses.
  */
 object BlocklistCatalog {
     const val BUNDLED_ID = "bundled-hosts"
@@ -40,6 +44,49 @@ object BlocklistCatalog {
                 license = "GPLv3 / CC BY-SA 3.0 (dual)",
                 enabledByDefault = true,
             ),
+            BlocklistSource(
+                id = "brave-specific",
+                name = "Brave Specific",
+                url = "https://raw.githubusercontent.com/brave/adblock-lists/master/brave-lists/brave-specific.txt",
+                license = "MPL-2.0",
+                enabledByDefault = true,
+                minDomains = 10,
+            ),
+            BlocklistSource(
+                id = "brave-android-specific",
+                name = "Brave Android Specific",
+                url = "https://raw.githubusercontent.com/brave/adblock-lists/master/brave-lists/brave-android-specific.txt",
+                license = "MPL-2.0",
+                enabledByDefault = true,
+                minDomains = 10,
+            ),
+            BlocklistSource(
+                id = "brave-firstparty",
+                name = "Brave Firstparty",
+                url = "https://raw.githubusercontent.com/brave/adblock-lists/master/brave-lists/brave-firstparty.txt",
+                license = "MPL-2.0",
+                enabledByDefault = true,
+                minDomains = 10,
+            ),
+            BlocklistSource(
+                id = "brave-cookie-specific",
+                name = "Brave Cookie Notices",
+                url = "https://raw.githubusercontent.com/brave/adblock-lists/master/brave-lists/brave-cookie-specific.txt",
+                license = "MPL-2.0",
+                enabledByDefault = true,
+                minDomains = 10,
+            ),
+            BlocklistSource(
+                id = "brave-social",
+                name = "Brave Social",
+                url = "https://raw.githubusercontent.com/brave/adblock-lists/master/brave-lists/brave-social.txt",
+                license = "MPL-2.0",
+                enabledByDefault = true,
+                minDomains = 10,
+            ),
+            // Brave Unbreak is deliberately excluded: it is almost entirely @@
+            // exception rules, which this domain-subset engine never applies, so a
+            // toggle for it would promise protection it cannot deliver.
         )
 
     fun byId(id: String): BlocklistSource? = sources.firstOrNull { it.id == id }
