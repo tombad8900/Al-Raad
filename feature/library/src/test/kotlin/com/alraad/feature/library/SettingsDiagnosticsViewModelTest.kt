@@ -117,6 +117,38 @@ class SettingsDiagnosticsViewModelTest {
     }
 
     @Test
+    fun `toggling a list in settings reloads the blocker so the list stops applying`() =
+        kotlinx.coroutines.test.runTest {
+            val (store, updater, adBlocker) = testBlocklistDeps(fakeSettings, fakeLogger)
+            val vm = SettingsDiagnosticsViewModel(fakeSettings, fakeLogger, store, updater, adBlocker)
+            store.setEnabled("easylist", true)
+            check(store.promote("easylist", (1..5_000).joinToString("\n") { "||filler$it.example^" } + "\n||only-in-easylist.example^"))
+            adBlocker.reload()
+            assertTrue(adBlocker.shouldBlock("https://only-in-easylist.example/x.js"))
+            vm.setListEnabled("easylist", false)
+            assertFalse(adBlocker.shouldBlock("https://only-in-easylist.example/x.js"))
+            vm.setListEnabled("easylist", true)
+            assertTrue(adBlocker.shouldBlock("https://only-in-easylist.example/x.js"))
+        }
+
+    @Test
+    fun `settings shows awaiting-refresh lists and the real engine state, not just toggles`() =
+        kotlinx.coroutines.test.runTest {
+            val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+            val dir = java.io.File(context.filesDir, "blocklists").apply { mkdirs() }
+            java.io.File(dir, "easylist.domains").writeText("google.com")
+            val (store, updater, adBlocker) = testBlocklistDeps(fakeSettings, fakeLogger)
+            val vm = SettingsDiagnosticsViewModel(fakeSettings, fakeLogger, store, updater, adBlocker)
+            assertTrue(vm.blocklists.value.single { it.id == "easylist" }.awaitingRefresh)
+            assertFalse(vm.blocklists.value.single { it.id == "stevenblack-hosts" }.awaitingRefresh)
+            assertEquals(com.alraad.feature.library.settings.ProtectionUi.NOT_STARTED, vm.protection.value)
+            // No native library in this JVM: the first context-aware lookup makes the engine report unavailable.
+            adBlocker.shouldBlock("https://example.com/a.js", "https://example.com/", "script")
+            vm.refreshProtection()
+            assertEquals(com.alraad.feature.library.settings.ProtectionUi.NATIVE_UNAVAILABLE, vm.protection.value)
+        }
+
+    @Test
     fun `severity and text filters narrow visible logs and export`() {
         val vm =
             testBlocklistDeps(fakeSettings, fakeLogger).let { (store, updater, adBlocker) ->

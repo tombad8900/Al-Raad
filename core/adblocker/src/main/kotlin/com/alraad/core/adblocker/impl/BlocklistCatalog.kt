@@ -9,6 +9,8 @@ data class BlocklistSource(
     val enabledByDefault: Boolean,
     /** A download below this many parsed domains never promotes (last-known-good kept). */
     val minDomains: Int = 100,
+    /** True when the list is plain hosts format (trusted domain-for-domain), false for Adblock Plus syntax. */
+    val hostsFormat: Boolean = false,
 )
 
 /**
@@ -29,6 +31,7 @@ object BlocklistCatalog {
                 url = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts",
                 license = "MIT",
                 enabledByDefault = true,
+                hostsFormat = true,
             ),
             BlocklistSource(
                 id = "easylist",

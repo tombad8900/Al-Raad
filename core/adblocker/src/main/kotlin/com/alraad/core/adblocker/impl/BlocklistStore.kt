@@ -13,6 +13,7 @@ import javax.inject.Singleton
  * per-site exceptions live in SharedPreferences (frozen AppSettings contract is
  * not extended here).
  */
+@Suppress("TooManyFunctions") // one store for list files, toggles and exceptions; the file helpers are tiny
 @Singleton
 class BlocklistStore
     @Inject
@@ -67,17 +68,32 @@ class BlocklistStore
         ): Boolean {
             val domains = AdblockPlusDomainParser.parse(text)
             if (!plausibleUpdate(id, domains.size)) return false
-            val target = File(dir, "$id.domains")
-            val tmp = File(dir, "$id.tmp")
             dir.mkdirs()
-            tmp.writeText(domains.sorted().joinToString("\n"))
-            check(tmp.renameTo(target)) { "atomic promote failed for $id" }
-            return true
+            val rawTmp = File(dir, "$id.raw.tmp")
+            // One file per list, replaced by a single rename: the stored copy is either entirely the old list or
+            // entirely the new one. Domains are derived from this same text, so the two can never disagree.
+            val promoted =
+                runCatching {
+                    rawTmp.writeText(text)
+                    check(rawTmp.renameTo(rawFile(id))) { "atomic promote failed for $id" }
+                }.isSuccess
+            if (!promoted) rawTmp.delete()
+            return promoted
         }
 
+        private fun rawFile(id: String) = File(dir, "$id.raw")
+
+        /** Pre-raw installs kept only a parsed domain list; it is used until the next successful update. */
+        private fun legacyDomainsFile(id: String) = File(dir, "$id.domains")
+
         fun storedDomains(id: String): Set<String>? {
-            val file = File(dir, "$id.domains")
-            return if (file.isFile) file.readLines().filterTo(HashSet()) { it.isNotBlank() } else null
+            val raw = rawFile(id)
+            val legacy = legacyDomainsFile(id)
+            return when {
+                raw.isFile -> AdblockPlusDomainParser.parse(raw.readText())
+                legacy.isFile -> legacy.readLines().filterTo(HashSet()) { it.isNotBlank() }
+                else -> null
+            }
         }
 
         /** Domains from every enabled list that has a stored copy; empty when none downloaded yet. */
@@ -89,5 +105,37 @@ class BlocklistStore
             return merged
         }
 
-        fun lastUpdated(id: String): Long = File(dir, "$id.domains").takeIf { it.isFile }?.lastModified() ?: 0L
+        /**
+         * Rule text for the engine. A stored raw list is used as is (hosts-format lists are converted to
+         * `||domain^`). A pre-raw install only has parsed domains: those are exact for hosts-format lists, but for
+         * Adblock Plus lists they are a lossy subset (they dropped rule options, so a `$third-party` or path-scoped
+         * rule on a normal site became a whole-domain block). That ABP cache is NOT fed to the engine; see
+         * [listsPendingRefresh].
+         */
+        fun activeEngineRules(): String {
+            val out = StringBuilder()
+            for (source in BlocklistCatalog.sources) {
+                if (!isEnabled(source.id)) continue
+                val raw = rawFile(source.id)
+                val legacy = legacyDomainsFile(source.id)
+                when {
+                    raw.isFile && source.hostsFormat ->
+                        HostsParser.parse(
+                            raw.readText(),
+                        ).forEach { out.append("||").append(it).append("^\n") }
+                    raw.isFile -> out.append(raw.readText()).append('\n')
+                    legacy.isFile && source.hostsFormat -> storedDomains(source.id)?.forEach { out.append("||").append(it).append("^\n") }
+                }
+            }
+            return out.toString()
+        }
+
+        /** Enabled Adblock Plus lists that only have the lossy legacy copy and wait for a fresh download. */
+        fun listsPendingRefresh(): List<String> =
+            BlocklistCatalog.sources
+                .filter { isEnabled(it.id) && !it.hostsFormat && !rawFile(it.id).isFile && legacyDomainsFile(it.id).isFile }
+                .map { it.id }
+
+        fun lastUpdated(id: String): Long =
+            (rawFile(id).takeIf { it.isFile } ?: legacyDomainsFile(id).takeIf { it.isFile })?.lastModified() ?: 0L
     }

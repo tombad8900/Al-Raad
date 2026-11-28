@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.alraad.core.adblocker.impl.BlocklistCatalog
 import com.alraad.core.adblocker.impl.BlocklistStore
 import com.alraad.core.adblocker.impl.BlocklistUpdater
+import com.alraad.core.adblocker.impl.EngineStatus
 import com.alraad.core.adblocker.impl.OfflineAdBlocker
 import com.alraad.core.common.contracts.AppSettings
 import com.alraad.core.common.contracts.DiagCategory
@@ -29,7 +30,27 @@ data class BlocklistUi(
     val name: String,
     val enabled: Boolean,
     val lastUpdated: Long,
+    /** Enabled Adblock Plus list with only the lossy legacy cache: not applied until a fresh download. */
+    val awaitingRefresh: Boolean = false,
 )
+
+/** What the ad blocker is actually doing, as opposed to which toggles are on. */
+enum class ProtectionUi {
+    NOT_STARTED,
+    ACTIVE,
+    NATIVE_UNAVAILABLE,
+    BUILD_FAILED,
+    ;
+
+    fun label(blockingOn: Boolean): String =
+        when {
+            !blockingOn -> "الحجب متوقف / Blocking is off"
+            this == ACTIVE -> "المحرك شغّال / Engine active"
+            this == NATIVE_UNAVAILABLE -> "المحرك غير متاح: القائمة المدمجة فقط / Engine unavailable: bundled hosts only"
+            this == BUILD_FAILED -> "فشل بناء المحرك / Engine build failed"
+            else -> "المحرك يبدأ مع أول تصفح / Engine starts on first browsing"
+        }
+}
 
 /** Settings and searchable, filterable diagnostics state. */
 @HiltViewModel
@@ -101,8 +122,30 @@ class SettingsDiagnosticsViewModel
 
         private fun currentBlocklists(): List<BlocklistUi> =
             BlocklistCatalog.sources.map {
-                BlocklistUi(it.id, it.name, blocklistStore.isEnabled(it.id), blocklistStore.lastUpdated(it.id))
+                BlocklistUi(
+                    it.id,
+                    it.name,
+                    blocklistStore.isEnabled(it.id),
+                    blocklistStore.lastUpdated(it.id),
+                    it.id in blocklistStore.listsPendingRefresh(),
+                )
             }
+
+        private fun currentProtection(): ProtectionUi =
+            when (offlineAdBlocker.engineStatus) {
+                EngineStatus.READY -> ProtectionUi.ACTIVE
+                EngineStatus.NATIVE_UNAVAILABLE -> ProtectionUi.NATIVE_UNAVAILABLE
+                EngineStatus.BUILD_FAILED -> ProtectionUi.BUILD_FAILED
+                EngineStatus.NOT_BUILT -> ProtectionUi.NOT_STARTED
+            }
+
+        val protection = MutableStateFlow(currentProtection())
+
+        /** Re-reads engine and list state (called when Settings opens; the engine builds on first browsing). */
+        fun refreshProtection() {
+            blocklists.value = currentBlocklists()
+            protection.value = currentProtection()
+        }
 
         fun setListEnabled(
             id: String,
@@ -110,7 +153,7 @@ class SettingsDiagnosticsViewModel
         ) {
             blocklistStore.setEnabled(id, enabled)
             offlineAdBlocker.reload()
-            blocklists.value = currentBlocklists()
+            refreshProtection()
         }
 
         /** Manual refresh; a malformed or unreachable list keeps its last-known-good copy. */
@@ -122,7 +165,7 @@ class SettingsDiagnosticsViewModel
                     blocklistUpdater.updateAll()
                 } finally {
                     offlineAdBlocker.reload()
-                    blocklists.value = currentBlocklists()
+                    refreshProtection()
                     listsUpdating.value = false
                 }
             }
