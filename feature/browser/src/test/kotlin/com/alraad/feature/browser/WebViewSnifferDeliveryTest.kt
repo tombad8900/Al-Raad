@@ -120,8 +120,8 @@ class WebViewSnifferDeliveryTest {
                 onPageDocumentStarted = { _, url ->
                     associator.onPageStartedWithContext(url, "tab-a").documentId
                 },
-                onPageUrlChanged = { _, previousUrl, url, _ ->
-                    associator.onPageUrlChanged(previousUrl, url)?.documentId
+                onPageUrlChanged = { _, previousUrl, previousDocumentId, url, _ ->
+                    associator.onPageUrlChanged(previousUrl, url, previousDocumentId)?.documentId
                 },
                 onRequestObservedWithContext = { url, headers, pageUrl, documentId ->
                     captured += Triple(pageUrl, documentId, headers)
