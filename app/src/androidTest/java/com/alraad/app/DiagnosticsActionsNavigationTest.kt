@@ -45,10 +45,11 @@ class DiagnosticsActionsNavigationTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context get() = instrumentation.targetContext
     private val logger: DiagnosticsLogger
-        get() = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            DiagnosticsLoggerTestEntryPoint::class.java,
-        ).diagnosticsLogger()
+        get() =
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                DiagnosticsLoggerTestEntryPoint::class.java,
+            ).diagnosticsLogger()
 
     @Test
     fun emptyDiagnosticsActionsShowVisibleFeedback() {
@@ -95,6 +96,7 @@ class DiagnosticsActionsNavigationTest {
             intended(hasAction(Intent.ACTION_CHOOSER), times(1))
 
             val chooser = getIntents().first { it.action == Intent.ACTION_CHOOSER }
+
             @Suppress("DEPRECATION")
             val send = chooser.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
             assertNotNull(send)
@@ -102,9 +104,10 @@ class DiagnosticsActionsNavigationTest {
             assertEquals("text/plain", send.type)
             assertTrue(send.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
             val uri: Uri = checkNotNull(send.clipData?.getItemAt(0)?.uri)
-            val exported = context.contentResolver.openInputStream(uri)!!.use {
-                it.readBytes().toString(Charsets.UTF_8)
-            }
+            val exported =
+                context.contentResolver.openInputStream(uri)!!.use {
+                    it.readBytes().toString(Charsets.UTF_8)
+                }
             assertEquals(expected, exported)
             assertTrue(exported.contains("[REDACTED]"))
             assertFalse(exported.contains("diagnostics-private-token"))
@@ -138,10 +141,11 @@ class DiagnosticsActionsNavigationTest {
             runCatching { composeRule.onNodeWithText(marker, substring = true).assertIsDisplayed() }.isSuccess
         }
         val entries = runBlocking { logger.observeLogs().first() }.map(DiagnosticsRedactor::redact)
-        val expected = entries.joinToString("\n") { entry ->
-            val details = entry.details.entries.joinToString(";") { (key, value) -> "$key=$value" }
-            "${entry.timestamp}\t${entry.category}\t${entry.level}\t${entry.message}\t$details"
-        }
+        val expected =
+            entries.joinToString("\n") { entry ->
+                val details = entry.details.entries.joinToString(";") { (key, value) -> "$key=$value" }
+                "${entry.timestamp}\t${entry.category}\t${entry.level}\t${entry.message}\t$details"
+            }
         assertTrue(expected.contains(marker))
         assertTrue(expected.contains("[REDACTED]"))
         return expected
