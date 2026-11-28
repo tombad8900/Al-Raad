@@ -14,6 +14,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.alraad.core.adblocker.impl.WebViewIntegrationHelper
 import com.alraad.core.common.contracts.AppSettings
 import com.alraad.core.common.contracts.DiagnosticsLogger
@@ -39,7 +44,9 @@ fun BrowserScreen(
     val activeTab = tabState.tabs.firstOrNull { it.id == tabState.activeTabId }
     var isLoading by remember { mutableStateOf(false) }
     val backgroundColor = MaterialTheme.colorScheme.background
-    val webViewPool = remember { BrowserWebViewPool() }
+    val applicationContext = LocalContext.current.applicationContext
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val webViewPool = remember(tabManager, applicationContext) { tabManager.webViewPool(applicationContext) }
     val pageTabAssociators = remember { mutableMapOf<String, PageTabAssociator>() }
     val pageTabAssociator =
         activeTab?.let { pageTabAssociators.getOrPut(it.id) { PageTabAssociator() } } ?: PageTabAssociator()
@@ -55,7 +62,15 @@ fun BrowserScreen(
             webViewPool,
         )
 
-    BrowserTabLifecycle(tabManager, settings, liveTabIds, pageTabAssociators, webViewPool)
+    BrowserTabLifecycle(
+        tabManager = tabManager,
+        settings = settings,
+        liveTabIds = liveTabIds,
+        activeTabId = activeTab?.id,
+        pageTabAssociators = pageTabAssociators,
+        webViewPool = webViewPool,
+        lifecycleOwner = lifecycleOwner,
+    )
 
     BrowserBackNavigation(
         activeTab = activeTab,
@@ -91,15 +106,33 @@ private fun BrowserTabLifecycle(
     tabManager: TabManager,
     settings: AppSettings,
     liveTabIds: Set<String>,
+    activeTabId: String?,
     pageTabAssociators: MutableMap<String, PageTabAssociator>,
     webViewPool: BrowserWebViewPool,
+    lifecycleOwner: androidx.lifecycle.LifecycleOwner,
 ) {
-    DisposableEffect(webViewPool) {
-        onDispose { webViewPool.clear() }
-    }
     LaunchedEffect(liveTabIds) {
         pageTabAssociators.keys.retainAll(liveTabIds)
         webViewPool.retainTabs(liveTabIds)
+    }
+    LaunchedEffect(activeTabId) {
+        webViewPool.activate(activeTabId)
+    }
+    DisposableEffect(lifecycleOwner, webViewPool, tabManager) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> webViewPool.pauseAll()
+                Lifecycle.Event.ON_RESUME -> webViewPool.activate(tabManager.state.value.activeTabId)
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            // Preserve WebViews and their navigation history; only pause them while this
+            // destination is absent. TabManager owns final release at tab/process lifetime.
+            webViewPool.pauseAll()
+        }
     }
     LaunchedEffect(Unit) {
         if (tabManager.state.value.tabs.isEmpty()) tabManager.openTab(settings.homepageUrl)
@@ -129,7 +162,7 @@ private fun createBrowserWebViewEnvironment(
 private fun BrowserWebViewHost(
     activeTab: BrowserTab?,
     environment: BrowserWebViewEnvironment,
-    backgroundColor: androidx.compose.ui.graphics.Color,
+    backgroundColor: Color,
     handlers: BrowserHandlers,
     pageTabAssociator: PageTabAssociator,
     onLoadingChange: (Boolean) -> Unit,
