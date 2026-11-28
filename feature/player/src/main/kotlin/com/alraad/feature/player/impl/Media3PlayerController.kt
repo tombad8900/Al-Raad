@@ -205,6 +205,13 @@ fun Media3PlayerController.addExternalSubtitle(track: SubtitleTrack) {
     rebuildPreservingPlayback { it.copy(subtitles = it.subtitles + track) }
 }
 
+/**
+ * Dispose decision for PlayerScreen: true only while [request] is still the active
+ * request, so a controller-side rebuild (source switch, subtitle attach) is never
+ * mistaken for leaving the screen.
+ */
+internal fun Media3PlayerController.isActiveRequest(request: PlaybackRequest): Boolean = currentPlaybackRequest.value == request
+
 /** Manual source switch (T5): rebuilds on another detected source, preserving position. */
 fun Media3PlayerController.switchSource(sourceIndex: Int) {
     val request = currentPlaybackRequest.value ?: return

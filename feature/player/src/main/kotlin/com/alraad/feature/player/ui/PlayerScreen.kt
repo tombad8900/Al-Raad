@@ -60,6 +60,7 @@ import com.alraad.core.common.contracts.PlaybackRequest
 import com.alraad.feature.player.impl.Media3PlayerController
 import com.alraad.feature.player.impl.addExternalSubtitle
 import com.alraad.feature.player.impl.externalSubtitleTrack
+import com.alraad.feature.player.impl.isActiveRequest
 import com.alraad.feature.player.impl.setQuality
 import com.alraad.feature.player.impl.switchSource
 
@@ -114,7 +115,7 @@ fun PlayerScreen(
             // A source switch (T5) or external subtitle attach swaps the request while
             // the controller's own rebuild already preserved playback; releasing here
             // would destroy that fresh player. Release only when truly leaving.
-            if (controller.currentPlaybackRequest.value == playbackRequest) {
+            if (controller.isActiveRequest(playbackRequest)) {
                 controller.release()
                 player = null
             }
