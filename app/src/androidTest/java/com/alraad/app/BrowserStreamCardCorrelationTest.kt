@@ -11,7 +11,6 @@ import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.feature.browser.tabs.TabManagerTestEntryPoint
 import dagger.hilt.android.EntryPointAccessors
-import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -52,7 +51,6 @@ class BrowserStreamCardCorrelationTest {
                 }
             }.isSuccess
         }
-        assertNotNull("Browser WebView must be attached", browserWebView)
         val webView = requireNotNull(browserWebView)
         composeRule.waitUntil(timeoutMillis = 10_000) {
             var ready = false
@@ -84,7 +82,5 @@ class BrowserStreamCardCorrelationTest {
                 composeRule.onNodeWithText(mediaUrl, substring = true).assertIsDisplayed()
             }.isSuccess
         }
-        composeRule.onNodeWithText("روابط البث المكتشفة:", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText(mediaUrl, substring = true).assertIsDisplayed()
     }
 }
