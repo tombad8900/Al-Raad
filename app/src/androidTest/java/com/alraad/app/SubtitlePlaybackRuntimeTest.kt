@@ -79,7 +79,9 @@ class SubtitlePlaybackRuntimeTest {
 
     private fun videoUrl(path: String): String =
         // The second source carries a dummy query so the two switch sources stay
-        // distinct URLs while the host serves the same clip for both.
+        // distinct URLs while the host serves the same clip for both: this proves
+        // the selection transition (observable runner-side via the ?second=1 fetch),
+        // not switching between different media content.
         fixtureBaseUrl?.let { "$it/fixture.mp4" + if (path == "video2.mp4") "?second=1" else "" }
             ?: server.url("/$path").toString()
 
@@ -183,8 +185,10 @@ class SubtitlePlaybackRuntimeTest {
         }
         val subtitleRequest = requests.first { it.path.orEmpty().startsWith("/subs.vtt") }
         if (fixtureBaseUrl == null) {
-            // Positive control is observable only while the video rides MockWebServer
-            // (local runs); in CI the fixture is host-served and not visible here.
+            // Local-run positive control: the video request carried the synthetic
+            // test Cookie. In CI the fixture is host-served, so the same control is
+            // asserted runner-side from the fixture server's request log (ci.yml
+            // "Verify fixture request instrumentation").
             val videoRequest = requests.first { it.path.orEmpty().startsWith("/video.mp4") }
             assertEquals("session-secret", videoRequest.getHeader("Cookie"))
         }

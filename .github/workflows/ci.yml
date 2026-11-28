@@ -113,7 +113,31 @@ jobs:
           mkdir -p /tmp/fixture-serve
           curl -fsSL --retry 3 -o /tmp/fixture-serve/fixture.mp4 https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4
           printf '%s' "<html><body><video autoplay muted playsinline src='/fixture.mp4'></video></body></html>" > /tmp/fixture-serve/player.html
-          nohup python3 -m http.server 18080 --directory /tmp/fixture-serve > /tmp/fixture-serve.log 2>&1 &
+          # Instrumented fixture server: logs each request path and whether the
+          # synthetic test Cookie rode along (only the non-secret "session-secret"
+          # test value ever appears here), so CI holds a positive control for the
+          # header-isolation proof and an observable source-switch transition.
+          cat > /tmp/fixture-serve/serve.py <<'PY'
+          import functools
+          import http.server
+
+          class Handler(http.server.SimpleHTTPRequestHandler):
+              def do_GET(self):
+                  cookie = self.headers.get("Cookie")
+                  marker = "present:" + cookie if cookie else "none"
+                  with open("/tmp/fixture-serve/requests.log", "a") as log:
+                      log.write(self.path + " cookie=" + marker + "\n")
+                  super().do_GET()
+
+              def log_message(self, *args):
+                  pass
+
+          http.server.ThreadingHTTPServer(
+              ("127.0.0.1", 18080),
+              functools.partial(Handler, directory="/tmp/fixture-serve"),
+          ).serve_forever()
+          PY
+          nohup python3 /tmp/fixture-serve/serve.py > /tmp/fixture-serve.log 2>&1 &
           sleep 2
           curl -fsSI http://127.0.0.1:18080/player.html | head -1
 
@@ -137,6 +161,16 @@ jobs:
             adb shell rm -f /sdcard/Download/app-launch.png /sdcard/Download/diagnostics-export.txt /sdcard/Download/scenario-*.png || true
             mkdir -p scenario-captures
             bash -c './gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.fixtureBaseUrl=http://10.0.2.2:18080; code=$?; adb pull /sdcard/Download/app-launch.png app-launch.png || true; adb pull /sdcard/Download/diagnostics-export.txt diagnostics-export.txt || true; for f in $(adb shell ls /sdcard/Download/scenario-*.png 2>/dev/null | tr -d "\r"); do adb pull "$f" scenario-captures/ || true; done; adb logcat -d -t 2000 > scenario-captures/logcat-tail.txt || true; if [ "$code" -eq 0 ]; then test -s app-launch.png; test -s diagnostics-export.txt; [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d " \n")" = "89504e470d0a1a0a" ]; fi; exit $code' 
+
+      - name: Verify fixture request instrumentation
+        # Header-isolation positive control: at least one video request carried the
+        # synthetic test Cookie (proves stream headers actually flowed to media
+        # requests; the subtitle-side exclusion is asserted in-test via
+        # MockWebServer). Source-switch transition: the second switch source URL
+        # (?second=1) was actually fetched during the run.
+        run: |
+          grep -q '^/fixture.mp4 cookie=present:session-secret$' /tmp/fixture-serve/requests.log
+          grep -q '^/fixture.mp4?second=1 cookie=' /tmp/fixture-serve/requests.log
 
       - name: Upload app-launch screenshot
         if: always()
