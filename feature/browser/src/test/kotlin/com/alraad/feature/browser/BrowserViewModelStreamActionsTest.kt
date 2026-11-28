@@ -350,6 +350,4 @@ class BrowserViewModelStreamActionsTest {
             viewModel.detectedStreams.value.map { it.stream.url },
         )
     }
-
-
 }
