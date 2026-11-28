@@ -10,6 +10,7 @@ class BrowserBackHandlerTest {
         val history = mutableMapOf("first" to 1, "second" to 2)
         var active = "second"
         var search = false
+
         fun back(url: String) =
             handleBrowserBack(
                 tabUrl = url,
