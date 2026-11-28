@@ -149,7 +149,11 @@ class AppScenarioTest {
             composeRule.onNodeWithText("\u062a\u0634\u063a\u064a\u0644").performClick()
             // The player route shows its controls; the no-stream placeholder must be absent.
             waitForNode(hasContentDescription("Fullscreen"), 15_000)
-            waitForRenderedVideoFrames().also { seekAndPauseForCapture(it) }
+            waitForRenderedVideoFrames().also {
+                awaitPlayerKeepScreenOn(expected = true)
+                seekAndPauseForCapture(it)
+                awaitPlayerKeepScreenOn(expected = false)
+            }
             capture("scenario-player-fit-frames.png")
 
             composeRule.onNode(hasContentDescription("Fill screen")).performClick()
@@ -220,6 +224,15 @@ class AppScenarioTest {
     }
 
     @OptIn(UnstableApi::class)
+    /** The PlayerView keeps the screen on while playing and releases it once paused. */
+    private fun awaitPlayerKeepScreenOn(expected: Boolean) {
+        var actual: Boolean? = null
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            onView(isAssignableFrom(PlayerView::class.java)).check { view, _ -> actual = (view as PlayerView).keepScreenOn }
+            actual == expected
+        }
+    }
+
     private fun waitForRenderedVideoFrames(): ExoPlayer {
         var attachedPlayer: ExoPlayer? = null
         var lastMatcherFailure: Throwable? = null
