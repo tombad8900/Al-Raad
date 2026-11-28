@@ -54,7 +54,14 @@ fun BrowserWebView(
                             },
                             onRequestObserved = { url, headers, pageUrl ->
                                 val tabId = pageTabAssociator.tabIdForPage(pageUrl)
-                                environment.sniffer.onRequestObserved(url, headers, null, StreamSource.NETWORK, pageUrl, tabId)
+                                environment.sniffer.onRequestObserved(
+                                    url,
+                                    headers,
+                                    null,
+                                    StreamSource.NETWORK,
+                                    pageUrl,
+                                    tabId,
+                                )
                                 environment.subtitleSniffer.onRequestObserved(url, headers, pageUrl, tabId)
                             },
                         )
