@@ -78,16 +78,9 @@ class BrowserViewModel
 
                     val onCurrentPage = track.sourcePageUrl in currentPageUrlsByTab.value[track.sourceTabId].orEmpty()
                     if (onCurrentPage) {
-                        subtitlesByTab.update { current ->
-                            current +
-                                (
-                                    track.sourceTabId to
-                                        mergeSubtitleTracks(
-                                            current[track.sourceTabId].orEmpty(),
-                                            listOf(track),
-                                        )
-                                )
-                        }
+                        val updatedTracks =
+                            mergeSubtitleTracks(subtitlesByTab.value[track.sourceTabId].orEmpty(), listOf(track))
+                        subtitlesByTab.update { current -> current + (track.sourceTabId to updatedTracks) }
                         pendingSubtitlesByTab.update { current ->
                             val remaining = current[track.sourceTabId].orEmpty().filterNot { it.id == track.id }
                             if (remaining.isEmpty()) {
@@ -99,16 +92,9 @@ class BrowserViewModel
                     } else {
                         // WebView's shouldInterceptRequest can race the UI-thread page-start
                         // callback. Hold the page-scoped track briefly instead of dropping it.
-                        pendingSubtitlesByTab.update { current ->
-                            current +
-                                (
-                                    track.sourceTabId to
-                                        mergeSubtitleTracks(
-                                            current[track.sourceTabId].orEmpty(),
-                                            listOf(track),
-                                        )
-                                )
-                        }
+                        val pendingTracks =
+                            mergeSubtitleTracks(pendingSubtitlesByTab.value[track.sourceTabId].orEmpty(), listOf(track))
+                        pendingSubtitlesByTab.update { current -> current + (track.sourceTabId to pendingTracks) }
                     }
                 }
             }
