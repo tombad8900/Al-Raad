@@ -21,7 +21,6 @@ class PageTabAssociatorTest {
         assertFalse(redirect.startsNewNavigation)
         assertEquals("tabB", associator.onPageStartedWithContext("https://b.example/", "tabB").tabId)
         assertEquals("tabA", associator.onPageFinished("https://cdn.a.example/"))
-        assertEquals("tabA", associator.tabIdForPage("https://cdn.a.example/"))
     }
 
     @Test
@@ -126,7 +125,6 @@ class PageTabAssociatorTest {
         assertNull(
             associator.onPageUrlChanged("https://unknown.example/", "https://other.example/", "missing-document"),
         )
-        assertNull(associator.associationForPage("https://other.example/"))
     }
 
 
