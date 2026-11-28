@@ -154,13 +154,9 @@ class PageTabAssociator {
         url: String,
         documentId: String?,
     ): PageDocumentAssociation? =
-        documentId
-            ?.let(documentOwners::get)
-            ?.takeIf { association ->
-                lastBoundDocument == association && previousUrl?.let(pageDocuments::get) == association
-            }?.also { association ->
-                pageDocuments[url] = association
-            }
+        documentId?.let(documentOwners::get)?.takeIf {
+            it == lastBoundDocument && previousUrl?.let(pageDocuments::get) == it
+        }?.also { pageDocuments[url] = it }
 
     @Synchronized
     fun associationForDocument(documentId: String?): PageDocumentAssociation? =
