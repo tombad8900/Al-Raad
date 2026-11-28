@@ -113,7 +113,7 @@ class RuntimePageLoadTest {
             composeRule.activity.setContentView(web)
             web.loadUrl(pageUrl)
         }
-        val done = finished.await(60, TimeUnit.SECONDS)
+        val done = finished.await(45, TimeUnit.SECONDS)
         Thread.sleep(SETTLE_MS)
         val title = StringBuilder()
         val textLen = CountDownLatch(1)
@@ -139,7 +139,8 @@ class RuntimePageLoadTest {
         instrumentation.runOnMainSync { web.destroy() }
     }
 
-    @Test fun rotanaPageWithAndWithoutEngine() {
+    @Test(timeout = 420_000)
+    fun rotanaPageWithAndWithoutEngine() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val store = BlocklistStore(context)
         BlocklistCatalog.sources.forEach { source ->
