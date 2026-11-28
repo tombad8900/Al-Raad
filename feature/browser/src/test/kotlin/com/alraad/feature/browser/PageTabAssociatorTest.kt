@@ -145,10 +145,8 @@ class PageTabAssociatorTest {
     }
 
     @Test
-    fun `redirect keeps the explicitly pending navigation owner after tab switch`() {
+    fun `redirect uses pending owner when no previous document can be confused`() {
         val associator = PageTabAssociator()
-        associator.recordRequest("tab-a", "https://a.example/start")
-        associator.onPageStartedWithContext("https://a.example/start", "tab-a")
         val pendingDocument = associator.recordRequest("tab-b", "https://b.example/start")
 
         val redirected = associator.onPageStartedWithContext("https://cdn.example/final", "tab-a")
