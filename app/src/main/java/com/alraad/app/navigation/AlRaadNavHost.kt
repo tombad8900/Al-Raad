@@ -218,31 +218,19 @@ private fun NavGraphBuilder.settingsDestination(navController: NavHostController
         DiagnosticsScreen(
             viewModel = hiltViewModel<SettingsDiagnosticsViewModel>(),
             onExport = { text ->
-                // User-initiated file export: write the log to app cache and hand it
-                // to the share sheet as a .txt via FileProvider. Falls back to the
-                // clipboard if the file cannot be written or no share target exists.
-                runCatching {
-                    val dir = java.io.File(context.cacheDir, "diagnostics").apply { mkdirs() }
-                    val file = java.io.File(dir, "alraad-diagnostics-" + System.currentTimeMillis() + ".txt")
-                    file.writeText(text)
-                    val uri =
-                        androidx.core.content.FileProvider.getUriForFile(
-                            context,
-                            context.packageName + ".fileprovider",
-                            file,
-                        )
-                    val send =
-                        android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                    context.startActivity(android.content.Intent.createChooser(send, null))
-                }.onFailure {
-                    val clipboard =
-                        context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("diagnostics log", text))
-                }
+                val message =
+                    when (exportDiagnostics(context, text) { context.startActivity(it) }) {
+                        ExportResult.SHARED -> null
+                        ExportResult.EMPTY -> "لا يوجد ما يُصدَّر / Nothing to export"
+                        ExportResult.COPIED_INSTEAD -> "تعذر التصدير، تم النسخ بدلًا منه / Export failed, copied instead"
+                        ExportResult.FAILED -> "تعذر التصدير / Export failed"
+                    }
+                message?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show() }
+            },
+            onCopy = { text ->
+                val message =
+                    if (copyDiagnostics(context, text)) "تم النسخ / Copied" else "لا يوجد ما يُنسخ / Nothing to copy"
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
             },
         )
     }
