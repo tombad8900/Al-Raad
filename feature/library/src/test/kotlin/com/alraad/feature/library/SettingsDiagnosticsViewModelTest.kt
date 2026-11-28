@@ -132,6 +132,23 @@ class SettingsDiagnosticsViewModelTest {
         }
 
     @Test
+    fun `settings shows awaiting-refresh lists and the real engine state, not just toggles`() =
+        kotlinx.coroutines.test.runTest {
+            val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+            val dir = java.io.File(context.filesDir, "blocklists").apply { mkdirs() }
+            java.io.File(dir, "easylist.domains").writeText("google.com")
+            val (store, updater, adBlocker) = testBlocklistDeps(fakeSettings, fakeLogger)
+            val vm = SettingsDiagnosticsViewModel(fakeSettings, fakeLogger, store, updater, adBlocker)
+            assertTrue(vm.blocklists.value.single { it.id == "easylist" }.awaitingRefresh)
+            assertFalse(vm.blocklists.value.single { it.id == "stevenblack-hosts" }.awaitingRefresh)
+            assertEquals(com.alraad.feature.library.settings.ProtectionUi.NOT_STARTED, vm.protection.value)
+            // No native library in this JVM: the first context-aware lookup makes the engine report unavailable.
+            adBlocker.shouldBlock("https://example.com/a.js", "https://example.com/", "script")
+            vm.refreshProtection()
+            assertEquals(com.alraad.feature.library.settings.ProtectionUi.NATIVE_UNAVAILABLE, vm.protection.value)
+        }
+
+    @Test
     fun `severity and text filters narrow visible logs and export`() {
         val vm =
             testBlocklistDeps(fakeSettings, fakeLogger).let { (store, updater, adBlocker) ->

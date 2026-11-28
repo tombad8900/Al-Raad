@@ -20,4 +20,6 @@ interface AdblockEntryPoint {
     fun blocklistUpdater(): com.alraad.core.adblocker.impl.BlocklistUpdater
 
     fun offlineAdBlocker(): OfflineAdBlocker
+
+    fun blocklistStore(): com.alraad.core.adblocker.impl.BlocklistStore
 }

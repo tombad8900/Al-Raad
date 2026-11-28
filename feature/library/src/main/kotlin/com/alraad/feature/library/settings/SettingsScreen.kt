@@ -42,6 +42,8 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsState()
     val blocklists by viewModel.blocklists.collectAsState()
     val listsUpdating by viewModel.listsUpdating.collectAsState()
+    val protection by viewModel.protection.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refreshProtection() }
     Column(modifier = modifier.fillMaxSize().padding(12.dp)) {
         TextButton(onClick = onOpenDiagnostics, modifier = Modifier.fillMaxWidth()) {
             Text("سجل التشخيص / Diagnostics log")
@@ -57,9 +59,14 @@ fun SettingsScreen(
         }
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text("قوائم الحجب / Block lists", style = MaterialTheme.typography.titleSmall)
+        Text(protection.label(settings.adBlockEnabled), style = MaterialTheme.typography.bodySmall)
         blocklists.forEach { item ->
             val status =
-                if (item.lastUpdated > 0) "آخر تحديث ${formatTimestamp(item.lastUpdated)}" else "النسخة المدمجة فقط"
+                when {
+                    item.awaitingRefresh -> "بانتظار تنزيل جديد، غير مطبّقة حاليًا"
+                    item.lastUpdated > 0 -> "آخر تحديث ${formatTimestamp(item.lastUpdated)}"
+                    else -> "النسخة المدمجة فقط"
+                }
             SettingToggle("${item.name} — $status", item.enabled) { on ->
                 viewModel.setListEnabled(item.id, on)
             }
