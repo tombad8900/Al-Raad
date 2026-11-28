@@ -49,7 +49,7 @@ class RuntimeBrowserBackTest {
     }
 
     @Before fun resetTabs() {
-        tabManager.reset()
+        instrumentation.runOnMainSync { tabManager.reset() }
     }
 
     private fun activeWebView(): WebView? {
