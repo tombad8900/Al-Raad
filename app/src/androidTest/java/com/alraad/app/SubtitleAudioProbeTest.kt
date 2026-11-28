@@ -80,6 +80,66 @@ class SubtitleAudioProbeTest {
         server.shutdown()
     }
 
+    /**
+     * Known-good playback control, no subtitles involved: does the position clock
+     * advance at all on this emulator for each media type? READY + isPlaying with a
+     * frozen position was observed in run 46121415741; this measures it directly.
+     */
+    @Test
+    fun controlAudioPositionAdvances() = positionControl("audio.wav")
+
+    @Test
+    fun controlVideoPositionAdvances() = positionControl("fixture.mp4")
+
+    private fun positionControl(mediaPath: String) {
+        val baseUrl =
+            checkNotNull(InstrumentationRegistry.getArguments().getString("fixtureBaseUrl")) {
+                "Position control requires the host-served fixture (fixtureBaseUrl)"
+            }
+        val stream =
+            StreamUrl(
+                url = "$baseUrl/$mediaPath",
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+            )
+        instrumentation.runOnMainSync {
+            controller.play(PlaybackRequest(sources = listOf(stream)))
+            val player = checkNotNull(controller.currentPlayer()) { "Player build failed" }
+            attachEvidenceListener(player)
+            player.playWhenReady = true
+        }
+        val ready = CountDownLatch(1)
+        instrumentation.runOnMainSync {
+            val player = checkNotNull(controller.currentPlayer())
+            if (player.playbackState == Player.STATE_READY) {
+                ready.countDown()
+            } else {
+                player.addListener(
+                    object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (playbackState == Player.STATE_READY) ready.countDown()
+                        }
+                    },
+                )
+            }
+        }
+        assertTrue("Player never became READY for $mediaPath", ready.await(60, TimeUnit.SECONDS))
+        val p0 = readPosition()
+        Thread.sleep(10_000)
+        val p1 = readPosition()
+        Log.i(TAG, "control $mediaPath pos0=" + p0 + " pos1=" + p1 + " delta=" + (p1 - p0) + "ms")
+        assertTrue(
+            "Position frozen on $mediaPath: pos0=" + p0 + " pos1=" + p1,
+            p1 - p0 > 2_000,
+        )
+    }
+
+    private fun readPosition(): Long {
+        var pos = -1L
+        instrumentation.runOnMainSync { pos = controller.currentPlayer()?.currentPosition ?: -1L }
+        return pos
+    }
+
     @Test
     fun vttCuesOnAudioOnly() = probe("subs.vtt", "text/vtt", "Hello from VTT")
 
