@@ -57,8 +57,12 @@ class WebViewIntegrationHelper
             onNavigationRequested: (WebView, String) -> Unit = { _, _ -> },
             onPageDocumentStarted: (WebView, String) -> String? = { _, _ -> null },
             onPageUrlChanged: (WebView, String?, String, Boolean) -> String? = { _, _, _, _ -> null },
-            onRequestObservedWithContext: (url: String, headers: Map<String, String>, pageUrl: String?, documentId: String?) -> Unit =
-                { _, _, _, _ -> },
+            onRequestObservedWithContext: (
+                url: String,
+                headers: Map<String, String>,
+                pageUrl: String?,
+                documentId: String?,
+            ) -> Unit = { _, _, _, _ -> },
         ): WebViewClient =
             object : WebViewClient() {
                 // Cached from UI-thread navigation callbacks: shouldInterceptRequest runs
@@ -204,7 +208,6 @@ class WebViewIntegrationHelper
 
         private fun jsQuote(value: String): String = value.replace("\\", "\\\\").replace("'", "\\'").let { "'$it'" }
     }
-
 
 private data class CachedPageContext(
     val url: String?,
