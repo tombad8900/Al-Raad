@@ -15,7 +15,9 @@ import com.alraad.core.common.contracts.StreamSource
 import com.alraad.core.common.contracts.StreamUrl
 import com.alraad.core.common.contracts.SubtitleTrack
 import com.alraad.feature.player.impl.Media3PlayerController
+import com.alraad.feature.player.impl.addExternalSubtitle
 import com.alraad.feature.player.impl.externalSubtitleTrack
+import com.alraad.feature.player.impl.switchSource
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.flow.Flow
@@ -29,6 +31,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -172,6 +175,78 @@ class SubtitlePlaybackRuntimeTest {
         assertEquals("text/vtt", subtitleRequest.getHeader("Accept"))
     }
 
+    @Test
+    fun sourceSwitchPreservesPositionAndPlayState() {
+        val v1 =
+            StreamUrl(
+                url = server.url("/video.mp4").toString(),
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+            )
+        val v2 =
+            StreamUrl(
+                url = server.url("/video2.mp4").toString(),
+                format = StreamFormat.MP4,
+                source = StreamSource.NETWORK,
+            )
+        instrumentation.runOnMainSync { controller.play(PlaybackRequest(sources = listOf(v1, v2))) }
+        awaitReady()
+        instrumentation.runOnMainSync { checkNotNull(controller.currentPlayer()).seekTo(1500) }
+        Thread.sleep(POSITION_SETTLE_MS)
+
+        var positionBefore = 0L
+        var positionAfter = -1L
+        var playingAfter = false
+        instrumentation.runOnMainSync {
+            positionBefore = checkNotNull(controller.currentPlayer()).currentPosition
+            controller.switchSource(1)
+            val switched = checkNotNull(controller.currentPlayer())
+            positionAfter = switched.currentPosition
+            playingAfter = switched.playWhenReady
+        }
+        assertEquals(v2, controller.currentStream.value)
+        assertTrue(
+            "Position lost on source switch: $positionBefore -> $positionAfter",
+            positionAfter in (positionBefore - 1500)..(positionBefore + 1500),
+        )
+        assertTrue("Playback did not continue after switching while playing", playingAfter)
+
+        instrumentation.runOnMainSync {
+            checkNotNull(controller.currentPlayer()).pause()
+            controller.switchSource(0)
+            assertTrue(
+                "Paused playback resumed after a source switch",
+                checkNotNull(controller.currentPlayer()).playWhenReady.not(),
+            )
+        }
+        assertEquals(v1, controller.currentStream.value)
+
+        instrumentation.runOnMainSync { controller.release() }
+        assertNull("Screen-exit cleanup left a player behind", controller.currentPlayer())
+        assertNotNull("release() must preserve the selection for restore", controller.currentStream.value)
+    }
+
+    private fun awaitReady() {
+        val ready = CountDownLatch(1)
+        instrumentation.runOnMainSync {
+            val player = checkNotNull(controller.currentPlayer()) { "Player build failed" }
+            if (player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED) {
+                ready.countDown()
+            } else {
+                player.addListener(
+                    object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) {
+                                ready.countDown()
+                            }
+                        }
+                    },
+                )
+            }
+        }
+        assertTrue("Player never became READY", ready.await(90, TimeUnit.SECONDS))
+    }
+
     /** Plays the fixture with (or without) one subtitle; returns a latch that fires on its cue text. */
     private fun playWithSubtitle(
         subtitlePath: String?,
@@ -235,6 +310,11 @@ class SubtitlePlaybackRuntimeTest {
                             .setHeader("Content-Type", "video/mp4")
                             .setHeader("Accept-Ranges", "bytes")
                             .setBody(Buffer().write(videoFixture))
+                    "/video2.mp4" ->
+                        MockResponse()
+                            .setHeader("Content-Type", "video/mp4")
+                            .setHeader("Accept-Ranges", "bytes")
+                            .setBody(Buffer().write(videoFixture))
                     "/subs.vtt" -> MockResponse().setHeader("Content-Type", "text/vtt").setBody(VTT_FIXTURE)
                     "/subs.srt" -> MockResponse().setHeader("Content-Type", "application/x-subrip").setBody(SRT_FIXTURE)
                     "/subs.ass" -> MockResponse().setHeader("Content-Type", "text/x-ssa").setBody(ASS_FIXTURE)
@@ -258,6 +338,8 @@ class SubtitlePlaybackRuntimeTest {
                 "[Events]\n" +
                 "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" +
                 "Dialogue: 0,0:00:00.00,0:00:04.00,Default,,0,0,0,,Hello from ASS\n"
+
+        const val POSITION_SETTLE_MS = 800L
 
         /** Shared download of the same clip the player-runtime scenario uses. */
         val videoFixture: ByteArray by lazy {
