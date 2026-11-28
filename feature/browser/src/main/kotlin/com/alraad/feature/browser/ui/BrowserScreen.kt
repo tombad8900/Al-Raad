@@ -119,13 +119,14 @@ private fun BrowserTabLifecycle(
         webViewPool.activate(activeTabId)
     }
     DisposableEffect(lifecycleOwner, webViewPool, tabManager) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
                 Lifecycle.Event.ON_PAUSE -> webViewPool.pauseAll()
                 Lifecycle.Event.ON_RESUME -> webViewPool.activate(tabManager.state.value.activeTabId)
-                else -> Unit
+                    else -> Unit
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
