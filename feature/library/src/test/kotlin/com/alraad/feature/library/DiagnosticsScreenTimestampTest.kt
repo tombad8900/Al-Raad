@@ -61,7 +61,7 @@ class DiagnosticsScreenTimestampTest {
             testBlocklistDeps(fakeSettings, fakeLogger).let { (store, updater, adBlocker) ->
                 SettingsDiagnosticsViewModel(fakeSettings, fakeLogger, store, updater, adBlocker)
             }
-        composeRule.setContent { com.alraad.feature.library.settings.DiagnosticsScreen(viewModel = viewModel, onExport = {}) }
+        composeRule.setContent { com.alraad.feature.library.settings.DiagnosticsScreen(viewModel = viewModel, onExport = {}, onCopy = {}) }
         composeRule.onNodeWithText(formatTimestamp(entry.timestamp)).assertIsDisplayed()
     }
 }
