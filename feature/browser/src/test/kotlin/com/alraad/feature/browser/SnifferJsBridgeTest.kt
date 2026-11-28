@@ -1,17 +1,13 @@
 package com.alraad.feature.browser
 
-import com.alraad.core.common.contracts.DiagCategory
-import com.alraad.core.common.contracts.DiagEntry
-import com.alraad.core.common.contracts.DiagLevel
-import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.contracts.StreamSource
 import com.alraad.core.common.contracts.StreamUrl
+import com.alraad.core.common.fakes.FakeDiagnosticsLogger
 import com.alraad.feature.browser.sniffer.FetchXhrCaptureScript
 import com.alraad.feature.browser.sniffer.SnifferJsBridge
 import com.alraad.feature.browser.sniffer.StreamObservationListener
 import com.alraad.feature.browser.sniffer.StreamSniffer
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -19,15 +15,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SnifferJsBridgeTest {
-    private val logs = mutableListOf<String>()
-    private val logger = object : DiagnosticsLogger {
-        override fun log(category: DiagCategory, level: DiagLevel, message: String, details: Map<String, String>) {
-            logs += details.toString()
-        }
-        override fun observeLogs(): Flow<List<DiagEntry>> = flowOf(emptyList())
-        override suspend fun exportAsText() = ""
-        override suspend fun clear() = Unit
-    }
+    private val logger = FakeDiagnosticsLogger()
+
     @Test fun `observations retain native page tab and reject stale document tokens`() {
         val sniffer = StreamSniffer(logger)
         var seen: Triple<String?, String?, StreamUrl>? = null
@@ -41,13 +30,12 @@ class SnifferJsBridgeTest {
         val token = bridge.bindPage(page, "tab-new")
         bridge.onRequestObserved(payload(oldToken, oldPage, "https://cdn.example/stale.m3u8"))
         bridge.onRequestObserved(payload(token, page, "https://cdn.example/live.m3u8"))
-        assertEquals(page, seen?.first)
-        assertEquals("tab-new", seen?.second)
-        assertEquals(StreamSource.JS_BRIDGE, seen?.third?.source)
+        assertEquals(Triple(page, "tab-new", StreamSource.JS_BRIDGE), Triple(seen?.first, seen?.second, seen?.third?.source))
         val script = FetchXhrCaptureScript.build("12345678-1234-1234-1234-123456789abc")
         assertTrue(script.contains("window.fetch = function") && script.contains("XMLHttpRequest.prototype.send"))
-        assertFalse(script.contains("responseText") || script.contains("response.body") || script.contains("cookie"))
+        assertFalse(listOf("responseText", "response.body", "cookie").any(script::contains))
     }
+
     @Test fun `malformed oversized mismatched and non-http inputs are ignored`() {
         val sniffer = StreamSniffer(logger)
         var count = 0
@@ -55,14 +43,12 @@ class SnifferJsBridgeTest {
         val bridge = SnifferJsBridge(sniffer)
         val page = "https://page.example/"
         val token = bridge.bindPage(page, "tab")
-        listOf(
-            "{",
-            "x".repeat(16_385),
-            payload(token, page, "file:///private/a.m3u8"),
-            payload(token, "https://other.example/", "https://cdn.example/a.m3u8"),
-        ).forEach(bridge::onRequestObserved)
+        listOf("{", "x".repeat(16_385), payload(token, page, "file:///private/a.m3u8"),
+            payload(token, "https://other.example/", "https://cdn.example/a.m3u8"))
+            .forEach(bridge::onRequestObserved)
         assertEquals(0, count)
     }
+
     @Test fun `credentials remain available to playback but never enter diagnostics`() {
         val sniffer = StreamSniffer(logger)
         var stream: StreamUrl? = null
@@ -77,16 +63,12 @@ class SnifferJsBridgeTest {
         assertEquals("Bearer auth-secret", stream?.headers?.get("Authorization"))
         assertEquals("Bearer auth-secret", stream?.drmLicenseRequestHeaders?.get("Authorization"))
         assertFalse(stream?.headers?.containsKey("Cookie") == true)
-        val diagnosticText = logs.toString()
+        val diagnosticText = runBlocking { logger.exportAsText() }
         assertFalse(diagnosticText.contains("auth-secret") || diagnosticText.contains("cookie-secret"))
         assertFalse(diagnosticText.contains("Authorization") || diagnosticText.contains("Cookie"))
     }
-    private fun payload(
-        token: String,
-        page: String,
-        url: String,
-        headers: JSONObject = JSONObject().put("accept", "application/vnd.apple.mpegurl"),
-    ): String =
+
+    private fun payload(token: String, page: String, url: String, headers: JSONObject? = null): String =
         JSONObject().put("token", token).put("pageUrl", page).put("url", url)
-            .put("headers", headers).toString()
+            .put("headers", headers ?: JSONObject().put("accept", "application/vnd.apple.mpegurl")).toString()
 }
