@@ -22,9 +22,9 @@ import androidx.test.espresso.matcher.RootMatchers.withDecorView
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.platform.app.InstrumentationRegistry
+import com.alraad.app.di.DiagnosticsLoggerTestEntryPoint
 import com.alraad.core.common.contracts.DiagCategory
 import com.alraad.core.common.contracts.DiagLevel
-import com.alraad.app.di.DiagnosticsLoggerTestEntryPoint
 import com.alraad.core.common.contracts.DiagnosticsLogger
 import com.alraad.core.common.diagnostics.DiagnosticsRedactor
 import dagger.hilt.android.EntryPointAccessors
