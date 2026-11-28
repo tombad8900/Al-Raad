@@ -26,8 +26,7 @@ internal object FetchXhrCaptureScript {
                 } catch (_) {}
               }
               if (typeof window.fetch === "function" && typeof Headers === "function") {
-                var originalFetch = window.fetch;
-                window.fetch = function(input, init) {
+                var originalFetch = window.fetch; window.fetch = function(input, init) {
                   try {
                     var request = input instanceof Request ? input : null;
                     var headers = new Headers(request ? request.headers : undefined);
