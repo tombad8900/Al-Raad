@@ -15,6 +15,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +55,7 @@ fun AddressBar(
     onNavigate: (String) -> Unit,
     modifier: Modifier = Modifier,
     onBookmarkClick: (() -> Unit)? = null,
+    onExitClick: (() -> Unit)? = null,
 ) {
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -93,6 +95,11 @@ fun AddressBar(
                     },
                 ),
         )
+        if (onExitClick != null) {
+            TextButton(onClick = onExitClick, modifier = Modifier.testTag("browser_exit")) {
+                Text(if (isRtl) "خروج" else "Exit")
+            }
+        }
         if (onBookmarkClick != null) {
             IconButton(onClick = onBookmarkClick, modifier = Modifier.testTag("bookmark_action")) {
                 Icon(
