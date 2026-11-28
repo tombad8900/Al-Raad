@@ -36,7 +36,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
 import org.junit.rules.TestRule
-import org.junit.runner.Description
 import org.junit.runners.model.Statement
 
 /**
@@ -48,6 +47,8 @@ import org.junit.runners.model.Statement
 class RuntimeBrowserBackTest {
     private val composeRule = createAndroidComposeRule<MainActivity>()
 
+    // Reset before Activity composition so BrowserScreen's initial-tab effect runs normally.
+    // History-driven creation below remains a separate real UI path and verifies its own WebView.
     private val resetTabsBeforeActivity =
         TestRule { base, _ ->
             object : Statement() {
