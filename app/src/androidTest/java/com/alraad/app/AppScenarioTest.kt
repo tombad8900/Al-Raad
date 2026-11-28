@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.view.View
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
@@ -19,11 +20,31 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performTextInput
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.analytics.AnalyticsListener
+import androidx.media3.ui.PlayerView
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.assertion.ViewAssertions.matches
+import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
 import androidx.test.platform.app.InstrumentationRegistry
 import com.alraad.feature.browser.tabs.TabManagerTestEntryPoint
 import dagger.hilt.android.EntryPointAccessors
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.mockwebserver.Dispatcher
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.RecordedRequest
+import okio.Buffer
+import org.hamcrest.Description
+import org.hamcrest.TypeSafeMatcher
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -94,36 +115,14 @@ class AppScenarioTest {
      * controlled authorized content; needs emulator network, and fails honestly if
      * the media cannot be fetched.
      */
-    @Test fun detectedStreamTapReachesPlayerRoute() {
+    @Test
+    fun localVideoRendersInPlayerAndFitFillCaptures() {
         composeRule.waitForIdle()
         waitForNode(hasSetTextAction(), 20_000)
-
-        // Load a CONTROLLED local wrapper page (test-only MockWebServer fixture,
-        // no production scheme handling broadened) whose script issues the media
-        // request as a subresource fetch: direct navigation to a media file is
-        // handed to the downloader and never reaches the sniffer, while ANY page
-        // subresource request for the .mp4 URL is observed through the WebView
-        // client and classified by URL extension, exactly like a <video> tag's
-        // own request. A fetch is used instead of an autoplaying <video> because
-        // software-rendered emulator WebViews crash their renderer decoding real
-        // media (run 46035966507 logcat: aw_browser_terminator); the bar asserts
-        // DETECTION + routing, which the request alone exercises. Media URL is
-        // ExoPlayer's own public test asset (authorized).
-        val server = okhttp3.mockwebserver.MockWebServer()
-        server.start()
-        server.enqueue(
-            okhttp3.mockwebserver.MockResponse()
-                .setResponseCode(200)
-                .setHeader("Content-Type", "text/html")
-                .setBody(
-                    "<html><body><script>" +
-                        "fetch('https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4'," +
-                        " {mode: 'no-cors'}).catch(function(){});" +
-                        "</script></body></html>",
-                ),
-        )
+        val server = localPlaybackServer(downloadPlaybackFixture())
         try {
-            composeRule.onNode(hasSetTextAction()).performTextInput(server.url("/wrapper.html").toString())
+            val pageUrl = server.url("/player.html").toString()
+            composeRule.onNode(hasSetTextAction()).performTextInput(pageUrl)
             composeRule.onNode(hasSetTextAction()).performImeAction()
             // T2 picker UI (post #73): a detected stream shows the picker section with
             // a Play button instead of the old minimal bar.
@@ -139,13 +138,127 @@ class AppScenarioTest {
             composeRule.onNodeWithText("\u062a\u0634\u063a\u064a\u0644").performClick()
             // The player route shows its controls; the no-stream placeholder must be absent.
             waitForNode(hasContentDescription("Fullscreen"), 15_000)
-            composeRule
-                .onNodeWithText(
-                    "\u0644\u0645 \u064a\u062a\u0645 \u0627\u062e\u062a\u064a\u0627\u0631 \u0628\u062b \u0628\u0639\u062f",
-                ).assertDoesNotExist()
-            capture("scenario-07-player-route.png")
+            waitForRenderedVideoFrames()
+            Thread.sleep(1_000)
+            capture("scenario-player-fit-frames.png")
+
+            composeRule.onNode(hasContentDescription("Fill screen")).performClick()
+            waitForNode(hasContentDescription("Fit video inside screen"), 10_000)
+            composeRule.waitForIdle()
+            Thread.sleep(500)
+            capture("scenario-player-fill-frames.png")
         } finally {
             server.shutdown()
+        }
+    }
+
+    private fun downloadPlaybackFixture(): ByteArray {
+        val fixtureUrl =
+            "https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4"
+        val client = OkHttpClient.Builder().callTimeout(90, TimeUnit.SECONDS).build()
+        val bytes =
+            client.newCall(Request.Builder().url(fixtureUrl).build()).execute().use { response ->
+                check(response.isSuccessful) { "Test video download failed: HTTP ${response.code}" }
+                requireNotNull(response.body).bytes()
+            }
+        check(bytes.isNotEmpty()) { "Test video fixture is empty" }
+        return bytes
+    }
+
+    private fun localPlaybackServer(fixture: ByteArray): MockWebServer {
+        val server = MockWebServer()
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse =
+                    when (request.path) {
+                        "/player.html" ->
+                            MockResponse()
+                                .setHeader("Content-Type", "text/html; charset=utf-8")
+                                .setBody(
+                                    "<html><body><video autoplay muted playsinline src='/fixture.mp4'></video></body></html>",
+                                )
+                        "/fixture.mp4" ->
+                            MockResponse()
+                                .setHeader("Content-Type", "video/mp4")
+                                .setHeader("Accept-Ranges", "bytes")
+                                .setBody(Buffer().write(fixture))
+                        else -> MockResponse().setResponseCode(404)
+                    }
+            }
+        server.start()
+        return server
+    }
+
+    @OptIn(UnstableApi::class)
+    private fun waitForRenderedVideoFrames() {
+        var attachedPlayer: ExoPlayer? = null
+        composeRule.waitUntil(timeoutMillis = 15_000) {
+            runCatching {
+                onView(isAssignableFrom(PlayerView::class.java)).check(
+                    matches(
+                        object : TypeSafeMatcher<View>() {
+                            override fun matchesSafely(view: View): Boolean {
+                                val player = (view as PlayerView).player as? ExoPlayer ?: return false
+                                attachedPlayer = player
+                                return true
+                            }
+
+                            override fun describeTo(description: Description) {
+                                description.appendText("PlayerView with an attached ExoPlayer")
+                            }
+                        },
+                    ),
+                )
+            }.isSuccess
+        }
+
+        val player = checkNotNull(attachedPlayer) { "PlayerView did not attach an ExoPlayer" }
+        val firstFrameRendered = CountDownLatch(1)
+        val listener =
+            object : AnalyticsListener {
+                override fun onRenderedFirstFrame(
+                    eventTime: AnalyticsListener.EventTime,
+                    output: Any,
+                    renderTimeMs: Long,
+                ) {
+                    firstFrameRendered.countDown()
+                }
+            }
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { player.addAnalyticsListener(listener) }
+        try {
+            assertTrue(
+                "Media3 did not report a rendered video frame within 90 seconds",
+                firstFrameRendered.await(90, TimeUnit.SECONDS),
+            )
+            // The short fixture clip can END before assertions run on a slow emulator;
+            // READY or ENDED both prove the render pipeline delivered the first frame.
+            // Poll briefly: a loaded emulator can transiently re-enter BUFFERING right
+            // after the first frame, and the state name/error is recorded on failure.
+            var playbackState = Player.STATE_IDLE
+            var videoWidth = 0
+            var videoHeight = 0
+            var playbackError: String? = null
+            val stateDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(15)
+            do {
+                instrumentation.runOnMainSync {
+                    playbackState = player.playbackState
+                    videoWidth = player.videoSize.width
+                    videoHeight = player.videoSize.height
+                    playbackError = player.playerError?.errorCodeName
+                }
+                if (playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED) break
+                Thread.sleep(250)
+            } while (System.nanoTime() < stateDeadline)
+            assertTrue(
+                "Player left the render pipeline before the frame assertion " +
+                    "(state=" + playbackState + ", error=" + playbackError + ")",
+                playbackState == Player.STATE_READY || playbackState == Player.STATE_ENDED,
+            )
+            assertTrue("Decoded video width is missing", videoWidth > 0)
+            assertTrue("Decoded video height is missing", videoHeight > 0)
+        } finally {
+            instrumentation.runOnMainSync { player.removeAnalyticsListener(listener) }
         }
     }
 
