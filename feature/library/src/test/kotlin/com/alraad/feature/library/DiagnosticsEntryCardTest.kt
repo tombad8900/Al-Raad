@@ -37,7 +37,7 @@ class DiagnosticsEntryCardTest {
         card.performClick()
 
         assertEquals(1, clickCount)
-        val heightDp = card.fetchSemanticsNode().boundsInRoot.height / composeRule.density
+        val heightDp = with(composeRule.density) { card.fetchSemanticsNode().boundsInRoot.height.toDp().value }
         assertTrue("Expected at least 48dp, was $heightDp dp", heightDp >= 48f)
     }
 }
