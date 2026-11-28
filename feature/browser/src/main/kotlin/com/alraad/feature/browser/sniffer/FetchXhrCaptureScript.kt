@@ -8,7 +8,7 @@ internal object FetchXhrCaptureScript {
             (function(token) {
               if (window.__alraadCaptureInstalled === token) return;
               window.__alraadCaptureInstalled = token;
-              var allowed = {accept: true, authorization: true, "content-type": true, range: true};
+              var allowed = {accept:true, authorization:true, "content-type":true, range:true};
               function report(rawUrl, headers, method) {
                 try {
                   var url = new URL(rawUrl, location.href);
@@ -19,12 +19,11 @@ internal object FetchXhrCaptureScript {
                     if (allowed[name] && value.length <= 1024) safe[name] = value;
                   });
                   var payload = JSON.stringify({
-                    token: token, pageUrl: location.href, url: url.href,
-                    method: String(method || "GET").slice(0, 16), headers: safe
+                    token:token, pageUrl:location.href, url:url.href,
+                    method:String(method || "GET").slice(0, 16), headers:safe
                   });
-                  if (payload.length <= 16384 && window.AlRaadSniffer) {
+                  if (payload.length <= 16384 && window.AlRaadSniffer)
                     window.AlRaadSniffer.onRequestObserved(payload);
-                  }
                 } catch (_) {}
               }
               if (typeof window.fetch === "function" && typeof Headers === "function") {
@@ -36,8 +35,8 @@ internal object FetchXhrCaptureScript {
                     if (init && init.headers) new Headers(init.headers).forEach(function(v, k) {
                       headers.set(k, v);
                     });
-                    report(request ? request.url : String(input),
-                      headers, (init && init.method) || (request && request.method) || "GET");
+                    report(request ? request.url : String(input), headers,
+                      (init && init.method) || (request && request.method) || "GET");
                   } catch (_) {}
                   return originalFetch.apply(this, arguments);
                 };
@@ -47,23 +46,17 @@ internal object FetchXhrCaptureScript {
                 var setHeader = XMLHttpRequest.prototype.setRequestHeader;
                 var send = XMLHttpRequest.prototype.send;
                 XMLHttpRequest.prototype.open = function(method, url) {
-                  this.__alraadMethod = method;
-                  this.__alraadUrl = url;
-                  this.__alraadHeaders = {};
+                  this.__alraadMethod = method; this.__alraadUrl = url; this.__alraadHeaders = {};
                   return open.apply(this, arguments);
                 };
                 XMLHttpRequest.prototype.setRequestHeader = function(name, value) {
                   var key = String(name).toLowerCase();
-                  if (allowed[key] && String(value).length <= 1024) {
-                    this.__alraadHeaders[key] = String(value);
-                  }
+                  if (allowed[key] && String(value).length <= 1024) this.__alraadHeaders[key] = String(value);
                   return setHeader.apply(this, arguments);
                 };
                 XMLHttpRequest.prototype.send = function() {
-                  try {
-                    var headers = new Headers(this.__alraadHeaders || {});
-                    report(this.__alraadUrl, headers, this.__alraadMethod);
-                  } catch (_) {}
+                  try { report(this.__alraadUrl, new Headers(this.__alraadHeaders || {}), this.__alraadMethod); }
+                  catch (_) {}
                   return send.apply(this, arguments);
                 };
               }
