@@ -117,14 +117,29 @@ class RuntimeBrowserBackTest {
             Thread.sleep(250)
         }
         capture("backtest-timeout-${System.currentTimeMillis()}.png")
+        // Capture the real failure state first; the controls below load other URLs and must not mask it.
+        val actual = url()
         val state = tabManager.state.value
-        assertEquals(
+        val failure =
             "WebView url (tabs=${state.tabs.map { it.id.take(4) to it.url }} active=${state.activeTabId?.take(4)} " +
                 "viewExists=${onMain { activeWebViewOnMain() != null }} ${uiDiagnostics()} " +
-                "serverRequests=${activeServer?.requestCount} ${serverProbe(expected)} webviewLogs=${webViewLogs()})",
-            expected,
-            url(),
-        )
+                "serverRequests=${activeServer?.requestCount} ${serverProbe(expected)} "
+        val port = activeServer?.port
+        val controls =
+            "directLocalhost=${webViewControl(expected)} " +
+                "ipv4=${webViewControl("http://127.0.0.1:$port/ctl-v4")} " +
+                "webviewLogs=${webViewLogs()})"
+        assertEquals(failure + controls, expected, actual)
+    }
+
+    /** Control: load [target] straight into the active WebView (bypassing the app's tab sync) and report what happened. */
+    private fun webViewControl(target: String): String {
+        val before = activeServer?.requestCount ?: 0
+        onMain { activeWebViewOnMain()?.loadUrl(target) }
+        val end = System.currentTimeMillis() + 8_000
+        while (System.currentTimeMillis() < end && url() != target) Thread.sleep(250)
+        val reached = url()
+        return "[url=${reached == target} now=$reached requestsDelta=${(activeServer?.requestCount ?: 0) - before}]"
     }
 
     /** Wait for the initial tab and its actual attached WebView, not merely the address field. */
@@ -195,8 +210,8 @@ class RuntimeBrowserBackTest {
     private fun webViewLogs(): String =
         kotlinx.coroutines.runBlocking { diagnostics.exportAsText() }
             .lines()
-            .filter { it.contains("Tab load") || it.contains("Page started") || it.contains("HTTP") }
-            .takeLast(12)
+            .filter { it.contains("Tab load") || it.contains("Load failed") || it.contains("HTTP") }
+            .takeLast(10)
             .joinToString(" | ")
 
     private fun uiDiagnostics(): String =
