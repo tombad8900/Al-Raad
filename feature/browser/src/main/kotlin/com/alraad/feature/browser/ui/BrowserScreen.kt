@@ -66,21 +66,15 @@ fun BrowserScreen(
     )
 
     Column(modifier = modifier.fillMaxSize()) {
-        AddressBar(
-            currentUrl = activeTab?.url ?: "",
+        BrowserToolbar(
+            activeTab = activeTab,
             isLoading = isLoading,
+            handlers = handlers,
             onNavigate = { url ->
                 val id = tabState.activeTabId ?: tabManager.openTab(url).id
                 tabManager.updateTab(id, url = url)
             },
-            onBookmarkClick = handlers.actions.onBookmark,
-            onExitClick = onExit,
-        )
-        DetectedStreamPicker(
-            items = handlers.detectedStreams.streams,
-            onPlay = handlers.detectedStreams.onPlay,
-            onCopy = handlers.detectedStreams.onCopy,
-            onSave = handlers.detectedStreams.onSave,
+            onExit = onExit,
         )
         key(activeTab?.id) {
             BrowserWebView(
@@ -102,6 +96,29 @@ fun BrowserScreen(
             )
         }
     }
+}
+
+@Composable
+private fun BrowserToolbar(
+    activeTab: BrowserTab?,
+    isLoading: Boolean,
+    handlers: BrowserHandlers,
+    onNavigate: (String) -> Unit,
+    onExit: () -> Unit,
+) {
+    AddressBar(
+        currentUrl = activeTab?.url ?: "",
+        isLoading = isLoading,
+        onNavigate = onNavigate,
+        onBookmarkClick = handlers.actions.onBookmark,
+        onExitClick = onExit,
+    )
+    DetectedStreamPicker(
+        items = handlers.detectedStreams.streams,
+        onPlay = handlers.detectedStreams.onPlay,
+        onCopy = handlers.detectedStreams.onCopy,
+        onSave = handlers.detectedStreams.onSave,
+    )
 }
 
 @Composable
