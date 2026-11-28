@@ -26,7 +26,7 @@ import okhttp3.mockwebserver.RecordedRequest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -214,7 +214,7 @@ class RuntimeBrowserBackTest {
             awaitUrl(a)
 
             val tab2 = checkNotNull(tabManager.state.value.activeTabId)
-            assertNotSame("History opens a distinct tab", tab1, tab2)
+            assertNotEquals("History opens a distinct tab", tab1, tab2)
             val view2 = checkNotNull(onMain { activeWebViewOnMain() })
             assertNotSame("History tab owns a distinct WebView", view1, view2)
             assertEquals("new tab opens the selected History URL", a, onMain { view2.url })
