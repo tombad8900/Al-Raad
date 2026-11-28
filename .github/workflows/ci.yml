@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      testClass:
+        description: 'Diagnostic only: instrumentation class (or class#method) filter; empty = full suite'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -112,6 +117,9 @@ jobs:
         run: |
           mkdir -p /tmp/fixture-serve
           curl -fsSL --retry 3 -o /tmp/fixture-serve/fixture.mp4 https://storage.googleapis.com/exoplayer-test-media-0/BigBuckBunny_320x180.mp4
+          # Diagnostic (t4-subtitle-diagnostic): audio-only clip so cue tests can run
+          # without the starved software h264 decode competing with extraction.
+          ffmpeg -f lavfi -i anullsrc=r=8000:cl=mono -t 30 -c:a aac -b:a 24k -y /tmp/fixture-serve/audio.mp4
           printf '%s' "<html><body><video autoplay muted playsinline src='/fixture.mp4'></video></body></html>" > /tmp/fixture-serve/player.html
           # Instrumented fixture server: logs each request path and whether the
           # synthetic test Cookie rode along (only the non-secret "session-secret"
@@ -160,9 +168,13 @@ jobs:
             adb shell settings put global cached_apps_freezer disabled || true
             adb shell rm -f /sdcard/Download/app-launch.png /sdcard/Download/diagnostics-export.txt /sdcard/Download/scenario-*.png || true
             mkdir -p scenario-captures
-            bash -c './gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.fixtureBaseUrl=http://10.0.2.2:18080; code=$?; adb pull /sdcard/Download/app-launch.png app-launch.png || true; adb pull /sdcard/Download/diagnostics-export.txt diagnostics-export.txt || true; for f in $(adb shell ls /sdcard/Download/scenario-*.png 2>/dev/null | tr -d "\r"); do adb pull "$f" scenario-captures/ || true; done; adb logcat -d -t 2000 > scenario-captures/logcat-tail.txt || true; adb logcat -d -s SubtitleProof:V > scenario-captures/subtitle-proof.log || true; if [ "$code" -eq 0 ]; then test -s app-launch.png; test -s diagnostics-export.txt; [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d " \n")" = "89504e470d0a1a0a" ]; fi; exit $code' 
+            export TF='${{ inputs.testClass }}'
+            case "$TF" in ''|*[!A-Za-z0-9._#]*) echo "invalid testClass: $TF"; exit 1;; esac
+            echo "test filter: ${TF:-<full suite>}"
+            bash -c 'EXTRA=""; [ -n "$TF" ] && EXTRA="-Pandroid.testInstrumentationRunnerArguments.class=$TF"; ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.fixtureBaseUrl=http://10.0.2.2:18080 $EXTRA; code=$?; adb pull /sdcard/Download/app-launch.png app-launch.png || true; adb pull /sdcard/Download/diagnostics-export.txt diagnostics-export.txt || true; for f in $(adb shell ls /sdcard/Download/scenario-*.png 2>/dev/null | tr -d "\r"); do adb pull "$f" scenario-captures/ || true; done; adb logcat -d -t 2000 > scenario-captures/logcat-tail.txt || true; adb logcat -d -s SubtitleProof:V > scenario-captures/subtitle-proof.log || true; if [ "$code" -eq 0 ]; then test -s app-launch.png; test -s diagnostics-export.txt; [ "$(head -c 8 app-launch.png | od -An -tx1 | tr -d " \n")" = "89504e470d0a1a0a" ]; fi; exit $code' 
 
       - name: Verify fixture request instrumentation
+        if: always()
         # Header-isolation positive control: at least one video request carried the
         # synthetic test Cookie (proves stream headers actually flowed to media
         # requests; the subtitle-side exclusion is asserted in-test via

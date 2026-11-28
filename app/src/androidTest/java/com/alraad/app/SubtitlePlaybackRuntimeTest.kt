@@ -192,6 +192,11 @@ class SubtitlePlaybackRuntimeTest {
         selectFirstTextTrack()
         // The attach rebuilt the player, so the cue listener from playWithSubtitle
         // went away with the old instance; watch again on the rebuilt player.
+        // Diagnostic (t4-subtitle-diagnostic): re-attach the evidence listener too,
+        // so the attach window shows whether a text track ever surfaces.
+        instrumentation.runOnMainSync {
+            controller.currentPlayer()?.let { attachEvidenceListener(it) }
+        }
         watchCues("Hello from VTT", cues)
         assertEquals(listOf(track), controller.currentPlaybackRequest.value?.subtitles)
         assertTrue("Player was not rebuilt", positionAfter >= 0)
