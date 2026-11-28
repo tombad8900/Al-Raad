@@ -62,6 +62,9 @@ class BrowserViewModel
         /** Subtitle tracks are isolated by the same source tab/page as detected streams. */
         private val subtitlesByTab =
             kotlinx.coroutines.flow.MutableStateFlow<Map<String, List<SubtitleTrack>>>(emptyMap())
+        private val pendingSubtitlesByTab =
+            kotlinx.coroutines.flow.MutableStateFlow<Map<String, List<SubtitleTrack>>>(emptyMap())
+        private val subtitleAssociationLock = Any()
         val detectedSubtitles: StateFlow<List<SubtitleTrack>> =
             kotlinx.coroutines.flow.combine(tabManager.state, subtitlesByTab) { tabState, byTab ->
                 tabState.activeTabId?.let { byTab[it] }.orEmpty()
@@ -69,16 +72,25 @@ class BrowserViewModel
 
         private val subtitleListener =
             SubtitleSniffer.Listener { track ->
-                val state = tabManager.state.value
-                val knownTab = state.tabs.any { it.id == track.sourceTabId }
-                val onCurrentPage = track.sourcePageUrl in currentPageUrlsByTab.value[track.sourceTabId].orEmpty()
-                if (knownTab && onCurrentPage) {
-                    subtitlesByTab.update { current ->
-                        val existing = current[track.sourceTabId].orEmpty()
-                        val index = existing.indexOfFirst { it.id == track.id }
-                        val updated =
-                            if (index >= 0) existing.toMutableList().apply { set(index, track) } else existing + track
-                        current + (track.sourceTabId to updated.takeLast(MAX_SUBTITLES_PER_TAB))
+                synchronized(subtitleAssociationLock) {
+                    val knownTab = tabManager.state.value.tabs.any { it.id == track.sourceTabId }
+                    if (!knownTab) return@synchronized
+
+                    val onCurrentPage = track.sourcePageUrl in currentPageUrlsByTab.value[track.sourceTabId].orEmpty()
+                    if (onCurrentPage) {
+                        subtitlesByTab.update { current ->
+                            current + (track.sourceTabId to mergeSubtitleTracks(current[track.sourceTabId].orEmpty(), listOf(track)))
+                        }
+                        pendingSubtitlesByTab.update { current ->
+                            val remaining = current[track.sourceTabId].orEmpty().filterNot { it.id == track.id }
+                            if (remaining.isEmpty()) current - track.sourceTabId else current + (track.sourceTabId to remaining)
+                        }
+                    } else {
+                        // WebView's shouldInterceptRequest can race the UI-thread page-start
+                        // callback. Hold the page-scoped track briefly instead of dropping it.
+                        pendingSubtitlesByTab.update { current ->
+                            current + (track.sourceTabId to mergeSubtitleTracks(current[track.sourceTabId].orEmpty(), listOf(track)))
+                        }
                     }
                 }
             }
@@ -113,9 +125,12 @@ class BrowserViewModel
             viewModelScope.launch {
                 tabManager.state.collect { state ->
                     val liveTabIds = state.tabs.mapTo(mutableSetOf()) { it.id }
-                    streamsByTab.update { current -> current.filterKeys { it in liveTabIds } }
-                    currentPageUrlsByTab.update { current -> current.filterKeys { it in liveTabIds } }
-                    subtitlesByTab.update { current -> current.filterKeys { it in liveTabIds } }
+                    synchronized(subtitleAssociationLock) {
+                        streamsByTab.update { current -> current.filterKeys { it in liveTabIds } }
+                        currentPageUrlsByTab.update { current -> current.filterKeys { it in liveTabIds } }
+                        subtitlesByTab.update { current -> current.filterKeys { it in liveTabIds } }
+                        pendingSubtitlesByTab.update { current -> current.filterKeys { it in liveTabIds } }
+                    }
                 }
             }
         }
@@ -132,15 +147,41 @@ class BrowserViewModel
             url: String,
             startsNewNavigation: Boolean,
         ) {
-            if (tabManager.state.value.tabs.none { it.id == tabId }) return
-            currentPageUrlsByTab.update { current ->
-                val urls = if (startsNewNavigation) emptySet() else current[tabId].orEmpty()
-                current + (tabId to (urls + url).toList().takeLast(MAX_PAGE_URLS_PER_TAB).toSet())
+            synchronized(subtitleAssociationLock) {
+                if (tabManager.state.value.tabs.none { it.id == tabId }) return@synchronized
+                val urls = if (startsNewNavigation) emptySet() else currentPageUrlsByTab.value[tabId].orEmpty()
+                val updatedUrls = (urls + url).toList().takeLast(MAX_PAGE_URLS_PER_TAB).toSet()
+                currentPageUrlsByTab.update { current -> current + (tabId to updatedUrls) }
+
+                if (startsNewNavigation) {
+                    streamsByTab.update { current -> current + (tabId to emptyList()) }
+                    subtitlesByTab.update { current -> current + (tabId to emptyList()) }
+                }
+
+                val pending = pendingSubtitlesByTab.value[tabId].orEmpty()
+                val ready = pending.filter { it.sourcePageUrl in updatedUrls }
+                val remaining = if (startsNewNavigation) emptyList() else pending.filterNot { it.sourcePageUrl in updatedUrls }
+                if (ready.isNotEmpty()) {
+                    subtitlesByTab.update { current ->
+                        current + (tabId to mergeSubtitleTracks(current[tabId].orEmpty(), ready))
+                    }
+                }
+                pendingSubtitlesByTab.update { current ->
+                    if (remaining.isEmpty()) current - tabId else current + (tabId to remaining)
+                }
             }
-            if (startsNewNavigation) {
-                streamsByTab.update { current -> current + (tabId to emptyList()) }
-                subtitlesByTab.update { current -> current + (tabId to emptyList()) }
+        }
+
+        private fun mergeSubtitleTracks(
+            existing: List<SubtitleTrack>,
+            incoming: List<SubtitleTrack>,
+        ): List<SubtitleTrack> {
+            val merged = existing.toMutableList()
+            incoming.forEach { track ->
+                val index = merged.indexOfFirst { it.id == track.id }
+                if (index >= 0) merged[index] = track else merged += track
             }
+            return merged.takeLast(MAX_SUBTITLES_PER_TAB)
         }
 
         /**
