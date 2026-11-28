@@ -86,16 +86,6 @@ fun BrowserWebView(
             SafeWebViewConfig.apply(webView, environment.settings)
             if (javaScriptEnabled.value) {
                 runCatching { webView.addJavascriptInterface(jsBridge, SNIFFER_BRIDGE_NAME) }
-                val pageUrl = webView.url
-                val owner = pageTabAssociator.tabIdForPage(pageUrl)
-                if (pageUrl != null && owner != null && !jsBridge.isBoundTo(pageUrl, owner)) {
-                    val token = jsBridge.bindPage(pageUrl, owner)
-                    if (token.isNotEmpty()) {
-                        runCatching { webView.evaluateJavascript(FetchXhrCaptureScript.build(token), null) }
-                    }
-                } else if (owner == null) {
-                    jsBridge.clearPage()
-                }
             } else {
                 runCatching { webView.removeJavascriptInterface(SNIFFER_BRIDGE_NAME) }
                 jsBridge.clearPage()
