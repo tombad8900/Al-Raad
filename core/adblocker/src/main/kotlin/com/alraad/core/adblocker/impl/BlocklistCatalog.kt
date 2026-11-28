@@ -85,7 +85,7 @@ object BlocklistCatalog {
                 url = "https://raw.githubusercontent.com/brave/adblock-lists/master/brave-lists/brave-social.txt",
                 license = "MPL-2.0",
                 enabledByDefault = true,
-                minDomains = 10,
+                minDomains = 3,
             ),
             // Brave Unbreak is deliberately excluded: it is almost entirely @@
             // exception rules, which this domain-subset engine never applies, so a
