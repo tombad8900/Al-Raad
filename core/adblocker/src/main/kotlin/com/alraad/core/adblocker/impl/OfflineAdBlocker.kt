@@ -96,6 +96,7 @@ class OfflineAdBlocker
         /** Test seams: engine construction and native availability. */
         internal var engineFactory: (String) -> Long = NativeAdblock::nativeCreate
         internal var nativeAvailable: () -> Boolean = NativeAdblock::isAvailable
+        internal var clock: () -> Long = System::currentTimeMillis
 
         /** Why the rule engine is or is not active; ABP rules are never applied without it. */
         @Volatile var engineStatus: EngineStatus = EngineStatus.NOT_BUILT
@@ -155,7 +156,7 @@ class OfflineAdBlocker
         @Volatile private var enabledCache: Pair<Long, Boolean>? = null
 
         private suspend fun blockingEnabled(): Boolean {
-            val now = System.currentTimeMillis()
+            val now = clock()
             enabledCache?.let { if (now - it.first < 2_000) return it.second }
             val value = runCatching { settings.observeSettings().first().adBlockEnabled }.getOrDefault(true)
             enabledCache = now to value

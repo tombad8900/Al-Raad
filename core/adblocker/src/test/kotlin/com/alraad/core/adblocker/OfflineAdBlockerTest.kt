@@ -159,3 +159,49 @@ class OfflineAdBlockerConcurrencyTest {
             assertTrue("worker failures: $failures", failures.isEmpty())
         }
 }
+
+@RunWith(RobolectricTestRunner::class)
+class OfflineAdBlockerSettingCacheTest {
+    @Test fun `global switch is cached for 2 seconds then re-read on both overloads`() =
+        runTest {
+            val state = kotlinx.coroutines.flow.MutableStateFlow(AppSettings(adBlockEnabled = true))
+            val repo =
+                object : SettingsRepository {
+                    override fun observeSettings(): Flow<AppSettings> = state
+
+                    override suspend fun update(settings: AppSettings) = Unit
+                }
+            var now = 1_000L
+            val blocker =
+                OfflineAdBlocker(
+                    ApplicationProvider.getApplicationContext(),
+                    object : DiagnosticsLogger {
+                        override fun log(
+                            category: DiagCategory,
+                            level: DiagLevel,
+                            message: String,
+                            details: Map<String, String>,
+                        ) = Unit
+
+                        override fun observeLogs(): Flow<List<com.alraad.core.common.contracts.DiagEntry>> = flowOf(emptyList())
+
+                        override suspend fun exportAsText(): String = ""
+
+                        override suspend fun clear() = Unit
+                    },
+                    repo,
+                    BlocklistStore(ApplicationProvider.getApplicationContext()),
+                ).also { it.clock = { now } }
+            val ad = "https://ad.doubleclick.net/track"
+            assertTrue(blocker.shouldBlock(ad))
+            state.value = AppSettings(adBlockEnabled = false)
+            now += 1_999
+            assertTrue("still cached inside 2 s", blocker.shouldBlock(ad))
+            now += 2
+            assertFalse("OFF applies after cache expiry (1-arg)", blocker.shouldBlock(ad))
+            assertFalse("OFF applies on context-aware overload", blocker.shouldBlock(ad, "https://example.com/", "script"))
+            state.value = AppSettings(adBlockEnabled = true)
+            now += 2_001
+            assertTrue("ON applies after expiry (1-arg)", blocker.shouldBlock(ad))
+        }
+}
